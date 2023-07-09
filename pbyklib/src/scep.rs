@@ -42,7 +42,7 @@ use yubikey::{
 use crate::utils::{recipient_identifier_from_cert, signer_identifier_from_cert};
 use crate::yubikey_utils::get_attestation_p7;
 use crate::{
-    log_debug, log_error,
+    log_debug, log_error, log_info,
     network::{get_ca_cert, post_body},
     utils::{generate_self_signed_cert, get_email_addresses, get_subject_name, verify_and_decrypt},
     Error, Result,
@@ -380,14 +380,20 @@ pub async fn process_scep_payload(
     is_phase2: bool,
     pin: &[u8],
     mgmt_key: &MgmKey,
+    display: Option<String>,
 ) -> crate::Result<Vec<u8>> {
-    log_debug("Being process_scep_payload");
     if !scep_instructions.contains_key("Challenge")
         || !scep_instructions.contains_key("URL")
         || !scep_instructions.contains_key("Subject")
     {
         log_error("scep_instructions was missing one or more of Challenge, URL or Subject");
         return Err(Error::ParseError);
+    }
+
+    if let Some(display) = display {
+        log_info(&format!("Processing SCEP payload {}", &display));
+    } else {
+        log_info("Processing SCEP payload");
     }
 
     let (challenge, url) = get_challenge_and_url(scep_instructions)?;
@@ -424,6 +430,7 @@ pub async fn process_scep_payload(
     let attestation_p7 = get_attestation_p7(yubikey, slot_id)?;
     let get_ca_url = format!("{url}?operation=GetCACert");
     let pki_op_url = format!("{url}?operation=PKIOperation");
+    log_debug(&format!("Obtaining RA certifiate from {get_ca_url}"));
     let ca_cert = get_ca_cert(&get_ca_url).await?;
     let attrs = prepare_attributes(&challenge, &email_addresses, &attestation_p7)?;
     let csr_der = prepare_csr(yubikey, slot_id, &ss, attrs, pin, mgmt_key)?;
@@ -433,6 +440,7 @@ pub async fn process_scep_payload(
     assert!(yubikey.authenticate(mgmt_key.clone()).is_ok());
     let signed_data_pkcs7_der = prepare_signed_data(yubikey, slot_id, ss, &enc_ed)?;
 
+    log_debug(&format!("Submitting SCEP request to {get_ca_url}"));
     let result = match post_body(
         &pki_op_url,
         &signed_data_pkcs7_der,

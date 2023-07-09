@@ -11,7 +11,10 @@ use yubikey::{
 
 use crate::utils::buffer_to_hex;
 use crate::yubikey_utils::get_attestation_p7;
-use crate::{data::Preenroll, network::post_body, utils::generate_self_signed_cert, Error, Result};
+use crate::{
+    data::Preenroll, log_debug, log_info, network::post_body, utils::generate_self_signed_cert,
+    Error, Result,
+};
 
 /// The `pre_enroll` function interacts with the Purebred portal to prepare a YubiKey for enrollment
 pub async fn pre_enroll(
@@ -21,7 +24,11 @@ pub async fn pre_enroll(
     pre_enroll_otp: &str,
     host: &str,
 ) -> Result<String> {
+    log_info(&format!("Pre-enrolling YubiKey with serial {}", serial));
+
     let uuid = Uuid::new_v4();
+
+    log_debug("Generating self-signed device certificate");
     let self_signed_cert = generate_self_signed_cert(
         yubikey,
         SlotId::CardAuthentication,
@@ -29,6 +36,10 @@ pub async fn pre_enroll(
         format!("c=US,cn={uuid}").as_str(),
     )?;
 
+    log_debug(&format!(
+        "Generating attestation for self-signed certificate in {} slot",
+        SlotId::CardAuthentication
+    ));
     let attestation_p7 = get_attestation_p7(yubikey, SlotId::CardAuthentication)?;
     let yubikey_attestation = Base64::encode_string(attestation_p7.as_slice());
 
@@ -57,6 +68,7 @@ pub async fn pre_enroll(
         Err(_e) => return Err(Error::Unrecognized),
     };
 
+    log_debug("Submitting pre-enrollment request");
     match post_body(
         format!("{}/pb/admin_submit", host).as_str(),
         json_preenroll.as_bytes(),

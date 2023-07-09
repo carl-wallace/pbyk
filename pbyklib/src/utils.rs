@@ -133,6 +133,8 @@ pub(crate) fn verify_and_decrypt(
         return Err(Error::ParseError);
     }
 
+    // todo verify signature and validate path to signer
+
     let bytes2 = ci_sd.content.to_der().map_err(Error::Asn1)?;
     let sd = SignedData::from_der(&bytes2).map_err(Error::Asn1)?;
     let xml = get_encap_content(&sd.encap_content_info)?;
@@ -354,9 +356,16 @@ pub async fn process_payloads(
                                     return Err(Error::Plist);
                                 }
                             };
-                            if let Err(e) =
-                                process_scep_payload(yubikey, payload_content, false, pin, mgmt_key)
-                                    .await
+
+                            if let Err(e) = process_scep_payload(
+                                yubikey,
+                                payload_content,
+                                false,
+                                pin,
+                                mgmt_key,
+                                get_as_string(dict, "PayloadDisplayName"),
+                            )
+                            .await
                             {
                                 log_error(&format!("Failed to process SCEP payload: {:?}.", e));
                                 return Err(e);
@@ -473,4 +482,13 @@ pub(crate) fn get_subject_name(dict: &Dictionary) -> Result<Name> {
         Ok(n) => Ok(n),
         Err(e) => Err(Error::Asn1(e)),
     }
+}
+
+pub(crate) fn get_as_string(dict: &Dictionary, key: &str) -> Option<String> {
+    if let Some(value) = dict.get(key) {
+        if let Some(retval) = value.as_string() {
+            return Some(retval.to_string());
+        }
+    }
+    None
 }

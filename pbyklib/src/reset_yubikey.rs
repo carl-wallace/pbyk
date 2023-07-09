@@ -1,6 +1,6 @@
 //! Provides support for resetting YubiKey devices for enrollment with Purebred
 
-use crate::log_error;
+use crate::{log_error, log_info};
 use rand_core::{OsRng, RngCore};
 use yubikey::{CccId, ChuId, MgmKey, YubiKey};
 
@@ -31,7 +31,11 @@ pub fn reset_yubikey(
     puk: &str,
     management_key: &MgmKey,
 ) -> yubikey::Result<()> {
-    //todo finish impl
+    log_info(&format!(
+        "Resetting YubiKey with serial {}",
+        yubikey.serial()
+    ));
+
     let mut failed = 0;
     let mut value = "00000000";
     while failed < 3 {

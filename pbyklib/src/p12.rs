@@ -4,7 +4,7 @@ use std::sync::Once;
 
 use openssl::pkcs12::Pkcs12;
 
-use crate::{log_debug, log_error, Error};
+use crate::{log_error, log_info, Error};
 use der::Decode;
 use rsa::pkcs1::RsaPrivateKey;
 use yubikey::piv::RetiredSlotId;
@@ -40,7 +40,7 @@ pub(crate) async fn import_p12(
     password: &str,
     index: u8,
 ) -> crate::Result<()> {
-    log_debug(&format!("Begin import_p12 with index {index}"));
+    log_info(&format!("Processing PKCS #12 payload with index {index}"));
 
     INIT.call_once(|| {
         openssl::init();

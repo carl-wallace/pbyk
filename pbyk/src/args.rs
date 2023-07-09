@@ -34,7 +34,7 @@ use yubikey::Serial;
 ///       --logging-config <LOGGING_CONFIG>
 ///           Full path and filename of YAML-formatted configuration file for log4rs logging mechanism. See <https:///docs.rs/log4rs/latest/log4rs/> for details
 ///   -c, --log-to-console
-///           Log output to the console (in addition to any destinations specified by logging_config)
+///           Log info and above level output to the console (in addition to any destinations specified by logging_config)
 /// ```
 #[derive(Parser, Debug)]
 #[command(arg_required_else_help(true))]

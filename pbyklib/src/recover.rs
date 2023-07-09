@@ -18,7 +18,7 @@ pub async fn recover(
     mgmt_key: &MgmKey,
 ) -> Result<()> {
     log_info(&format!(
-        "Begin recover for YubiKey with serial {}",
+        "Begin recover operation for YubiKey with serial {}",
         recover_inputs.serial
     ));
 

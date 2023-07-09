@@ -11,16 +11,18 @@ use yubikey::{piv::SlotId, MgmKey, YubiKey};
 
 use crate::data::{OtaActionInputs, Phase2Request, Phase3Request};
 use crate::scep::process_scep_payload;
-use crate::utils::{get_encap_content, get_signed_data, verify_and_decrypt};
+use crate::utils::{get_as_string, get_encap_content, get_signed_data, verify_and_decrypt};
 use crate::yubikey_utils::{get_cert_from_slot, get_uuid_from_cert};
 use crate::{
-    log_error,
+    log_error, log_info,
     network::{post_body, post_no_body},
     Error, Result,
 };
 
 /// Execute the phase 1 portion of the OTA protocol as part of Purebred enrollment
 async fn phase1(url: &str) -> Result<Value> {
+    log_info("Executing Phase 1");
+
     let p1resp = post_no_body(url).await?;
     let ci = match ContentInfo::from_der(&p1resp) {
         Ok(c) => c,
@@ -80,6 +82,8 @@ async fn phase2(
     pin: &[u8],
     mgmt_key: &MgmKey,
 ) -> Result<Vec<u8>> {
+    log_info("Executing Phase 2");
+
     let signed_data_pkcs7_der = get_signed_data(
         yubikey,
         SlotId::CardAuthentication,
@@ -170,7 +174,15 @@ async fn phase2(
         }
     };
 
-    process_scep_payload(yubikey, pc, true, pin, mgmt_key).await
+    process_scep_payload(
+        yubikey,
+        pc,
+        true,
+        pin,
+        mgmt_key,
+        get_as_string(profile2_dict, "PayloadDisplayName"),
+    )
+    .await
 }
 
 /// Execute the phase 3 portion of the OTA protocol to complete Purebred enrollment
@@ -180,6 +192,7 @@ async fn phase3(
     ca_issued_device_cert: &Certificate,
     phase3_url: &str,
 ) -> Result<()> {
+    log_info("Executing Phase 3");
     let signed_data_pkcs7_der = get_signed_data(
         yubikey,
         SlotId::CardAuthentication,
@@ -209,6 +222,11 @@ pub async fn enroll(
     pin: &[u8],
     mgmt_key: &MgmKey,
 ) -> Result<()> {
+    log_info(&format!(
+        "Enrolling YubiKey with serial {}",
+        yubikey.serial()
+    ));
+
     let uuid = match get_uuid_from_cert(yubikey) {
         Ok(uuid) => uuid,
         Err(e) => {

@@ -19,7 +19,7 @@ pub async fn ukm(
     mgmt_key: &MgmKey,
 ) -> Result<()> {
     log_info(&format!(
-        "Begin ukm for YubiKey with serial {}",
+        "Begin user key management operation for YubiKey with serial {}",
         ukm_inputs.serial
     ));
 
