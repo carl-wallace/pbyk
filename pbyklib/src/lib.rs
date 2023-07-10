@@ -44,57 +44,30 @@ pub enum Error {
     Decryption,
 }
 
-/// Enum that describes level associated with a log message
-#[derive(Debug, Eq, PartialEq)]
-enum PbykLogLevels {
-    /// Common error logging level
-    Error,
-    /// Common info logging level
-    Info,
-    /// Common warn logging level
-    Warn,
-    /// Common debug logging level
-    Debug,
-}
-
-/// Generates logging output per the configuration identified in configuration.yaml
-fn log_message(level: &PbykLogLevels, message: &str) {
-    if &PbykLogLevels::Error == level {
-        error!("{}", message);
-    } else if &PbykLogLevels::Warn == level {
-        warn!("{}", message);
-    } else if &PbykLogLevels::Info == level {
-        info!("{}", message);
-    } else {
-        debug!("{}", message);
-    }
-}
-
 /// Generates error level logging output per calling application configured logging
 pub fn log_error(message: &str) {
-    log_message(&PbykLogLevels::Error, message)
+    error!("{}", message)
 }
 
 /// Generates warn level logging output per calling application configured logging
 pub fn log_warn(message: &str) {
-    log_message(&PbykLogLevels::Warn, message)
+    warn!("{}", message)
 }
 
 /// Generates info level logging output per calling application configured logging
 pub fn log_info(message: &str) {
-    log_message(&PbykLogLevels::Info, message)
+    info!("{}", message)
 }
 
 /// Generates info level logging output per calling application configured logging
 pub fn log_debug(message: &str) {
-    log_message(&PbykLogLevels::Debug, message)
+    debug!("{}", message)
 }
 
-// todo change to be correct (currently set to default)
 lazy_static! {
     /// Default management key for devices enrolled with Purebred
     pub static ref PB_MGMT_KEY: MgmKey =
-        MgmKey::new(hex!("010203040506070801020304050607080102030405060708")).unwrap();
+        MgmKey::new(hex!("020203040506070801020304050607080102030405060708")).unwrap();
 
     /// Base URL of Purebred portal
     pub static ref PB_HOST: String = "https://pb2.redhoundsoftware.net".to_string();

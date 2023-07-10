@@ -14,7 +14,7 @@ const-oid = { version = "0.9", features = ["db"] }
 der = { version = "0.7.6", features = ["alloc", "derive", "oid", "pem"] }
 spki = "0.7.2"
 x509-cert = "0.2.3"
-yubikey = { version = "0.8.0-pre.0", git = "https://github.com/carl-wallace/yubikey.rs.git", features=["untested"], branch="x509" }
+yubikey = { version = "0.8.0-pre.0", git = "https://github.com/carl-wallace/yubikey.rs.git", features=["untested"], branch="x509_pr" }
 
 pbyklib = {path = "../pbyklib"}
 

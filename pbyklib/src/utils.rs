@@ -3,6 +3,7 @@ use cipher::BlockDecryptMut;
 use cipher::KeyIvInit;
 use std::io::Cursor;
 use std::str::FromStr;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rand_core::{OsRng, RngCore};
 use subtle_encoding::hex;
@@ -16,27 +17,31 @@ use cms::{
     signed_data::{EncapsulatedContentInfo, SignedData},
 };
 use const_oid::db::rfc5280::ID_CE_SUBJECT_KEY_IDENTIFIER;
-use der::asn1::OctetString;
+use der::asn1::{OctetString, UtcTime};
 use der::{Any, Decode, Encode, Tag};
 use plist::Dictionary;
+use sha1::Sha1;
 use sha2::{Digest, Sha256};
-use spki::AlgorithmIdentifierOwned;
+use spki::{AlgorithmIdentifierOwned, SubjectPublicKeyInfoRef};
+use x509_cert::builder::CertificateBuilder;
 use x509_cert::ext::pkix::SubjectKeyIdentifier;
 use x509_cert::name::Name;
+use x509_cert::serial_number::SerialNumber;
+use x509_cert::time::{Time, Validity};
 use x509_cert::Certificate;
 use yubikey::{
-    certificate::generate_self_signed,
     piv,
     piv::{AlgorithmId, SlotId},
-    MgmKey, PinPolicy, TouchPolicy, YubiKey, YubiKeySigningKey,
+    MgmKey, PinPolicy, TouchPolicy, YubiKey,
 };
 
 use crate::p12::import_p12;
 use crate::rsa_utils::decrypt_inner;
 use crate::scep::process_scep_payload;
 use crate::{log_error, Error, Result};
+use yubikey::certificate::yubikey_signer::Rsa2048;
+use yubikey::certificate::yubikey_signer::YubiRsa;
 
-//todo
 /// Generates a self-signed certificate containing a public key corresponding to the given algorithm
 /// and a subject DN set to "cn=<cn>, c=US" using the indicated slot on the provided YubiKey.
 pub fn generate_self_signed_cert(
@@ -57,16 +62,58 @@ pub fn generate_self_signed_cert(
         Err(e) => return Err(Error::YubiKey(e)),
     };
 
-    let signer: YubiKeySigningKey<'_, Sha256> =
-        YubiKeySigningKey::new(yubikey, SlotId::CardAuthentication, public_key);
-
     let mut serial = [0u8; 20];
     OsRng.fill_bytes(&mut serial);
     serial[0] = 0x01;
+    let serial = SerialNumber::new(&serial[..]).expect("serial can't be more than 20 bytes long");
 
     // Generate a self-signed certificate for the new key.
-    match generate_self_signed(signer, &serial, None, name) {
-        Ok(cert) => Ok(cert),
+    let ten_years_duration = Duration::from_secs(365 * 24 * 60 * 60 * 10);
+    let ten_years_time = match SystemTime::now().checked_add(ten_years_duration) {
+        Some(t) => t,
+        None => return Err(Error::Unrecognized),
+    };
+    let not_after = Time::UtcTime(
+        UtcTime::from_unix_duration(
+            ten_years_time
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_| Error::Unrecognized)?,
+        )
+        .map_err(|_| Error::Unrecognized)?,
+    );
+    let validity = Validity {
+        not_before: Time::UtcTime(
+            UtcTime::from_unix_duration(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|_| Error::Unrecognized)?,
+            )
+            .map_err(|_| Error::Unrecognized)?,
+        ),
+        not_after,
+    };
+    let name = Name::from_str(name).map_err(Error::Asn1)?;
+    let spkibuf = public_key.to_der().map_err(Error::Asn1)?;
+    let b = Sha1::digest(spkibuf);
+    let os = OctetString::new(b.as_slice()).map_err(Error::Asn1)?;
+    let skid = SubjectKeyIdentifier(os);
+
+    match yubikey::certificate::Certificate::generate_self_signed(
+        yubikey,
+        SlotId::CardAuthentication,
+        serial,
+        validity,
+        name,
+        public_key,
+        |builder: &mut CertificateBuilder<
+            '_,
+            yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>>,
+        >| {
+            builder.add_extension(&skid).unwrap();
+            Ok(())
+        },
+    ) {
+        Ok(cert) => Ok(cert.cert),
         Err(e) => Err(Error::YubiKey(e)),
     }
 }
@@ -238,11 +285,16 @@ pub(crate) fn get_signed_data(
         econtent: Some(Any::new(Tag::OctetString, data_to_sign).map_err(Error::Asn1)?),
     };
 
-    let signer: YubiKeySigningKey<'_, Sha256> = YubiKeySigningKey::new(
-        yubikey,
-        slot_id,
-        signers_cert.tbs_certificate.subject_public_key_info.clone(),
-    );
+    let enc_spki = signers_cert
+        .tbs_certificate
+        .subject_public_key_info
+        .to_der()
+        .map_err(Error::Asn1)?;
+    let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki).map_err(Error::Asn1)?;
+
+    let signer: yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>> =
+        yubikey::certificate::yubikey_signer::Signer::new(yubikey, slot_id, spki_ref)
+            .map_err(|_| Error::Unrecognized)?;
 
     let digest_algorithm = AlgorithmIdentifierOwned {
         oid: const_oid::db::rfc5912::ID_SHA_256,

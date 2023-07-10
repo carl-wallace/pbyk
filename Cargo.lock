@@ -2593,11 +2593,13 @@ dependencies = [
 [[package]]
 name = "yubikey"
 version = "0.8.0-pre.0"
-source = "git+https://github.com/carl-wallace/yubikey.rs.git?branch=x509#667e33471d6c8904ebfbb0ef8251b8b519ebf2f2"
+source = "git+https://github.com/carl-wallace/yubikey.rs.git?branch=x509_pr#aef7c67fecf5ffb2b773e7125f1b821742253a6a"
 dependencies = [
  "base16ct",
+ "chrono",
  "der",
  "des",
+ "ecdsa",
  "elliptic-curve",
  "hmac",
  "log",
@@ -2615,7 +2617,6 @@ dependencies = [
  "sha1",
  "sha2",
  "signature",
- "spki",
  "subtle",
  "uuid",
  "x509-cert",

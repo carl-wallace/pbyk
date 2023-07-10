@@ -21,6 +21,15 @@ The workflow consists of four steps, with an optional fifth step that can be use
 - [User key management](ukm::ukm)
 - (Optional) [Recover](recover::recover)
 
+## Protocol
+
+The protocol is essentially Apple's [Over-the-Air Profile Delivery and Configuration (OTA protocol)](https://developer.apple.com/library/archive/documentation/NetworkingInternet/Conceptual/iPhoneOTAConfiguration/OTASecurity/OTASecurity.html)
+with the following three alterations:
+
+- An additional round-trip is added before the OTA protocol is executed to provide the portal with a self-signed certificate corresponding to a freshly generated key pair. This additional step is referred to as Pre-enrollment or Phase 0 and is used to establish trust in a public key.
+- The Phase 2 response during OTA execution is encrypted using the certificate presented to the portal and verified by a Purebred Agent during Pre-enrollment.
+- One or more user key management (UKM) or recover steps may be performed to deliver encrypted configuration protocols following execution of the OTA protocol.
+
 ## Status
 
 tl;dr: not ready to use.

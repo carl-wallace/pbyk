@@ -1,8 +1,7 @@
 use plist::Dictionary;
 
 use rsa::RsaPublicKey;
-use sha2::Sha256;
-use signature::Signer;
+use signature::Signer as OtherSigner;
 
 use cms::signed_data::SignedData;
 use cms::{
@@ -33,10 +32,11 @@ use x509_cert::{
     spki::{AlgorithmIdentifierOwned, SubjectPublicKeyInfoRef},
     Certificate,
 };
+use yubikey::certificate::yubikey_signer::Rsa2048;
 use yubikey::{
-    certificate::{write, CertInfo},
+    certificate::CertInfo,
     piv::{AlgorithmId, SlotId},
-    MgmKey, YubiKey, YubiKeySigningKey,
+    MgmKey, YubiKey,
 };
 
 use crate::utils::{recipient_identifier_from_cert, signer_identifier_from_cert};
@@ -47,6 +47,7 @@ use crate::{
     utils::{generate_self_signed_cert, get_email_addresses, get_subject_name, verify_and_decrypt},
     Error, Result,
 };
+use yubikey::certificate::yubikey_signer::YubiRsa;
 
 /// Generate signature over presented data using provided YubiKey, slot and public key from `cert`
 /// with the Sha256 hash algorithm
@@ -56,11 +57,15 @@ fn sign_request(
     cert: &Certificate,
     data: &[u8],
 ) -> crate::Result<BitString> {
-    let signer: YubiKeySigningKey<'_, Sha256> = YubiKeySigningKey::new(
-        yubikey,
-        slot_id,
-        cert.tbs_certificate.subject_public_key_info.clone(),
-    );
+    let enc_spki = cert
+        .tbs_certificate
+        .subject_public_key_info
+        .to_der()
+        .map_err(Error::Asn1)?;
+    let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki).map_err(Error::Asn1)?;
+    let signer: yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>> =
+        yubikey::certificate::yubikey_signer::Signer::new(yubikey, slot_id, spki_ref)
+            .map_err(|_| Error::Unrecognized)?;
 
     match signer.try_sign(data) {
         Ok(sig) => match sig.to_bitstring() {
@@ -288,14 +293,21 @@ fn prepare_signed_data(
         parameters: None,
     };
 
-    let signer: YubiKeySigningKey<'_, Sha256> = YubiKeySigningKey::new(
-        yubikey,
-        slot_id,
-        self_signed_cert
-            .tbs_certificate
-            .subject_public_key_info
-            .clone(),
-    );
+    let enc_spki = self_signed_cert
+        .tbs_certificate
+        .subject_public_key_info
+        .to_der()
+        .map_err(Error::Asn1)?;
+    let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki).map_err(Error::Asn1)?;
+
+    let signer: yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>> =
+        match yubikey::certificate::yubikey_signer::Signer::new(yubikey, slot_id, spki_ref) {
+            Ok(s) => s,
+            Err(e) => {
+                log_error(&format!("Failed to created YubiKey signer: {:?}", e));
+                return Err(Error::YubiKey(e));
+            }
+        };
 
     let external_message_digest = None;
     let mut signer_info_builder = SignerInfoBuilder::new(
@@ -440,7 +452,7 @@ pub async fn process_scep_payload(
     assert!(yubikey.authenticate(mgmt_key.clone()).is_ok());
     let signed_data_pkcs7_der = prepare_signed_data(yubikey, slot_id, ss, &enc_ed)?;
 
-    log_debug(&format!("Submitting SCEP request to {get_ca_url}"));
+    log_debug(&format!("Submitting SCEP request to {pki_op_url}"));
     let result = match post_body(
         &pki_op_url,
         &signed_data_pkcs7_der,
@@ -478,12 +490,8 @@ pub async fn process_scep_payload(
             match cert_choice {
                 CertificateChoices::Certificate(c) => {
                     let enc_cert = c.to_der().map_err(Error::Asn1)?;
-                    let _ = write(
-                        yubikey,
-                        slot_id,
-                        CertInfo::Uncompressed,
-                        enc_cert.as_slice(),
-                    );
+                    let yc = yubikey::certificate::Certificate { cert: c.clone() };
+                    let _ = yc.write(yubikey, slot_id, CertInfo::Uncompressed);
                     return Ok(enc_cert);
                 }
                 _ => {

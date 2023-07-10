@@ -74,7 +74,11 @@ pub fn reset_yubikey(
 
     let mut cccid_bytes = CCC_TMPL.to_vec();
     cccid_bytes[9..23].copy_from_slice(&cardid_cccid);
-    let cccid = CccId(cccid_bytes.try_into().unwrap());
+    let cccid = CccId(
+        cccid_bytes
+            .try_into()
+            .map_err(|_| yubikey::Error::GenericError)?,
+    );
     if let Err(e) = cccid.set(yubikey) {
         log_error(&format!("Failed to set CccId: {:?}", e));
         return Err(e);
@@ -92,7 +96,11 @@ pub fn reset_yubikey(
 
     let mut chuid_bytes = CHUID_TMPL.to_vec();
     chuid_bytes[29..45].copy_from_slice(&cardid_chuid);
-    let chuid = ChuId(chuid_bytes.try_into().unwrap());
+    let chuid = ChuId(
+        chuid_bytes
+            .try_into()
+            .map_err(|_| yubikey::Error::GenericError)?,
+    );
     if let Err(e) = chuid.set(yubikey) {
         log_error(&format!("Failed to set ChuId: {:?}", e));
         return Err(e);

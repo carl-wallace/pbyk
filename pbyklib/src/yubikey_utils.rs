@@ -5,7 +5,7 @@ use const_oid::db::rfc4519::COMMON_NAME;
 use der::asn1::{Ia5StringRef, PrintableStringRef, TeletexStringRef, Utf8StringRef};
 use der::{Decode, Encode, Tag, Tagged};
 use x509_cert::Certificate;
-use yubikey::{certificate, piv, piv::SlotId, Key, YubiKey};
+use yubikey::{piv, piv::SlotId, Key, YubiKey};
 
 use crate::{log_error, Error, Result};
 
@@ -46,7 +46,7 @@ pub(crate) fn get_attestation_p7(yubikey: &mut YubiKey, slot_id: SlotId) -> Resu
             for key in keys {
                 if key.slot() == SlotId::Attestation {
                     match builder.add_certificate(cms::cert::CertificateChoices::Certificate(
-                        key.certificate().clone(),
+                        key.certificate().cert.clone(),
                     )) {
                         Ok(_) => {
                             found = true;
@@ -113,7 +113,7 @@ pub(crate) fn get_cert_from_slot(yubikey: &mut YubiKey, slot_id: SlotId) -> Resu
     for ac in l {
         if ac.slot() == slot_id {
             if let Some(cert) = Some(ac.certificate().clone()) {
-                return Ok(cert);
+                return Ok(cert.cert);
             }
         }
     }
@@ -122,7 +122,7 @@ pub(crate) fn get_cert_from_slot(yubikey: &mut YubiKey, slot_id: SlotId) -> Resu
 
 /// Reads certificate from CardAuthentication and extracts UUID from common name RDN in subject name
 pub(crate) fn get_uuid_from_cert(yubikey: &mut YubiKey) -> Result<String> {
-    let cert_bytes = match certificate::read(yubikey, SlotId::CardAuthentication) {
+    let cert = match yubikey::certificate::Certificate::read(yubikey, SlotId::CardAuthentication) {
         Ok(c) => c,
         Err(e) => {
             log_error(&format!(
@@ -132,11 +132,8 @@ pub(crate) fn get_uuid_from_cert(yubikey: &mut YubiKey) -> Result<String> {
             return Err(Error::Unrecognized);
         }
     };
-    let cert = match Certificate::from_der(cert_bytes.as_slice()) {
-        Ok(c) => c,
-        Err(e) => return Err(Error::Asn1(e)),
-    };
-    for n in cert.tbs_certificate.subject.0.iter() {
+
+    for n in cert.cert.tbs_certificate.subject.0.iter() {
         for a in n.0.iter() {
             if a.oid == COMMON_NAME {
                 let val = match a.value.tag() {

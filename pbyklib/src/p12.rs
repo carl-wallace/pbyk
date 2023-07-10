@@ -1,6 +1,7 @@
 //! Imports a PKCS12 object into a YubiKey
 
 use std::sync::Once;
+use x509_cert::Certificate;
 
 use openssl::pkcs12::Pkcs12;
 
@@ -10,7 +11,7 @@ use rsa::pkcs1::RsaPrivateKey;
 use yubikey::piv::RetiredSlotId;
 use yubikey::piv::SlotId::KeyManagement;
 use yubikey::{
-    certificate::{write, CertInfo},
+    certificate::CertInfo,
     piv::{import_rsa_key, AlgorithmId, RsaKeyData, SlotId},
     PinPolicy, TouchPolicy, YubiKey,
 };
@@ -135,7 +136,13 @@ pub(crate) async fn import_p12(
             return Err(Error::ParseError);
         }
     };
-    if let Err(e) = write(yubikey, slot, CertInfo::Uncompressed, &der_cert) {
+
+    let cert = match Certificate::from_der(&der_cert) {
+        Ok(cert) => yubikey::certificate::Certificate { cert },
+        Err(e) => return Err(Error::Asn1(e)),
+    };
+
+    if let Err(e) = cert.write(yubikey, slot, CertInfo::Uncompressed) {
         log_error(&format!("Failed to import certificate from PKCS #12 object at index {index} into slot {slot}: {:?}", e));
         return Err(Error::YubiKey(e));
     }
