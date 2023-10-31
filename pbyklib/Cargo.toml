@@ -2,40 +2,52 @@
 name = "pbyklib"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.65"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 base64ct = { version="1.6.0", features = ["alloc"] }
-#cms = {version = "0.2.1", path = "../../../RustCrypto/formats-pr/cms", features = ["builder"]}
-#cms = {version = "0.2.1", path = "../../../carl-wallace/formats/cms", features = ["builder"]}
-cms = {version = "0.2.1", git = "https://github.com/carl-wallace/formats.git", features = ["builder"], branch = "cmsbuilder"}
-const-oid = { version = "0.9", features = ["db"] }
-der = { version = "0.7.6", features = ["alloc", "derive", "oid", "pem"] }
+# EnvelopedDataBuilder is not yet released, hence use of private branch
+cms = {version = "0.2.1", git = "https://github.com/carl-wallace/formats.git", features = ["builder"], branch = "pbyk"}
+# cms = {version = "0.2.2", features = ["builder"]}
+const-oid = { version = "0.9.5", features = ["db"] }
+der = { version = "0.7.8", features = ["alloc", "derive", "oid", "pem"] }
 spki = "0.7.2"
-x509-cert = "0.2.3"
-yubikey = { version = "0.8.0-pre.0", git = "https://github.com/carl-wallace/yubikey.rs.git", features=["untested"], branch="x509_pr" }
+x509-cert = "0.2.4"
+# certval has not yet been released, hence use of private branch
+certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"], branch = "pbyk"}
 
 aes = "0.8.3"
 cipher = "0.4.4"
 cbc = "0.1.2"
-rsa = { version = "0.9.2", features = ["sha2"] }
+rsa = { version = "0.9.3", features = ["sha2"] }
 sha-1 = {version = "0.10.1", default-features = false}
-sha2 = "0.10"
+sha2 = "0.10.8"
 signature = { version = "2.1.0", features = ["digest", "alloc"]}
 
 hex-literal = "0.4.1"
 lazy_static = "1.4.0"
-log = "0.4.17"
-plist = "1.4.3"
-rand_core = { version = "0.6", features = ["std"] }
-reqwest = {version = "0.11", features = ["rustls-tls", "multipart", "blocking"]}
-serde = { version = "1.0.152", default-features = false, features = ["derive"] }
-serde_json = "1.0.94"
-subtle = { version = "2.1.1", default-features = false }
+log = "0.4.20"
+plist = "1.5.1"
+rand_core = { version = "0.6.4", features = ["std"] }
+reqwest = {version = "0.11.22", features = ["rustls-tls", "multipart", "blocking"]}
+serde = { version = "1.0.190", default-features = false, features = ["derive"] }
+serde_json = "1.0.107"
+subtle = { version = "2.5.0", default-features = false }
 subtle-encoding = "0.5.1"
-tokio = { version = "1.26.0", features = ["full", "time", "rt-multi-thread"]}
+tokio = { version = "1.33.0", features = ["full", "time", "rt-multi-thread"]}
+yubikey = { version = "0.8.0", features = ["untested"] }
 
+# DO NOT ADVANCE OPENSSL CRATE BEYOND 0.10.55 UNTIL PORTAL IS NO LONGER USING RC2-40 (!).
+# When this is updated, remove the old test cases that use RC2 in p12.rs.
 openssl = {version = "0.10.55", features = ["vendored"]}
 pkcs1 = "0.7.5"
 
+[features]
+default = ["dev"]
+dev = []
+om_nipr = []
+om_sipr = []
+nipr = []
+sipr = []
