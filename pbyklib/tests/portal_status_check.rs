@@ -1,4 +1,4 @@
-use pbyklib::portal_status_check::portal_status_check;
+use pbyklib::utils::portal_status_check::portal_status_check;
 
 #[cfg(feature = "dev")]
 #[tokio::test]
