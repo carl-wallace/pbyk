@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 
 members = [
     "pbyk",
@@ -7,13 +8,3 @@ members = [
 
 [profile.bench]
 debug = true
-
-[profile.release]
-debug = true
-
-#[patch.crates-io]
-#der = {path = "../../RustCrypto/formats-pr/der"}
-##x509-cert = {path = "../../RustCrypto/formats-pr/x509-cert"}
-##base64ct = {path = "../../RustCrypto/formats-pr/base64ct"}
-##const-oid = {path = "../../RustCrypto/formats-pr/const-oid"}
-#cms = {path = "../../RustCrypto/formats-pr/cms"}

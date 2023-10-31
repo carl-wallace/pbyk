@@ -1,0 +1,42 @@
+refresh_rate: 30 seconds
+appenders:
+  stdout:
+    kind: console
+    encoder:
+      pattern: "{m}{n}"
+  pbyk:
+    kind: rolling_file
+    path: "pbyk.log"
+    encoder:
+      pattern: "{d} {l} {t} - {m}{n}"
+    # The policy which handles rotation of the log file. Required.
+    policy:
+      # Identifies which policy is to be used. If no kind is specified, it will
+      # default to "compound".
+      kind: compound
+
+      # The remainder of the configuration is passed along to the policy's
+      # deserializer, and will vary based on the kind of policy.
+      trigger:
+        kind: size
+        limit: 100 mb
+
+      roller:
+        kind: delete      
+root:
+  level: debug
+  appenders:
+    - pbyk
+    - stdout
+loggers:
+  # turn hyper and/or reqwest on at desired level to see additional log output during dynamic building or regeneration
+  hyper:
+    level: debug
+  reqwest:
+    level: debug
+  rustls:
+    level: debug
+  certval:
+    level: debug
+  app::pbyk:
+    level: debug
