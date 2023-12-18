@@ -12,6 +12,13 @@ use crate::{
 
 /// Obtains fresh PIV and signature credentials and current encryption credential using the indicted
 /// YubiKey device using the URL obtained from `ukm_inputs`
+///
+/// # Arguments
+/// * `yubikey` - handle to YubiKey to enroll
+/// * `ukm_inputs` - structure containing information used to prepare URI to execute UKM action
+/// * `pin` - PIN required to provision user-related slots on the given YubiKey device
+/// * `mgmt_key` - management key required to provision the given YubiKey device
+/// * `env` - identifies the environment in which enrollment is being performed, i.e., DEV, NIPR, SIPR, OM_NIPR, OM_SIPR
 pub async fn ukm(
     yubikey: &mut YubiKey,
     ukm_inputs: &OtaActionInputs,

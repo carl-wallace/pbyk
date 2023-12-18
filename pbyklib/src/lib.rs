@@ -6,6 +6,7 @@ pub mod utils;
 
 use hex_literal::hex;
 use lazy_static::lazy_static;
+use std::io;
 use yubikey::MgmKey;
 
 /// Result type for pbyklib
@@ -27,6 +28,7 @@ pub enum Error {
     Certval(certval::Error),
     /// YubiKey is used to propagate error information from the yubikey crate
     YubiKey(yubikey::Error),
+    Io,
     Signature,
     Plist,
     Decryption,
@@ -34,6 +36,11 @@ pub enum Error {
     UnexpectedValue,
 }
 
+impl From<io::Error> for Error {
+    fn from(_: io::Error) -> Error {
+        Error::Io
+    }
+}
 impl From<der::Error> for Error {
     fn from(err: der::Error) -> Error {
         Error::Asn1(err)
@@ -42,6 +49,11 @@ impl From<der::Error> for Error {
 impl From<certval::Error> for Error {
     fn from(err: certval::Error) -> Error {
         Error::Certval(err)
+    }
+}
+impl From<yubikey::Error> for Error {
+    fn from(err: yubikey::Error) -> Error {
+        Error::YubiKey(err)
     }
 }
 

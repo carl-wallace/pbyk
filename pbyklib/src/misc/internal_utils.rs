@@ -220,6 +220,8 @@ pub(crate) fn generate_self_signed_cert(
     slot: SlotId,
     algorithm: AlgorithmId,
     name: &str,
+    pin: &[u8],
+    mgmt_key: &MgmKey,
 ) -> Result<Certificate> {
     // Generate a new key in the selected slot.
     let public_key = match piv::generate(
@@ -269,9 +271,12 @@ pub(crate) fn generate_self_signed_cert(
     let os = OctetString::new(b.as_slice())?;
     let skid = SubjectKeyIdentifier(os);
 
+    assert!(yubikey.verify_pin(pin).is_ok());
+    assert!(yubikey.authenticate(mgmt_key.clone()).is_ok());
+
     match yubikey::certificate::Certificate::generate_self_signed(
         yubikey,
-        SlotId::CardAuthentication,
+        slot,
         serial,
         validity,
         name,
@@ -296,7 +301,7 @@ pub(crate) fn buffer_to_hex(buffer: &[u8]) -> String {
     if let Ok(s) = r {
         s.to_string()
     } else {
-        "".to_string()
+        String::new()
     }
 }
 

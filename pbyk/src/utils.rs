@@ -1,16 +1,18 @@
 //! Utility functions used by the pbyk utility
 
-use crate::args::PbYkArgs;
 #[cfg(target_os = "windows")]
 use crate::no_bold::NoBold;
 #[cfg(not(target_os = "windows"))]
 use colored::Colorize;
+
 use log::LevelFilter;
 use log4rs::{
     append::console::ConsoleAppender,
     config::{Appender, Config, Root},
     encode::pattern::PatternEncoder,
 };
+
+use crate::args::PbYkArgs;
 
 /// Configures logging per logging-related elements of the provided [PbYkArgs] instance.
 ///
@@ -19,7 +21,11 @@ use log4rs::{
 /// `logging_config` option can be used to define a logging configuration that both logs to the
 /// console and logs to a file. The `log_to_console` option only emits logs from the Info level.
 /// To emit more granular messages to the console, use the `logging_config` option, which can also
-/// be used to govern logging output from dependencies.
+/// be used to govern logging output from dependencies. See <https://docs.rs/log4rs/latest/log4rs/>
+/// for a description of the YAML format.
+///
+/// If logging configuration fails, an error message is written to stdout and the application
+/// continues without logging support.
 pub(crate) fn configure_logging(args: &PbYkArgs) {
     let mut logging_configured = false;
 

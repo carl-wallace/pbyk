@@ -271,7 +271,7 @@ fn categorize_enc_cert() {
     assert!(check_key_enciphment(&cert).unwrap());
 }
 
-// todo: remove this when openssl is bumped beyond version 10.55
+// TODO: remove this when openssl is bumped beyond version 10.55
 #[tokio::test]
 async fn p12_test_rc2() {
     use hex_literal::hex;
@@ -288,7 +288,8 @@ async fn p12_test_rc2() {
 
     let _p12 = match pkcs12.as_ref().parse2(password) {
         Ok(p12) => p12,
-        Err(_e) => {
+        Err(e) => {
+            println!("p12_test_rc2 failed with: {e}. Make sure Cargo.lock has not rolled openssl, openssl-src and openssl-sys beyond 0.10.55, 111.26.0+1.1.1u and 0.9.90, respectively.");
             panic!();
         }
     };

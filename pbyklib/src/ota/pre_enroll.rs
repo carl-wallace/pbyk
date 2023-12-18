@@ -1,4 +1,4 @@
-//! Executed Pre-enroll (i.e., Phase 0) in preparation for Purebred enrollment
+//! Executes Pre-enroll (i.e., Phase 0) in preparation for Purebred enrollment
 
 use log::{debug, info};
 
@@ -10,7 +10,7 @@ use der::Encode;
 
 use yubikey::{
     piv::{AlgorithmId, SlotId},
-    Uuid, YubiKey,
+    MgmKey, Uuid, YubiKey,
 };
 
 use crate::{
@@ -23,15 +23,31 @@ use crate::{
     Error, Result,
 };
 
-/// The `pre_enroll` function interacts with the Purebred portal to prepare a YubiKey for enrollment
+/// Executes "Phase 0" to prepare a YubiKey for enrollment
+///
+/// A new key pair and self-signed certificate are generated using the [CardAuthentication](SlotId::CardAuthentication)
+/// slot and an [attestation](https://developers.yubico.com/PIV/Introduction/PIV_attestation.html)
+/// is obtained for the new key. The new self-signed certificate and attestation are encoded as a
+/// Preenroll message along with various other information, including the pre-enroll OTP, agent
+/// EDIPI and information read from the YubiKey. The message is then sent to the portal identified
+/// by the `base_url` parameter.
+///
+/// Upon success a string containing a hash of the self-signed certificate is returned.
+///
+/// # Arguments
+/// * `yubikey` - handle to YubiKey to enroll
+/// * `agent_edipi` - string containing 10 digit EDIPI of Purebred Agent who provided the `pre_enroll_otp` parameter
+/// * `pre_enroll_otp`- string containing 8 digit time-limited one-time password value provided by Purebred Agent identified by the `agent_edipi` parameter
+/// * `base_url` - base URI of Purebred portal to use to enroll YubiKey, for example, `https://pb2.redhoundsoftware.net`
 pub async fn pre_enroll(
     yubikey: &mut YubiKey,
     agent_edipi: &str,
-    serial: &str,
     pre_enroll_otp: &str,
-    host: &str,
+    base_url: &str,
+    pin: &[u8],
+    mgmt_key: &MgmKey,
 ) -> Result<String> {
-    info!("Pre-enrolling YubiKey with serial {serial}");
+    info!("Pre-enrolling YubiKey with serial {}", yubikey.serial());
 
     let uuid = Uuid::new_v4();
 
@@ -41,6 +57,8 @@ pub async fn pre_enroll(
         SlotId::CardAuthentication,
         AlgorithmId::Rsa2048,
         format!("c=US,cn={uuid}").as_str(),
+        pin,
+        mgmt_key,
     )?;
 
     debug!(
@@ -60,7 +78,7 @@ pub async fn pre_enroll(
     let preenroll = Preenroll {
         uuid: uuid.to_string(),
         edipi: agent_edipi.to_string(),
-        serial: serial.to_string(),
+        serial: yubikey.serial().to_string(),
         certificate: cb64,
         otp: pre_enroll_otp.to_string(),
         device_type: "Yubikey".to_string(),
@@ -77,7 +95,7 @@ pub async fn pre_enroll(
 
     debug!("Submitting pre-enrollment request");
     match post_body(
-        format!("{host}/pb/admin_submit").as_str(),
+        format!("{base_url}/pb/admin_submit").as_str(),
         json_preenroll.as_bytes(),
         "application/json",
     )

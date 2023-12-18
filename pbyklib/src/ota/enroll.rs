@@ -19,9 +19,10 @@ use crate::{
         network::{post_body, post_no_body},
         p12::import_p12,
         scep::process_scep_payload,
-        yubikey_utils::{get_cert_from_slot, get_uuid_from_cert},
+        yubikey_utils::get_uuid_from_cert,
     },
     ota::{OtaActionInputs, Phase2Request, Phase3Request},
+    utils::get_cert_from_slot,
     Error, Result,
 };
 
@@ -268,7 +269,16 @@ async fn phase3(
     }
 }
 
-/// Executes the OTA protocol (with encrypted phase 2 response) to complete Purebred enrollment
+/// Executes the OTA protocol (with encrypted phase 2 response) to complete Purebred enrollment, which
+/// includes issuance of a certificate for the device. User keys are provisioned via [ukm](crate::ota::ukm::ukm()) and [recover](crate::ota::recover::recover()).
+///
+/// # Arguments
+/// * `yubikey` - handle to YubiKey to enroll
+/// * `agent_edipi` - string containing 10 digit EDIPI of Purebred Agent who provided the `otp` field of the `oai` parameter
+/// * `oai` - structure containing information used to prepare URI to execute OTA protocol
+/// * `pin` - PIN required to provision user-related slots on the given YubiKey device
+/// * `mgmt_key` - management key required to provision the given YubiKey device
+/// * `env` - identifies the environment in which enrollment is being performed, i.e., DEV, NIPR, SIPR, OM_NIPR, OM_SIPR
 pub async fn enroll(
     yubikey: &mut YubiKey,
     agent_edipi: &str,

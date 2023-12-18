@@ -6,7 +6,7 @@ appenders:
       pattern: "{d} {l} {t} - {m}{n}"
   pbyk:
     kind: rolling_file
-    path: "target/pbyk.log"
+    path: "./target/pbyk.log"
     encoder:
       pattern: "{d} {l} {t} - {m}{n}"
     # The policy which handles rotation of the log file. Required.
@@ -33,14 +33,11 @@ loggers:
     level: error
   rustls:
     level: error
-  yubikey:
-    level: error
   certval:
+    level: error
+  yubikey:
     level: error
   pbyklib:
     level: debug
   pbyk:
     level: debug
-    appenders:
-      - pbyk
-    additive: true
