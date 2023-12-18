@@ -1,6 +1,6 @@
 # pbyk
 
-The `pbyk` utility is a provides a command line interface to enroll YubiKeys with a Purebred instance. Purebred is a derived
+The `pbyk` utility is a provides a command line interface and GUI interface to enroll YubiKeys with a Purebred instance. Purebred is a derived
 credential issuance system used by the U.S. Department of Defense. 
 
 As with all Purebred apps and libraries, enrollment requires the participation of a Purebred Agent. Specifically, when enrolling
@@ -12,6 +12,8 @@ passwords (OTPs) are required. These can be obtained by authenticating to the ta
 The `pbyk` utility uses support provided by the [pbyklib](../pbyklib/index.html) crate.
 
 ## Usage
+The available options depend on the elected features. The example below was prepared using `--features om_sipr,sipr,gui`.
+
 ```text
 Usage: pbyk [OPTIONS]
 
@@ -41,10 +43,11 @@ Diagnostics:
 Utilities:
   -y, --list-yubikeys  Lists available YubiKey devices, if any
   -r, --reset-yubikey  Resets the indicated YubiKey to a default state using a management key expected by Purebred applications
+  -i, --interactive    Run pbyk as command line app
 
 Logging:
   -l, --logging-config <LOGGING_CONFIG>
-          Full path and filename of YAML-formatted configuration file for log4rs logging mechanism. See <https://docs.rs/log4rs/latest/log4rs/> for details
+          Full path and filename of YAML-formatted configuration file for log4rs logging mechanism. See https://docs.rs/log4rs/latest/log4rs/ for details
   -c, --log-to-console
           Log output to the console
 ```
@@ -62,7 +65,7 @@ The first step is to list available YubiKeys. If you already know your device's 
 is present, this can be skipped.
 
 ```bash
-$ pbyk -l
+$ pbyk -y
 Name: Yubico YubiKey OTP+FIDO+CCID; Serial: 15995762
 ```
 
@@ -70,6 +73,11 @@ Next, reset the YubiKey so that it uses the expected management key.
 
 ```bash
 $ pbyk -s 15995762 -r
+Starting reset of YubiKey with serial number 15995762. Use Ctrl+C to cancel.
+Enter new PIN; PINs must contain 6 to 8 ASCII characters: 
+Re-enter new PIN: 
+Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length: 
+Re-enter new PIN Unlock Key (PUK): 
 ```
 
 ### Pre-enroll
@@ -144,11 +152,24 @@ When more than one environment is available, the `environment` option must be sp
   -e, --environment <ENVIRONMENT>  Environment to target [possible values: dev, om-sipr, sipr]
 ```
 
-\* The pbyk application does not support processing BER encoded data. NIPR CAs presently return BER-encoded data. The NIPR features have been temporarily disabled until the NIPR CAs have been updated and return DER-encoded data. 
+\* The pbyk application does not currently support processing BER encoded data. NIPR CAs presently return BER-encoded data when executing the [SCEP protocol](https://datatracker.ietf.org/doc/html/rfc8894). The NIPR features have been temporarily disabled until the NIPR CAs have been updated and return DER-encoded data. 
 
 ## Status
 
-This is a work-in-progress implementation which is at an early stage of development.
+The `pbyk` utility has been successfully tested against dev, om-sipr and sipr environments.
+
+## Known Issues
+
+### General
+- NIPR and O&M NIPR builds are not presently supported owing to lack of support for BER decoding in the `cms` crate and the current NIPR CA's usage of BER encoding when returing CA certificates during SCEP processing
+
+### GUI mode
+- YubiKey reset capability is not available
+- Presence of multiple YubiKeys is not supported
+- Copy and Paste does not work on MacOS (see [Dioxus issue 1691](https://github.com/DioxusLabs/dioxus/issues/1691))
+- Console window remains visible when run in GUI mode except on Windows
+- Console window from which app is launched in GUI mode is always hidden on Windows (this may not be desired)
+- State information is only saved when an action is performed, not when app is closed
 
 ## Minimum Supported Rust Version
 

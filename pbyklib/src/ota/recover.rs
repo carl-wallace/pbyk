@@ -11,6 +11,13 @@ use crate::{
 };
 
 /// Recovers keys for storage on the indicted YubiKey device using the URL obtained from `recover_inputs`
+///
+/// # Arguments
+/// * `yubikey` - handle to YubiKey to enroll
+/// * `recover_inputs` - structure containing information used to prepare URI to execute UKM action
+/// * `pin` - PIN required to provision user-related slots on the given YubiKey device
+/// * `mgmt_key` - management key required to provision the given YubiKey device
+/// * `env` - identifies the environment in which enrollment is being performed, i.e., DEV, NIPR, SIPR, OM_NIPR, OM_SIPR
 pub async fn recover(
     yubikey: &mut YubiKey,
     recover_inputs: &OtaActionInputs,

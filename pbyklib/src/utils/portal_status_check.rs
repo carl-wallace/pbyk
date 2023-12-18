@@ -8,8 +8,8 @@ use log::error;
 pub(crate) static STATUS_CHECK_TIMEOUT: u64 = 10;
 
 /// Attempt to connect to the `pb/portal_status` interface on the target portal to affirm network connectivity.
-pub async fn portal_status_check(host: &str) -> crate::Result<()> {
-    let url = format!("{host}/pb/portal_status");
+pub async fn portal_status_check(base_url: &str) -> crate::Result<()> {
+    let url = format!("{base_url}/pb/portal_status");
     let client = get_client(STATUS_CHECK_TIMEOUT)?;
     match client.get(&url).send().await {
         Ok(response) => match response.bytes().await {
@@ -20,7 +20,7 @@ pub async fn portal_status_check(host: &str) -> crate::Result<()> {
             }
         },
         Err(e) => {
-            error!("Status check failed for {host}: {e:?}");
+            error!("Status check failed for {base_url}: {e:?}");
             Err(Error::Network)
         }
     }

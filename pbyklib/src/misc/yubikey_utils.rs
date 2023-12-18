@@ -7,7 +7,6 @@ use der::{
     Decode, Encode, Tag, Tagged,
 };
 use log::error;
-use x509_cert::Certificate;
 use yubikey::{piv, piv::SlotId, Key, Uuid, YubiKey};
 
 use crate::{Error, Result};
@@ -99,28 +98,6 @@ pub(crate) fn get_attestation_p7(yubikey: &mut YubiKey, slot_id: SlotId) -> Resu
             Err(Error::Asn1(e))
         }
     }
-}
-
-/// Reads a certificate from the given slot and returns a `Certificate` object
-pub(crate) fn get_cert_from_slot(yubikey: &mut YubiKey, slot_id: SlotId) -> Result<Certificate> {
-    let keys = match Key::list(yubikey) {
-        Ok(l) => l,
-        Err(e) => {
-            error!(
-                "Failed to list keys on YubiKey in get_cert_from_slot: {:?}",
-                e
-            );
-            return Err(Error::Unrecognized);
-        }
-    };
-    for key in keys {
-        if key.slot() == slot_id {
-            if let Some(cert) = Some(key.certificate().clone()) {
-                return Ok(cert.cert);
-            }
-        }
-    }
-    Err(Error::BadInput)
 }
 
 /// Reads certificate from CardAuthentication and extracts common name RDN in subject name. The value

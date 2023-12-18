@@ -11,6 +11,7 @@ use yubikey::{CccId, ChuId, MgmKey, YubiKey};
 /// A script was provided in the user's guide the provided a list of actions that could be taken with the yubico-piv-tool to
 /// effect the necessary changes. Those actions were as follows:
 ///
+///```text
 ///   yubico-piv-tool -a verify-pin -P 32165498
 ///   yubico-piv-tool -a verify-pin -P 32165498
 ///   yubico-piv-tool -a verify-pin -P 32165498
@@ -23,6 +24,7 @@ use yubikey::{CccId, ChuId, MgmKey, YubiKey};
 ///   yubico-piv-tool -a set-mgm-key -n 020203040506070801020304050607080102030405060708
 ///   yubico-piv-tool -a change-puk -P 12345678 -N 12345678
 ///   yubico-piv-tool -a change-pin -P 123456 -N 77777777
+///```
 ///
 /// The reset_yubikey function is intended to perform the equivalent steps.
 ///

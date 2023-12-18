@@ -109,10 +109,10 @@ fn get_content_type(response: &Response) -> String {
             Ok(s) => s.to_string(),
             Err(e) => {
                 error!("Failed to process content type: {e:?}");
-                "".to_string()
+                String::new()
             }
         },
-        None => "".to_string(),
+        None => String::new(),
     }
 }
 

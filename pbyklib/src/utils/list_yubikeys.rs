@@ -1,7 +1,32 @@
 //! Supports listing available YubiKeys and selecting a YubiKey by serial number
 
+use crate::{Error, Result};
 use log::error;
-use yubikey::{reader::Context, Serial, YubiKey};
+use x509_cert::Certificate;
+use yubikey::piv::SlotId;
+use yubikey::{reader::Context, Key, Serial, YubiKey};
+
+/// Reads a certificate from the given slot and returns a `Certificate` object
+pub fn get_cert_from_slot(yubikey: &mut YubiKey, slot_id: SlotId) -> Result<Certificate> {
+    let keys = match Key::list(yubikey) {
+        Ok(l) => l,
+        Err(e) => {
+            error!(
+                "Failed to list keys on YubiKey in get_cert_from_slot({slot_id}): {:?}",
+                e
+            );
+            return Err(Error::Unrecognized);
+        }
+    };
+    for key in keys {
+        if key.slot() == slot_id {
+            if let Some(cert) = Some(key.certificate().clone()) {
+                return Ok(cert.cert);
+            }
+        }
+    }
+    Err(Error::BadInput)
+}
 
 /// Returns a list of available `YubiKey` instances
 pub fn list_yubikeys() -> yubikey::Result<Vec<YubiKey>> {

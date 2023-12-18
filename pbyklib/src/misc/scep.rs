@@ -405,6 +405,8 @@ pub async fn process_scep_payload(
         slot_id,
         AlgorithmId::Rsa2048,
         &subject_name.to_string(),
+        pin,
+        mgmt_key,
     ) {
         Ok(c) => c,
         Err(e) => {

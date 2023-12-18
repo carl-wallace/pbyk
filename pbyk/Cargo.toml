@@ -1,6 +1,6 @@
 [package]
 name = "pbyk"
-version = "0.1.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.70"
 
@@ -9,13 +9,42 @@ rust-version = "1.70"
 [dependencies]
 pbyklib = {path = "../pbyklib"}
 
-clap = {version = "4.4.7", features=["std", "derive"]}
-colored = "2.0.4"
-log = "0.4.17"
+clap = {version = "4.4.11", features=["std", "derive"]}
+colored = "2.1.0"
+log = "0.4.20"
 log4rs = {version = "1.2.0"}
-rpassword = "7.2.0"
-tokio = { version = "1.33.0", features = ["full", "time", "rt-multi-thread"]}
+rpassword = "7.3.1"
+tokio = { version = "1.35.0", features = ["full", "time", "rt-multi-thread"]}
 yubikey = { version = "0.8.0", features = ["untested"] }
+
+dioxus = {version = "0.4.0", optional = true}
+dioxus-desktop = {version = "0.4.0", optional = true}
+fermi = { version = "0.4.3", optional = true }
+native-dialog = { version = "0.7.0", optional = true }
+
+# Use fork until upstream is updated. This bumps the project to dioxus 0.4.0. See https://github.com/mrxiaozhuox/dioxus-toast/pull/3.
+dioxus-toast = { git = "https://github.com/carl-wallace/dioxus-toast", optional = true, branch = "update" }
+
+cfg-if = "1.0.0"
+home = {version = "0.5.5", optional = true}
+anyhow = {version = "1.0.75", optional = true}
+
+serde = { version = "1.0.193", default-features = false, features = ["derive"] }
+serde_json = "1.0.108"
+
+lazy_static = "1.4.0"
+base64ct = { version="1.6.0", features = ["alloc"] }
+
+# certval has not yet been released, hence use of private branch
+certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"], branch = "pbyk"}
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = {version = "0.3.9", features = ["wincon", "winuser"]}
+
+[dev-dependencies]
+ignore = "0.4.21"
+image = { version = "0.24.7", features = [] }
+png = "0.17.10"
 
 [features]
 default = ["dev"]
@@ -24,3 +53,4 @@ om_nipr = ["pbyklib/om_nipr"]
 om_sipr = ["pbyklib/om_sipr"]
 nipr = ["pbyklib/nipr"]
 sipr = ["pbyklib/sipr"]
+gui = ["home", "anyhow", "dioxus-desktop", "dioxus", "dioxus-toast", "fermi", "native-dialog"]

@@ -1,0 +1,299 @@
+//! Utility functions supporting GUI functionality
+
+#![cfg(feature = "gui")]
+#![allow(non_snake_case)]
+
+use std::{
+    fs,
+    fs::{create_dir_all, File},
+};
+
+use dioxus::prelude::*;
+use home::home_dir;
+use log::{debug, error};
+use yubikey::{piv::SlotId, YubiKey};
+
+use certval::{is_self_signed, populate_5280_pki_environment, PDVCertificate, PkiEnvironment};
+use dioxus_desktop::use_window;
+
+use crate::args::PbYkArgs;
+use crate::gui::gui_main::Phase;
+use pbyklib::{utils::get_cert_from_slot, Error, Result};
+
+/// Read saved arguments from (home dir)/.pbyk/pbyk.cfg, which is a JSON-formatted representation of
+/// a PbYkArgs structure.
+pub(crate) fn read_saved_args_or_default() -> PbYkArgs {
+    if let Some(home_dir) = home_dir() {
+        let app_cfg = home_dir.join(".pbyk").join("pbyk.cfg");
+        if let Ok(f) = File::open(app_cfg) {
+            match serde_json::from_reader(&f) {
+                Ok(saved_args) => return saved_args,
+                Err(e) => {
+                    error!("Failed to parse saved pbyk configuration: {:?}", e);
+                }
+            };
+        }
+    }
+    PbYkArgs::default()
+}
+
+// TODO: fire this from app close event handler if possible
+/// Save a JSON-formatted representation of a PbYkArgs structure to \<home dir\>/.pbyk/pbyk.cfg.
+pub(crate) fn save_args(args: &PbYkArgs) -> Result<()> {
+    if let Some(hd) = home_dir() {
+        let app_home = hd.join(".pbyk");
+        if !app_home.exists() && create_dir_all(&app_home).is_err() {
+            error!(
+                "Failed to create {} directory",
+                app_home.to_str().unwrap_or_default()
+            );
+            return Err(Error::Unrecognized);
+        }
+
+        let app_cfg = app_home.join("pbyk.cfg");
+        if let Ok(json_args) = serde_json::to_string(&args) {
+            if let Err(e) = fs::write(app_cfg, json_args) {
+                error!("Unable to write args to file: {e}");
+                return Err(Error::Unrecognized);
+            } else {
+                return Ok(());
+            }
+        }
+    }
+    Err(Error::Unrecognized)
+}
+
+use serde::{Deserialize, Serialize};
+
+/// Default window width
+static PBYK_DEFAULT_WIDTH: u32 = 625;
+/// Default window height
+static PBYK_DEFAULT_HEIGHT: u32 = 400;
+
+/// Structure to serialize and deserialize window size information
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct SavedWindowsSize {
+    pub width: u32,
+    pub height: u32,
+}
+impl Default for SavedWindowsSize {
+    fn default() -> Self {
+        SavedWindowsSize {
+            width: PBYK_DEFAULT_WIDTH,
+            height: PBYK_DEFAULT_HEIGHT,
+        }
+    }
+}
+
+/// Saves the current window size to a file named sws.json in the .pbyk folder in the user's home directory.
+pub(crate) fn save_window_size(cx: Scope<'_>) -> Result<()> {
+    let window = use_window(cx);
+    let scale_factor = if let Some(m) = window.current_monitor() {
+        m.scale_factor()
+    } else {
+        1.0
+    };
+
+    let inner_size = window
+        .webview
+        .window()
+        .outer_size()
+        .to_logical(scale_factor);
+    let sws = SavedWindowsSize {
+        width: inner_size.width,
+        height: inner_size.height,
+    };
+    debug!("save_window_size: {sws:?}");
+
+    if let Some(hd) = home_dir() {
+        let app_home = hd.join(".pbyk");
+        if !app_home.exists() && create_dir_all(&app_home).is_err() {
+            error!(
+                "Failed to create {} directory",
+                app_home.to_str().unwrap_or_default()
+            );
+            return Err(Error::Unrecognized);
+        }
+
+        let app_cfg = app_home.join("sws.json");
+        if let Ok(json_args) = serde_json::to_string(&sws) {
+            if let Err(e) = fs::write(app_cfg, json_args) {
+                error!("Unable to write SavedWindowSize to file: {e}");
+                return Err(Error::Unrecognized);
+            } else {
+                return Ok(());
+            }
+        }
+    }
+    Err(Error::Unrecognized)
+}
+
+/// Reads saved window size from a file named sws.json in the .pbyk folder in the user's home directory. If the file
+/// does not exist or if file contents seem irregular, default [width](PBYK_DEFAULT_WIDTH) and [height](PBYK_DEFAULT_HEIGHT) values are used.
+pub(crate) fn read_saved_window_size() -> SavedWindowsSize {
+    if let Some(home_dir) = home_dir() {
+        let app_cfg = home_dir.join(".pbyk").join("sws.json");
+        if let Ok(f) = File::open(app_cfg) {
+            match serde_json::from_reader::<&File, SavedWindowsSize>(&f) {
+                Ok(saved_args) => {
+                    // crude sanity check
+                    if PBYK_DEFAULT_WIDTH * 4 > saved_args.width
+                        && PBYK_DEFAULT_HEIGHT * 4 > saved_args.height
+                    {
+                        return saved_args;
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to parse saved pbyk configuration: {:?}", e);
+                }
+            };
+        }
+    }
+    SavedWindowsSize::default()
+}
+
+/// Searches the map for the given key. If an entry is found, the value is returned. Else, None is returned.
+pub(crate) fn string_or_none(ev: &Event<FormData>, key: &str) -> Option<String> {
+    if let Some(v) = ev.values.get(key) {
+        if !v[0].is_empty() {
+            return Some(v[0].clone());
+        }
+    }
+    None
+}
+
+/// Searches the map for the given key. If an entry is found, the value is returned. Else, the provided default value is returned as a String.
+pub(crate) fn string_or_default(ev: &Event<FormData>, key: &str, default: &str) -> String {
+    if let Some(v) = ev.values.get(key) {
+        if !v[0].is_empty() {
+            return v[0].clone();
+        }
+    }
+    default.to_string()
+}
+
+/// Returns PreEnroll if no certificate can be read from CardAuthentication slot or if
+/// certificate read from CardAuthentication slot is self-signed.
+///
+/// Returns Ukm when certificate in CardAuthentication slot is not-self-signed and there is no
+/// certificate in Authentication or Signature slot.
+///
+/// Returns UkmOrRecovery when certificate in CardAuthentication slot is not-self-signed and there is
+/// a certificate in Authentication or Signature slot.
+pub(crate) fn determine_phase(yubikey: &mut YubiKey) -> Phase {
+    match get_cert_from_slot(yubikey, SlotId::CardAuthentication) {
+        Ok(c) => {
+            let mut pe = PkiEnvironment::default();
+            populate_5280_pki_environment(&mut pe);
+            let pdv = PDVCertificate::try_from(c).unwrap();
+            if !is_self_signed(&pe, &pdv) {
+                let r1 = get_cert_from_slot(yubikey, SlotId::Authentication);
+                let r2 = get_cert_from_slot(yubikey, SlotId::Signature);
+                if r1.is_ok() || r2.is_ok() {
+                    Phase::UkmOrRecovery
+                } else {
+                    Phase::Ukm
+                }
+            } else {
+                Phase::PreEnroll
+            }
+        }
+        Err(e) => {
+            debug!(
+                "Did not read certificate from CardAuthentication slot with: {e:?}. Continuing..."
+            );
+            Phase::PreEnroll
+        }
+    }
+}
+
+/// Returns an environment value to use to pre-select a radio button when no option has already been chosen.
+#[allow(clippy::needless_return)]
+pub(crate) fn get_default_env() -> &'static str {
+    cfg_if! {
+        if #[cfg(feature = "dev")] {
+            return "DEV";
+        }
+        else if #[cfg(feature = "om_nipr")] {
+            return "OM_NIPR";
+        }
+        else if #[cfg(feature = "om_sipr")] {
+            return "OM_SIPR";
+        }
+        else if #[cfg(feature = "nipr")] {
+            return "NIPR";
+        }
+        else if #[cfg(feature = "sipr")] {
+            return "SIPR";
+        }
+        else {
+            "DEV"
+        }
+    }
+}
+
+/// Returns UseState\<bool\> instances corresponding to each of five possible radio buttons used to
+/// select an environment. Give are always returned here, though as few as zero may be displayed
+/// depending on the features elected at build time.
+///
+/// The returned tuple can be used to assign the following variables used in app rsx definitions:
+///     - s_dev_checked,
+///     - s_om_nipr_checked,
+///     - s_om_sipr_checked,
+///     - s_nipr_checked,
+///     - s_sipr_checked
+#[allow(clippy::type_complexity)]
+pub(crate) fn get_default_env_radio_selections(
+    cx: Scope<'_>,
+) -> (
+    &UseState<bool>,
+    &UseState<bool>,
+    &UseState<bool>,
+    &UseState<bool>,
+    &UseState<bool>,
+) {
+    match get_default_env() {
+        "DEV" => (
+            use_state(cx, || true),
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || false),
+        ),
+        "OM_NIPR" => (
+            use_state(cx, || false),
+            use_state(cx, || true),
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || false),
+        ),
+        "OM_SIPR" => (
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || true),
+            use_state(cx, || false),
+            use_state(cx, || false),
+        ),
+        "NIPR" => (
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || true),
+            use_state(cx, || false),
+        ),
+        "SIPR" => (
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || true),
+        ),
+        _ => (
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || false),
+            use_state(cx, || false),
+        ),
+    }
+}
