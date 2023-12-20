@@ -15,7 +15,9 @@ log = "0.4.20"
 log4rs = {version = "1.2.0"}
 rpassword = "7.3.1"
 tokio = { version = "1.35.0", features = ["full", "time", "rt-multi-thread"]}
-yubikey = { version = "0.8.0", features = ["untested"] }
+# the yubikey fork features a length check needed when pbyk is run in presence of some middleware. use fork until upstream is updated with length check added to form.
+#yubikey = { version = "0.8.0", features = ["untested"] }
+yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "pbyk", features = ["untested"]}
 
 dioxus = {version = "0.4.0", optional = true}
 dioxus-desktop = {version = "0.4.0", optional = true}

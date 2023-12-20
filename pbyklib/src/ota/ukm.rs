@@ -1,6 +1,6 @@
 //! Interacts with Purebred portal to obtain fresh PIV and signature credentials and current recovered encryption credential
 
-use log::info;
+use log::{error, info};
 use yubikey::{piv::SlotId, MgmKey, YubiKey};
 
 use crate::{
@@ -42,5 +42,20 @@ pub async fn ukm(
         env,
     )
     .await?;
-    process_payloads(yubikey, &dec, pin, mgmt_key, env, false).await
+    match process_payloads(yubikey, &dec, pin, mgmt_key, env, true).await {
+        Ok(_) => {
+            info!(
+                "Begin user key management operation for YubiKey with serial {}",
+                ukm_inputs.serial
+            );
+            Ok(())
+        }
+        Err(e) => {
+            error!(
+                "User key management operation failed for YubiKey with serial {}",
+                ukm_inputs.serial
+            );
+            Err(e)
+        }
+    }
 }

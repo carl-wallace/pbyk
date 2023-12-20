@@ -63,31 +63,24 @@ pub(crate) fn hide_console_window() {
 pub(crate) fn GuiMain(cx: Scope<'_>) -> Element<'_> {
     let mut fatal_error_val = String::new();
 
-    let s_serial = use_state(cx, || {
-        // TODO: support presence of > 1 yubikey
-        let mut available = vec![];
-        match list_yubikeys() {
-            Ok(readers) => {
-                let num_readers = readers.len();
-                info!("Number of YubiKeys: {}", num_readers);
-                if 1 == num_readers {
-                    for reader in readers {
-                        info!("Name: {}; Serial: {}", reader.name(), reader.serial());
-                        if !available.contains(&reader.serial()) {
-                            available.push(reader.serial());
-                        }
-                    }
-                    available[0].to_string()
-                } else {
-                    fatal_error_val = "More than one YubiKey is available. At present, pbyk does not support the presence of more than one YubiKey when run in GUI mode. Close the app, make sure one YubiKey is available then try again or use pbyk as a command line app.".to_string();
-                    String::new()
+    let mut serials = vec![];
+    let s_serial = use_state(cx, || match list_yubikeys() {
+        Ok(readers) => {
+            let num_readers = readers.len();
+            info!("Number of YubiKeys: {}", num_readers);
+            for reader in readers {
+                info!("Name: {}; Serial: {}", reader.name(), reader.serial());
+                let serial_str = reader.serial().to_string();
+                if !serials.contains(&serial_str) {
+                    serials.push(serial_str);
                 }
             }
-            Err(e) => {
-                error!("Failed to list YubiKeys with: {}", e);
-                fatal_error_val = format!("Failed to list YubiKeys with: {}. Close the app, make sure one YubiKey is available then try again.", e);
-                String::new()
-            }
+            serials[0].clone()
+        }
+        Err(e) => {
+            error!("Failed to list YubiKeys with: {}", e);
+            fatal_error_val = format!("Failed to list YubiKeys with: {}. Close the app, make sure at least one YubiKey is available then try again.", e);
+            String::new()
         }
     });
 
@@ -100,6 +93,7 @@ pub(crate) fn GuiMain(cx: Scope<'_>) -> Element<'_> {
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
     let do_reset = false;
     if !s_init.get() && !s_serial.get().is_empty() {
+        debug!("Getting default YubiKey serial number inside main");
         s_init.setter()(true);
         let serial = s_serial.get();
         let s = yubikey::Serial(serial.parse::<u32>().unwrap());
@@ -113,39 +107,46 @@ pub(crate) fn GuiMain(cx: Scope<'_>) -> Element<'_> {
         };
 
         if let Some(mut yubikey) = yubikey {
+            debug!("Determining YubiKey phase inside main");
             match yubikey.authenticate(PB_MGMT_KEY.clone()) {
                 Ok(_) => {
                     phase = determine_phase(&mut yubikey);
                 }
                 Err(e) => {
-                    let err = "The YubiKey with serial number {serial} is not using the expected management key. Please reset the device then try again.";
+                    let err = format!("The YubiKey with serial number {serial} is not using the expected management key. Please reset the device then try again.");
                     error!("{err}: {e:?}");
 
                     #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                    use native_dialog::{MessageDialog, MessageType};
-                    #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                    match MessageDialog::new()
-                        .set_type(MessageType::Info)
-                        .set_title("Reset?")
-                        .set_text(&format!("The YubiKey with serial number {serial} is not using the expected management key. Would you like to reset the device now?"))
-                        .show_confirm()
                     {
-                        Ok(answer) => {
-                            if answer {
-                                do_reset = true;
-                            } else {
+                        use native_dialog::{MessageDialog, MessageType};
+                        match MessageDialog::new()
+                            .set_type(MessageType::Info)
+                            .set_title("Reset?")
+                            .set_text(&format!("The YubiKey with serial number {serial} is not using the expected management key. Would you like to reset the device now?"))
+                            .show_confirm()
+                        {
+                            Ok(answer) => {
+                                if answer {
+                                    do_reset = true;
+                                } else {
+                                    fatal_error_val = err.to_string();
+                                }
+                            },
+                            Err(e) => {
+                                error!("Failed to solicit reset answer from user: {e}");
                                 fatal_error_val = err.to_string();
                             }
-                        },
-                        Err(e) => {
-                            error!("Failed to solicit reset answer from user: {e}");
-                            fatal_error_val = err.to_string();
                         }
+                    }
+                    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+                    {
+                        fatal_error_val = err.to_string();
                     }
                 }
             }
         }
     }
+    let s_serials = use_state(cx, || serials);
     let s_phase = use_state(cx, || {
         info!("Setting initial phase to {phase:?}");
         phase
@@ -156,11 +157,20 @@ pub(crate) fn GuiMain(cx: Scope<'_>) -> Element<'_> {
         do_reset
     });
 
-    if !fatal_error_val.is_empty() {
+    let s_fatal_error_val = use_state(cx, || fatal_error_val);
+
+    if !s_fatal_error_val.get().is_empty() {
         debug!("Showing fatal_error view");
-        fatal_error(cx, &fatal_error_val)
+        fatal_error(cx, s_fatal_error_val.get())
     } else {
         debug!("Showing app view");
-        app(cx, s_phase, s_serial, s_reset_req)
+        app(
+            cx,
+            s_phase,
+            s_serial,
+            s_reset_req,
+            s_serials,
+            s_fatal_error_val,
+        )
     }
 }

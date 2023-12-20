@@ -1,6 +1,6 @@
 //! Provide certification path building and validation support
 
-use log::{debug, error, log_enabled, trace, Level::Trace};
+use log::{debug, error, info, log_enabled, trace, Level::Trace};
 
 use base64ct::{Base64, Encoding};
 use der::Encode;
@@ -44,6 +44,7 @@ pub(crate) async fn validate_cert(
     intermediate: Vec<Certificate>,
     env: &str,
 ) -> crate::Result<()> {
+    debug!("validate_cert for {env}");
     // let configuration = get_configuration().expect("Failed to read configuration.");
 
     // create a default path settings object and default PKIEnvironment object
@@ -203,7 +204,14 @@ async fn validate_cert_buf(
             let mut cpr = CertificationPathResults::new();
             log_certs_in_path(path);
             match pe.validate_path(pe, cps, path, &mut cpr) {
-                Ok(()) => return Ok(()),
+                Ok(()) => {
+                    info!(
+                        "Validating {} certificate path for {}",
+                        (path.intermediates.len() + 2),
+                        name_to_string(&path.target.decoded_cert.tbs_certificate.subject)
+                    );
+                    return Ok(());
+                }
                 Err(e) => {
                     error!(
                         "Failed to validate {} certificate path for {}: {e:?}",

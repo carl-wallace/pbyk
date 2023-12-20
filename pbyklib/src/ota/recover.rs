@@ -1,6 +1,6 @@
 //! Interacts with Purebred portal to recover escrowed keys
 
-use log::info;
+use log::{error, info};
 use yubikey::{piv::SlotId, MgmKey, YubiKey};
 
 use crate::{
@@ -41,5 +41,20 @@ pub async fn recover(
         env,
     )
     .await?;
-    process_payloads(yubikey, &dec, pin, mgmt_key, env, true).await
+    match process_payloads(yubikey, &dec, pin, mgmt_key, env, true).await {
+        Ok(_) => {
+            info!(
+                "Begin recover operation for YubiKey with serial {}",
+                recover_inputs.serial
+            );
+            Ok(())
+        }
+        Err(e) => {
+            error!(
+                "Recover operation failed for YubiKey with serial {}",
+                recover_inputs.serial
+            );
+            Err(e)
+        }
+    }
 }

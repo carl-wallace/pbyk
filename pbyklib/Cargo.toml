@@ -36,7 +36,9 @@ serde_json = "1.0.108"
 subtle = { version = "2.5.0", default-features = false }
 subtle-encoding = "0.5.1"
 tokio = { version = "1.33.0", features = ["full", "time", "rt-multi-thread"]}
-yubikey = { version = "0.8.0", features = ["untested"] }
+# the yubikey fork features a length check needed when pbyk is run in presence of some middleware. use fork until upstream is updated with length check added to form.
+#yubikey = { version = "0.8.0", features = ["untested"] }
+yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "pbyk", features = ["untested"]}
 
 # DO NOT ADVANCE OPENSSL CRATE BEYOND 0.10.55 UNTIL PORTAL IS NO LONGER USING RC2-40 (!).
 # When this is updated, remove the old test cases that use RC2 in p12.rs.

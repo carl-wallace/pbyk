@@ -271,8 +271,14 @@ pub(crate) fn generate_self_signed_cert(
     let os = OctetString::new(b.as_slice())?;
     let skid = SubjectKeyIdentifier(os);
 
-    assert!(yubikey.verify_pin(pin).is_ok());
-    assert!(yubikey.authenticate(mgmt_key.clone()).is_ok());
+    if let Err(e) = yubikey.verify_pin(pin) {
+        error!("Failed to verify PIN in generate_self_signed_cert: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
+    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+        error!("Failed to authenticate using management key in generate_self_signed_cert: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
 
     match yubikey::certificate::Certificate::generate_self_signed(
         yubikey,
@@ -386,8 +392,14 @@ pub(crate) async fn verify_and_decrypt(
     mgmt_key: &MgmKey,
     env: &str,
 ) -> Result<Vec<u8>> {
-    assert!(yubikey.verify_pin(pin).is_ok());
-    assert!(yubikey.authenticate(mgmt_key.clone()).is_ok());
+    if let Err(e) = yubikey.verify_pin(pin) {
+        error!("Failed to verify PIN in verify_and_decrypt: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
+    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+        error!("Failed to authenticate using management key in verify_and_decrypt: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
 
     let xml = purebred_authorize_request(content, env).await?;
 
