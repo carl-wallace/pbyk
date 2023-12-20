@@ -20,6 +20,7 @@ use dioxus_desktop::tao::menu::{MenuBar, MenuItem};
 
 #[cfg(feature = "gui")]
 use dioxus_desktop::tao::window::Icon;
+use log::error;
 
 use pbyklib::{
     ota::{enroll, pre_enroll, recover, ukm, OtaActionInputs},
@@ -103,6 +104,8 @@ cfg_if! {
             use std::env;
             let e = env::args_os();
             let mut show_gui = true;
+            #[cfg(target_os = "windows")]
+            let mut hide_console = true;
             if 1 != e.len() {
                 let args = PbYkArgs::parse();
                 if !gui_sanity_check(&args) {
@@ -111,6 +114,10 @@ cfg_if! {
 
                 if !args.interactive {
                     configure_logging(&args);
+                    #[cfg(target_os = "windows")]
+                    if args.logging_config.is_some() {
+                        hide_console = false;
+                    }
                 }
                 else {
                     show_gui = false;
@@ -119,7 +126,9 @@ cfg_if! {
 
             if show_gui {
                 #[cfg(target_os = "windows")]
-                hide_console_window();
+                if hide_console {
+                    hide_console_window();
+                }
 
                 let icon_bytes = include_bytes!("../assets/keys-arrow-256.ico");
                 let icon = Icon::from_rgba(icon_bytes.to_vec(), 256, 256).unwrap();
@@ -503,7 +512,11 @@ async fn interactive_main() {
     // let pin = "123456";
 
     let mgmt_key = PB_MGMT_KEY.clone();
-    assert!(yubikey.authenticate(mgmt_key.clone()).is_ok());
+    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+        error!("Failed to authenticate using management key in generate_self_signed_cert: {e:?}");
+        println!("Failed to authenticate using management key in generate_self_signed_cert: {e:?}");
+        return;
+    }
 
     if args.pre_enroll_otp.is_some() {
         match pre_enroll(

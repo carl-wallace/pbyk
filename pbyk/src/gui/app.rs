@@ -3,7 +3,11 @@
 #![cfg(feature = "gui")]
 #![allow(non_snake_case)]
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::BTreeMap,
+    sync::Mutex,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use dioxus::prelude::*;
 use dioxus_toast::{Icon, ToastInfo, ToastManager};
@@ -31,9 +35,39 @@ use crate::gui::{
 lazy_static! {
     pub static ref DISA_ICON_BASE64: String =
         Base64::encode_string(include_bytes!("../../assets/disa.png"));
+    pub static ref BURNED_OTPS: Mutex<BTreeMap<String, Duration>> = Mutex::new(BTreeMap::new());
 }
 
 static TOAST_MANAGER: AtomRef<ToastManager> = AtomRef(|_| ToastManager::default());
+
+fn add_otp(otp: &str) {
+    clean_otps();
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => {
+            BURNED_OTPS
+                .lock()
+                .unwrap()
+                .insert(otp.to_string(), duration);
+        }
+        Err(e) => {
+            error!(
+                "Failed to read duration in add_otp: {e}. Continuing without OTP reuse detection."
+            )
+        }
+    }
+}
+
+fn check_otp(otp: &str) -> bool {
+    BURNED_OTPS.lock().unwrap().contains_key(otp)
+}
+
+fn clean_otps() {
+    let cur = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let limit = Duration::new(180, 0);
+    BURNED_OTPS.lock().unwrap().retain(|_, v| cur - *v < limit);
+}
 
 /// app is the primary component of GUI mode. It draws the forms that comprise the Purebred workflow
 /// and drives execution through the workflow.
@@ -42,6 +76,8 @@ pub(crate) fn app<'a>(
     s_phase: &'a UseState<Phase>,
     s_serial: &'a UseState<String>,
     s_reset_req: &'a UseState<bool>,
+    s_serials: &'a UseState<Vec<String>>,
+    s_fatal_error_val: &'a UseState<String>,
 ) -> Element<'a> {
     // initialize plumbing for status dialogs
     use_init_atom_root(cx);
@@ -64,6 +100,11 @@ pub(crate) fn app<'a>(
     let s_recover = use_state(cx, || false);
     let (s_dev_checked, s_om_nipr_checked, s_om_sipr_checked, s_nipr_checked, s_sipr_checked) =
         get_default_env_radio_selections(cx);
+
+    let serials = s_serials.get();
+    let serial_setter = s_serial.setter();
+    let s_check_phase = use_state(cx, || false);
+    let check_phase_setter = s_check_phase.setter();
 
     // Style variables for enabling/disabling UI elements. One governs the cursor. The other governs
     // elements that benefit from disabling, i.e., clickable elements and editable elements. Read-only
@@ -109,7 +150,6 @@ pub(crate) fn app<'a>(
                 use_state(cx, || "Pre-enroll".to_string()),
             ),
         };
-
     // Only show the environment row/table when there is more than one environment option available
     let s_multi_env_style = if 1 == num_environments() {
         use_state(cx, || "display:none;")
@@ -143,6 +183,7 @@ pub(crate) fn app<'a>(
     let s_sipr_style = use_state(cx, || "display:none;");
 
     if *s_reset_complete.get() {
+        s_pin.setter()(String::new());
         s_reset_complete.setter()(false);
         s_edipi_style.setter()("display:table-row;");
         s_pre_enroll_otp_style.setter()("display:table-row;");
@@ -151,6 +192,129 @@ pub(crate) fn app<'a>(
         s_button_label.setter()("Pre-enroll".to_string());
         s_hide_reset.setter()("none".to_string());
         s_phase.setter()(PreEnroll);
+    }
+
+    if *s_check_phase.get() {
+        s_pin.setter()(String::new());
+        let serial = s_serial.get().clone();
+        debug!("Connecting to newly selected YubiKey: {serial}");
+        let s = yubikey::Serial(serial.parse::<u32>().unwrap());
+        let yubikey = match get_yubikey(Some(s)) {
+            Ok(yk) => Some(yk),
+            Err(e) => {
+                error!("Failed to connect to YubiKey with serial {serial} with: {e}");
+                s_fatal_error_val.setter()(format!("Failed to connect to YubiKey with serial {serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e));
+                None
+            }
+        };
+
+        if let Some(mut yubikey) = yubikey {
+            debug!("Determining phase of newly selected YubiKey: {serial}");
+            match yubikey.authenticate(PB_MGMT_KEY.clone()) {
+                Ok(_) => {
+                    let phase = determine_phase(&mut yubikey);
+                    if phase != *s_phase.get() {
+                        s_phase.setter()(phase.clone());
+                        match phase {
+                            PreEnroll => {
+                                s_edipi_style.setter()("display:table-row;");
+                                s_pre_enroll_otp_style.setter()("display:table-row;");
+                                s_ukm_otp_style.setter()("display:none;");
+                                s_hide_recovery.setter()("none");
+                                s_button_label.setter()("Pre-enroll".to_string());
+                                s_hide_reset.setter()("none".to_string());
+                            }
+                            Enroll => {
+                                s_edipi_style.setter()("display:table-row;");
+                                s_pre_enroll_otp_style.setter()("display:none;");
+                                s_ukm_otp_style.setter()("display:none;");
+                                s_enroll_otp_style.setter()("display:table-row;");
+                                s_hide_recovery.setter()("none");
+                                s_button_label.setter()("Enroll".to_string());
+                                s_hide_reset.setter()("none".to_string());
+                            }
+                            Ukm => {
+                                s_edipi_style.setter()("display:none;");
+                                s_pre_enroll_otp_style.setter()("display:none;");
+                                s_enroll_otp_style.setter()("display:none;");
+                                s_ukm_otp_style.setter()("display:table-row;");
+                                s_hide_recovery.setter()("none");
+                                s_button_label.setter()("User Key Management".to_string());
+                                s_hide_reset.setter()("none".to_string());
+                            }
+                            UkmOrRecovery => {
+                                s_edipi_style.setter()("display:none;");
+                                s_pre_enroll_otp_style.setter()("display:none;");
+                                s_enroll_otp_style.setter()("display:none;");
+                                s_ukm_otp_style.setter()("display:table-row;");
+                                s_button_label.setter()("User Key Management".to_string());
+                                s_hide_recovery.setter()("inline-block");
+                                s_hide_reset.setter()("none".to_string());
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    let err = format!("The YubiKey with serial number {serial} is not using the expected management key. Please reset the device then try again.");
+                    error!("{err}: {e:?}");
+
+                    #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
+                    {
+                        let (tx, rx) = std::sync::mpsc::channel();
+                        use native_dialog::{MessageDialog, MessageType};
+                        match MessageDialog::new()
+                            .set_type(MessageType::Info)
+                            .set_title("Reset?")
+                            .set_text(&format!("The YubiKey with serial number {serial} is not using the expected management key. Would you like to reset the device now?"))
+                            .show_confirm()
+                        {
+                            Ok(answer) => {
+                                if answer {
+                                    let _ = tx.send(None);
+                                } else {
+                                    let _ = tx.send(Some(err.to_string()));
+                                }
+                            },
+                            Err(e) => {
+                                error!("Failed to solicit reset answer from user: {e}");
+                            }
+                        }
+                        match rx.recv() {
+                            Ok(result) => {
+                                match result {
+                                    Some(err) => {
+                                        if 1 == s_serials.len() {
+                                            s_fatal_error_val.setter()(err);
+                                        } else {
+                                            let serial_str = s_serial.get();
+                                            for cur in s_serials.get().iter() {
+                                                if cur != serial_str {
+                                                    info!("Resetting serial from {serial_str} to {cur}");
+                                                    s_serial.setter()(cur.to_string());
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    None => reset_setter(true),
+                                }
+                            }
+                            Err(e) => {
+                                let sm =
+                                    format!("Failed to spawn thread for reset: {e}").to_string();
+                                error!("{}", sm);
+                                s_fatal_error_val.setter()(sm);
+                            }
+                        }
+                    }
+
+                    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+                    s_fatal_error_val.setter()(err.to_string());
+                }
+            }
+        }
+
+        check_phase_setter(false);
     }
 
     // Non-fatal error handling
@@ -185,8 +349,8 @@ pub(crate) fn app<'a>(
     if *s_reset_req.get() {
         debug!("Showing reset view");
         if !s_pin.get().is_empty() || !s_puk.get().is_empty() {
-            pin_setter("".to_string());
-            puk_setter("".to_string());
+            pin_setter(String::new());
+            puk_setter(String::new());
         }
         reset(
             cx,
@@ -338,6 +502,7 @@ pub(crate) fn app<'a>(
                                 }
                             };
 
+                            debug!("Connecting to target YubiKey: {yks}");
                             let mut yubikey = match get_yubikey(Some(yks)) {
                                 Ok(yk) => yk,
                                 Err(e) => {
@@ -375,6 +540,7 @@ pub(crate) fn app<'a>(
 
                             match p {
                                 PreEnroll => {
+                                    info!("Starting Pre-enroll operation...");
                                     let agent_edipi = match string_or_none(&ev, "edipi") {
                                         Some(agent_edipi) => agent_edipi,
                                         None => {
@@ -407,10 +573,23 @@ pub(crate) fn app<'a>(
                                             return;
                                         }
                                     };
+                                    if check_otp(&pre_enroll_otp) {
+                                        let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
+                                        error!("{}", sm);
+                                        error_msg_setter(sm.to_string());
+                                        cursor_setter("default".to_string());
+                                        disabled_setter(false);
+                                        return;
+                                    }
+                                    else {
+                                        add_otp(&pre_enroll_otp);
+                                    }
 
                                     let (tx, rx) = std::sync::mpsc::channel();
                                     let pin_t = pin.clone();
+                                    pin_setter(pin);
                                     let agent_edipi_t = agent_edipi.clone();
+                                    edipi_setter(agent_edipi);
                                     let _ = tokio::spawn(async move {
                                         match pre_enroll(
                                             &mut yubikey,
@@ -431,7 +610,7 @@ pub(crate) fn app<'a>(
                                             Err(e) => {
                                                 let sm = format!("Pre-enroll failed: {:?}", e);
                                                 error!("{sm}");
-                                                if let Err(e) = tx.send((None, Some(sm))) {
+                                                if let Err(e) = tx.send((None, Some(format!("{sm}. Make sure the Agent EDIPI and Pre-enroll OTP are correct and try again.")))) {
                                                     error!("Failed to send pre-enroll error to main thread: {e}");
                                                 }
                                             }
@@ -442,8 +621,6 @@ pub(crate) fn app<'a>(
                                         Ok(result) => {
                                             if let Some(hash) = result.0 {
                                                 hash_setter(hash.clone());
-                                                edipi_setter(agent_edipi);
-                                                pin_setter(pin);
                                                 enter_enroll_phase!();
                                             }
                                             else {
@@ -460,7 +637,7 @@ pub(crate) fn app<'a>(
                                     disabled_setter(false);
                                 }
                                 Enroll => {
-                                    info!("Enroll");
+                                    info!("Starting Enroll operation...");
                                     let agent_edipi = match string_or_none(&ev, "edipi") {
                                         Some(agent_edipi) => agent_edipi,
                                         None => {
@@ -493,9 +670,21 @@ pub(crate) fn app<'a>(
                                             return;
                                         }
                                     };
+                                    if check_otp(&enroll_otp) {
+                                        let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
+                                        error!("{}", sm);
+                                        error_msg_setter(sm.to_string());
+                                        cursor_setter("default".to_string());
+                                        disabled_setter(false);
+                                        return;
+                                    }
+                                    else {
+                                        add_otp(&enroll_otp);
+                                    }
 
                                     let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
                                     let pin_t = pin.clone();
+                                    pin_setter(pin);
                                     let oai = OtaActionInputs::new(
                                         &yubikey.serial().to_string(),
                                         &enroll_otp,
@@ -522,7 +711,7 @@ pub(crate) fn app<'a>(
                                             Err(e) => {
                                                 let sm = format!("Enroll failed: {:?}", e);
                                                 error!("{}", sm);
-                                                if let Err(e) = tx.send(Some(sm)) {
+                                                if let Err(e) = tx.send(Some(format!("{sm}. Make sure the Agent EDIPI and Enroll OTP are correct and try again."))) {
                                                     error!("Failed to send enroll error to main thread: {e}");
                                                 }
                                             }
@@ -536,7 +725,6 @@ pub(crate) fn app<'a>(
                                             }
                                             else {
                                                 enter_ukm_phase!();
-                                                pin_setter(pin);
                                             }
                                         }
                                         Err(e) => {
@@ -572,6 +760,17 @@ pub(crate) fn app<'a>(
                                             return;
                                         }
                                     };
+                                    if check_otp(&ukm_otp) {
+                                        let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
+                                        error!("{}", sm);
+                                        error_msg_setter(sm.to_string());
+                                        cursor_setter("default".to_string());
+                                        disabled_setter(false);
+                                        return;
+                                    }
+                                    else {
+                                        add_otp(&ukm_otp);
+                                    }
 
                                     let oai = OtaActionInputs::new(
                                         &yks.to_string(),
@@ -581,8 +780,11 @@ pub(crate) fn app<'a>(
                                     );
 
                                     if recovery_active {
+                                        recover_setter(false);
+                                        info!("Starting recover operation...");
                                         let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
                                         let pin_t = pin.clone();
+                                        pin_setter(pin);
                                         let _ = tokio::spawn(async move {
                                             match recover(&mut yubikey, &oai, pin_t.as_bytes(), &PB_MGMT_KEY.clone(), &environment).await {
                                                 Ok(_) => {
@@ -594,7 +796,7 @@ pub(crate) fn app<'a>(
                                                 Err(e) => {
                                                     let sm = format!("Recover failed: {:?}", e);
                                                     error!("{}", sm);
-                                                    if let Err(e) = tx.send(Some(sm.clone())) {
+                                                    if let Err(e) = tx.send(Some(format!("{sm}. Make sure the UKM OTP are correct and try again."))) {
                                                         error!("Failed to send recover results to main thread: {e}");
                                                     }
                                                 }
@@ -607,7 +809,6 @@ pub(crate) fn app<'a>(
                                                 }
                                                 else {
                                                     recover_setter(false);
-                                                    pin_setter(pin);
                                                     success_msg_setter("Recover completed successfully".to_string());
                                                 }
                                             }
@@ -619,8 +820,10 @@ pub(crate) fn app<'a>(
                                         }
                                     }
                                     else {
+                                        info!("Starting UKM operation...");
                                         let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
                                         let pin_t = pin.clone();
+                                        pin_setter(pin);
                                         let _ = tokio::spawn(async move {
                                             match ukm(&mut yubikey, &oai, pin_t.as_bytes(), &PB_MGMT_KEY.clone(), &environment).await {
                                                 Ok(_) => {
@@ -632,7 +835,7 @@ pub(crate) fn app<'a>(
                                                 Err(e) => {
                                                     let sm = format!("UKM failed: {:?}", e);
                                                     error!("{}", sm);
-                                                    if let Err(e) = tx.send(Some(sm.clone())) {
+                                                    if let Err(e) = tx.send(Some(format!("{sm}. Make sure the UKM OTP are correct and try again."))) {
                                                         error!("Failed to send UKM results to main thread: {e}");
                                                     }
                                                 }
@@ -644,7 +847,6 @@ pub(crate) fn app<'a>(
                                                     error_msg_setter(error);
                                                 }
                                                 else {
-                                                    pin_setter(pin);
                                                     enter_ukm_or_recovery_phase!();
                                                     success_msg_setter("UKM completed successfully".to_string());
                                                 }
@@ -666,7 +868,26 @@ pub(crate) fn app<'a>(
                         class: "{s_cursor}",
                         tbody {
                             tr{
-                                style: "display:table-row;",
+                                style: if *s_phase.get() != Enroll { "display:table-row;" } else {"display:none;"},
+                                td{div{label {r#for: "multi_serial", "YubiKey Serial Number"}}}
+                                td{select {
+                                   oninput: move |evt| {
+                                       println!("{evt:?}");
+                                       serial_setter(evt.value.to_string());
+                                       check_phase_setter(true);
+                                   },
+                                   name: "serials", value: "{s_serial}",
+                                   serials.iter().map(|s|
+                                       rsx!{ option {
+                                           value : "{s}",
+                                           label : "{s}",
+                                           selected: if *s_serial.get() == *s {"true"} else {"false"}
+                                       }
+                                   })
+                                }}
+                            }
+                            tr{
+                                style: if *s_phase.get() == Enroll { "display:table-row;" } else {"display:none;"},
                                 td{div{label {r#for: "serial", "YubiKey Serial Number"}}}
                                 td{input { r#type: "text", name: "serial", readonly: true, value: "{s_serial}"}}
                             }
@@ -698,7 +919,7 @@ pub(crate) fn app<'a>(
                             tr{
                                 style: "display:table-row;",
                                 td{div{label {r#for: "pin", "YubiKey PIN"}}}
-                                td{input { disabled: "{s_disabled}", r#type: "password", placeholder: "Enter YubiKey PIN", name: "pin", maxlength: "8"}}
+                                td{input { disabled: "{s_disabled}", r#type: "password", placeholder: "Enter YubiKey PIN", name: "pin", value: "{s_pin}", maxlength: "8"}}
                             }
                             tr{
                                 style: "{s_multi_env_style}",

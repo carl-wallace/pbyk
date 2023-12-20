@@ -113,6 +113,7 @@ pub(crate) fn reset<'a>(
                             }
                         };
 
+                        log::debug!("Connecting to YubiKey to reset: {yks}");
                         let mut yubikey = match get_yubikey(Some(yks)) {
                             Ok(yk) => yk,
                             Err(e) => {

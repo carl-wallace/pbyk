@@ -97,7 +97,7 @@ pub(crate) fn save_window_size(cx: Scope<'_>) -> Result<()> {
     let inner_size = window
         .webview
         .window()
-        .outer_size()
+        .inner_size()
         .to_logical(scale_factor);
     let sws = SavedWindowsSize {
         width: inner_size.width,
@@ -140,6 +140,7 @@ pub(crate) fn read_saved_window_size() -> SavedWindowsSize {
                     if PBYK_DEFAULT_WIDTH * 4 > saved_args.width
                         && PBYK_DEFAULT_HEIGHT * 4 > saved_args.height
                     {
+                        debug!("read_saved_window_size: {saved_args:?}");
                         return saved_args;
                     }
                 }
@@ -149,6 +150,7 @@ pub(crate) fn read_saved_window_size() -> SavedWindowsSize {
             };
         }
     }
+    debug!("read_saved_window_size: using default");
     SavedWindowsSize::default()
 }
 

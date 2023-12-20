@@ -189,8 +189,14 @@ fn prepare_csr(
 
     let enc_cri = cert_req_info.to_der()?;
 
-    assert!(yubikey.verify_pin(pin).is_ok());
-    assert!(yubikey.authenticate(mgmt_key.clone()).is_ok());
+    if let Err(e) = yubikey.verify_pin(pin) {
+        error!("Failed to verify PIN in prepare_csr: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
+    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+        error!("Failed to authenticate using management key in prepare_csr: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
 
     let sig = match sign_request(yubikey, slot_id, self_signed_cert, &enc_cri) {
         Ok(sig) => sig,
@@ -426,8 +432,14 @@ pub async fn process_scep_payload(
     let csr_der = prepare_csr(yubikey, slot_id, &ss, attrs, pin, mgmt_key)?;
     let enc_ed = prepare_enveloped_data(&csr_der, &ca_cert)?;
 
-    assert!(yubikey.verify_pin(pin).is_ok());
-    assert!(yubikey.authenticate(mgmt_key.clone()).is_ok());
+    if let Err(e) = yubikey.verify_pin(pin) {
+        error!("Failed to verify PIN in process_scep_payload: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
+    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+        error!("Failed to authenticate using management key in process_scep_payload: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
     let signed_data_pkcs7_der = prepare_signed_data(yubikey, slot_id, ss, &enc_ed)?;
 
     debug!("Submitting SCEP request to {pki_op_url}");

@@ -62,8 +62,14 @@ pub fn reset_yubikey(
     }
     let _ = yubikey.reset_device();
 
-    assert!(yubikey.verify_pin(b"123456").is_ok());
-    assert!(yubikey.authenticate(MgmKey::default()).is_ok());
+    if let Err(e) = yubikey.verify_pin(b"123456") {
+        error!("Failed to verify using default PIN post-reset: {e:?}");
+        return Err(e);
+    }
+    if let Err(e) = yubikey.authenticate(MgmKey::default()) {
+        error!("Failed to authenticate using default management key post-reset: {e:?}");
+        return Err(e);
+    }
 
     const CCC_TMPL: &[u8] = &[
         0xf0, 0x15, 0xa0, 0x00, 0x00, 0x01, 0x16, 0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -114,7 +120,10 @@ pub fn reset_yubikey(
         error!("Failed to set management key: {e:?}");
         return Err(e);
     }
-    assert!(yubikey.authenticate(management_key.clone()).is_ok());
+    if let Err(e) = yubikey.authenticate(management_key.clone()) {
+        error!("Failed to authenticate using management key in generate_self_signed_cert: {e:?}");
+        return Err(e);
+    }
     if let Err(e) = yubikey.change_pin(b"123456", pin.as_bytes()) {
         error!("Failed to set new PIN: {e:?}");
         return Err(e);
