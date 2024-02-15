@@ -1,10 +1,12 @@
+//! RSA-related utility functions
+
 // poached from RSA crate
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 
 /// Processes decrypted RSA block containing a KEK and returns the KEK. This was poached from
 /// <https://github.com/RustCrypto/RSA/blob/40069a5408dc9eb531d68a50b3ada5c9ab47466d/src/algorithms/pkcs1v15.rs>
 #[inline]
-pub fn decrypt_inner(em: Vec<u8>, k: usize) -> crate::Result<(u8, Vec<u8>, u32)> {
+pub(crate) fn decrypt_inner(em: Vec<u8>, k: usize) -> crate::Result<(u8, Vec<u8>, u32)> {
     if k < 11 {
         return Err(crate::Error::Decryption);
     }

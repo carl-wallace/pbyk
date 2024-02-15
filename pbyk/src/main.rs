@@ -10,6 +10,9 @@
 extern crate cfg_if;
 
 use clap::{CommandFactory, Parser};
+#[cfg(feature = "gui")]
+use home::home_dir;
+use zeroize::Zeroizing;
 
 #[cfg(target_os = "windows")]
 use crate::no_bold::NoBold;
@@ -20,7 +23,6 @@ use dioxus_desktop::tao::menu::{MenuBar, MenuItem};
 
 #[cfg(feature = "gui")]
 use dioxus_desktop::tao::window::Icon;
-use log::error;
 
 use pbyklib::{
     ota::{enroll, pre_enroll, recover, ukm, OtaActionInputs},
@@ -32,6 +34,7 @@ use pbyklib::{
 
 mod args;
 use args::{num_environments, Environment, PbYkArgs};
+use pbyklib::ota::CryptoModule;
 
 #[cfg(feature = "gui")]
 mod gui;
@@ -43,17 +46,32 @@ mod utils;
 use crate::gui::utils::{get_default_env, read_saved_window_size};
 use utils::configure_logging;
 
+#[cfg(all(target_os = "windows", feature = "vsc"))]
+use pbyklib::utils::list_vscs::{get_vsc, get_vsc_id_from_serial, list_vscs, num_vscs};
+
+#[cfg(all(target_os = "windows", feature = "vsc"))]
+use log::info;
+
+use log::debug;
+#[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+use pbyklib::utils::reset_vsc::reset_vsc;
+
 /// Confirms provided arguments include at least one Action, Diagnostic or Utility argument
 fn sanity_check(args: &PbYkArgs) -> bool {
     if !args.portal_status_check
         && !args.scep_check
         && !args.list_yubikeys
-        && !args.reset_yubikey
+        && !args.reset_device
         && args.pre_enroll_otp.is_none()
         && args.enroll_otp.is_none()
         && args.ukm_otp.is_none()
         && args.recover_otp.is_none()
     {
+        #[cfg(all(target_os = "windows", feature = "vsc"))]
+        if args.list_vscs {
+            return true;
+        }
+
         println!(
             "{}: at least one Action, Diagnostic or Utility argument must be provided\n",
             "ERROR".bold()
@@ -75,7 +93,7 @@ fn gui_sanity_check(args: &PbYkArgs) -> bool {
             || args.serial.is_some()
             || args.environment.is_some()
             || args.list_yubikeys
-            || args.reset_yubikey
+            || args.reset_device
             || args.pre_enroll_otp.is_some()
             || args.enroll_otp.is_some()
             || args.ukm_otp.is_some()
@@ -104,7 +122,8 @@ cfg_if! {
             use std::env;
             let e = env::args_os();
             let mut show_gui = true;
-            #[cfg(target_os = "windows")]
+            let mut has_logging_config = false;
+            #[cfg(all(target_os = "windows", feature = "vsc"))]
             let mut hide_console = true;
             if 1 != e.len() {
                 let args = PbYkArgs::parse();
@@ -114,8 +133,9 @@ cfg_if! {
 
                 if !args.interactive {
                     configure_logging(&args);
-                    #[cfg(target_os = "windows")]
-                    if args.logging_config.is_some() {
+                    has_logging_config = args.logging_config.is_some();
+                    #[cfg(all(target_os = "windows", feature = "vsc"))]
+                    if has_logging_config {
                         hide_console = false;
                     }
                 }
@@ -125,9 +145,30 @@ cfg_if! {
             }
 
             if show_gui {
-                #[cfg(target_os = "windows")]
+                #[cfg(all(target_os = "windows", feature = "vsc"))]
                 if hide_console {
                     hide_console_window();
+                }
+
+                if !has_logging_config {
+                    if let Some(home_dir) = home_dir() {
+                        let pbyk_dir = home_dir.join(".pbyk");
+                        let logging_config = pbyk_dir.join("log.yaml");
+                        if !logging_config.exists() {
+                            let log_template = include_bytes!("../assets/log.yaml");
+                            if let Ok(log_template_str) = std::str::from_utf8(log_template.as_slice()) {
+                                let template = log_template_str.replace("<HOME DIR PBYK>", &pbyk_dir.join("pbyk.log").into_os_string().into_string().unwrap_or_default());
+                                if std::fs::write(&logging_config, template).is_ok() {
+                                    if let Err(e) = log4rs::init_file(&logging_config, Default::default()) {
+                                        println!("Failed to configure logging using {logging_config:?}: {e:?}");
+                                    }
+                                }
+                            }
+                        }
+                        else if let Err(e) = log4rs::init_file(&logging_config, Default::default()) {
+                                println!("Failed to configure logging using {logging_config:?}: {e:?}");
+                        }
+                    }
                 }
 
                 let icon_bytes = include_bytes!("../assets/keys-arrow-256.ico");
@@ -156,7 +197,12 @@ cfg_if! {
                                 menu.add_submenu("&pbyk", true, app_menu);
                                 menu
                             });
-                let config = Config::new().with_window(window);
+                let config = match home_dir() {
+                    Some(home_dir) => {
+                        Config::new().with_window(window).with_data_directory(home_dir.join(".pbyk"))
+                    }
+                    None => Config::new().with_window(window)
+                };
                 dioxus_desktop::launch_cfg(GuiMain, config,);
             }
             else {
@@ -226,7 +272,9 @@ async fn interactive_main() {
     // ----------------------------------------------------------------------------------
     // operations that are independent of environment (utilities)
     //  - list_yubikeys
+    //  - list_vscs
     //  - reset_yubikey
+    //  - reset_vsc
     // ----------------------------------------------------------------------------------
     if args.list_yubikeys {
         match list_yubikeys() {
@@ -248,120 +296,240 @@ async fn interactive_main() {
         return;
     }
 
+    #[cfg(all(target_os = "windows", feature = "vsc"))]
+    if args.list_vscs {
+        match list_vscs().await {
+            Ok(vscs) => {
+                for vsc in vscs {
+                    println!(
+                        "{}: {}",
+                        "Name".bold(),
+                        vsc.Reader().unwrap().Name().unwrap()
+                    );
+                }
+            }
+            Err(e) => {
+                println!(
+                    "{}: failed to detect virtual smart cards: {e:?}",
+                    "ERROR".bold()
+                );
+            }
+        }
+        return;
+    }
+
+    // Sanity check for presence of serial number (i.e., require if more than one device is present, use lone device else if
+    // only one is present and no serial was presented)
     if args.serial.is_none() && !args.portal_status_check && !args.scep_check {
         // if there's only one YubiKey present, read its serial number and use it.
-        // if there's more than one YubiKey present, set list_yubikeys to true and admonish user to specific a serial number
-        let count = match num_yubikeys() {
-            Ok(c) => c,
-            Err(e) => {
-                println!("{}: failed to detect YubiKeys: {e}", "ERROR".bold());
-                return;
+        // if there's more than one YubiKey present, set list_yubikeys to true and admonish user to specify a serial number
+        let yubikey_count = num_yubikeys().unwrap_or_else(|e| {
+            debug!("{}: failed to detect YubiKeys: {e}", "ERROR".bold());
+            0
+        });
+        #[cfg(all(target_os = "windows", feature = "vsc"))]
+        let vsc_count = num_vscs().await.unwrap_or_else(|e| {
+            debug!("{}: failed to detect VSCs: {e:?}", "ERROR".bold());
+            0
+        });
+        #[cfg(not(all(target_os = "windows", feature = "vsc")))]
+        let vsc_count = 0;
+
+        if 1 == (yubikey_count + vsc_count) {
+            if 1 == yubikey_count {
+                let list = match list_yubikeys() {
+                    Ok(list) => list,
+                    Err(e) => {
+                        println!("{}: no --serial argument was provided and failed to detect any available YubiKeys: {e}", "ERROR".bold());
+                        return;
+                    }
+                };
+                match list.first() {
+                    Some(yk) => args.serial = Some(yk.serial().to_string()),
+                    None => {
+                        println!("{}: no --serial argument was provided and failed to read serial number of an available YubiKey", "ERROR".bold());
+                        return;
+                    }
+                };
+            } else {
+                #[cfg(all(target_os = "windows", feature = "vsc"))]
+                {
+                    let list = match list_vscs().await {
+                        Ok(list) => list,
+                        Err(e) => {
+                            println!("{}: no --serial argument was provided and failed to detect any available VSCs: {e:?}", "ERROR".bold());
+                            return;
+                        }
+                    };
+                    match list.first() {
+                        Some(yk) => {
+                            args.serial = Some(
+                                yk.Reader()
+                                    .expect("Failed to get reader for VSC")
+                                    .Name()
+                                    .expect("Failed to get reader name for VSC")
+                                    .to_string(),
+                            )
+                        }
+                        None => {
+                            println!("{}: no --serial argument was provided and failed to read serial number of an available VSC", "ERROR".bold());
+                            return;
+                        }
+                    };
+                }
             }
-        };
-        if 1 == count {
-            let list = match list_yubikeys() {
-                Ok(list) => list,
-                Err(e) => {
-                    println!("{}: no --serial argument was provided and failed to detect any available YubiKeys: {e}", "ERROR".bold());
-                    return;
-                }
-            };
-            match list.first() {
-                Some(yk) => args.serial = Some(yk.serial().to_string()),
-                None => {
-                    println!("{}: no --serial argument was provided and failed to read serial number of an available YubiKey", "ERROR".bold());
-                    return;
-                }
-            };
+        } else if 0 == (yubikey_count + vsc_count) {
+            #[cfg(not(target_os = "windows"))]
+            println!("{}: failed to detect any YubiKeys", "ERROR".bold());
+            #[cfg(all(target_os = "windows", feature = "vsc"))]
+            println!("{}: failed to detect any YubiKeys or VSCs", "ERROR".bold());
         } else {
-            args.list_yubikeys = true;
-            println!("{}: more than one YubiKey was detected but no --serial argument was provided. Please try again providing a --serial argument corresponding to an available YubiKey or when only one YubiKey is available.", "ERROR".bold());
+            if 1 <= yubikey_count {
+                args.list_yubikeys = true;
+            } else {
+                #[cfg(all(target_os = "windows", feature = "vsc"))]
+                {
+                    args.list_vscs = true;
+                }
+            }
+            println!("{}: more than one device was detected but no --serial argument was provided. Please try again providing a --serial argument corresponding to an available device or when only one device is available.", "ERROR".bold());
             return;
         }
     }
 
-    let serial = match &args.serial {
-        Some(serial) => match serial.parse::<u32>() {
-            Ok(s) => Some(Serial(s)),
-            Err(e) => {
-                println!("ERROR: failed to parse serial number: {:?}", e);
-                return;
-            }
-        },
-        None => None,
-    };
+    // at this point if we need a serial number we have one
 
-    if args.reset_yubikey {
-        let mut yubikey = match get_yubikey(serial) {
-            Ok(yk) => yk,
-            Err(e) => {
-                println!("{}: {:?}", "ERROR".bold(), e);
-                return;
+    if args.reset_device {
+        match &args.serial {
+            Some(serial) => {
+                match serial.parse::<u32>() {
+                    Ok(s) => {
+                        let mut yubikey = match get_yubikey(Some(Serial(s))) {
+                            Ok(yk) => yk,
+                            Err(e) => {
+                                println!("{}: {:?}", "ERROR".bold(), e);
+                                return;
+                            }
+                        };
+
+                        println!(
+                            "Starting reset of YubiKey with serial number {}. Use Ctrl+C to cancel.",
+                            yubikey.serial()
+                        );
+
+                        // The rules below are culled from here: https://docs.yubico.com/yesdk/users-manual/application-piv/pin-puk-mgmt-key.html
+                        let pin = loop {
+                            let pin = Zeroizing::new(
+                                rpassword::prompt_password(
+                                    format!(
+                                        "{}: ",
+                                        "Enter new PIN; PINs must contain 6 to 8 ASCII characters"
+                                            .bold()
+                                    )
+                                    .to_string(),
+                                )
+                                .unwrap(),
+                            );
+                            let pin2 = Zeroizing::new(
+                                rpassword::prompt_password(
+                                    format!("{}: ", "Re-enter new PIN".bold()).to_string(),
+                                )
+                                .unwrap(),
+                            );
+                            if pin != pin2 {
+                                println!("{}: PINs do not match", "ERROR".bold());
+                            } else if pin.len() < 6 {
+                                println!(
+                                    "{}: PIN is not at least 6 characters long",
+                                    "ERROR".bold()
+                                );
+                            } else if pin.len() > 8 {
+                                println!(
+                                    "{}: PIN is longer than 8 characters long",
+                                    "ERROR".bold()
+                                );
+                            } else if !pin.is_ascii() {
+                                println!("{}: PIN contains non-ASCII characters", "ERROR".bold());
+                            } else {
+                                break pin;
+                            }
+                        };
+                        let puk = loop {
+                            let puk = Zeroizing::new(rpassword::prompt_password(
+                                format!(
+                                    "{}: ",
+                                    "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length".bold()
+                                )
+                                    .to_string(),
+                            )
+                                .unwrap());
+                            let puk2 = Zeroizing::new(
+                                rpassword::prompt_password(
+                                    format!("{}: ", "Re-enter new PIN Unlock Key (PUK)".bold())
+                                        .to_string(),
+                                )
+                                .unwrap(),
+                            );
+                            if puk != puk2 {
+                                println!("{}: PUKs do not match", "ERROR".bold());
+                            } else if puk.len() < 6 {
+                                println!(
+                                    "{}: PUK is not at least 6 characters long",
+                                    "ERROR".bold()
+                                );
+                            } else if puk.len() > 8 {
+                                println!(
+                                    "{}: PUK is longer than 8 characters long",
+                                    "ERROR".bold()
+                                );
+                            } else {
+                                break puk;
+                            }
+                        };
+                        // comment out above two loops and uncomment below to run in debugger
+                        // let pin = "123456".to_string();
+                        // let puk = "12345678".to_string();
+
+                        if let Err(e) = reset_yubikey(&mut yubikey, &pin, &puk, &PB_MGMT_KEY) {
+                            println!("{}: reset failed with: {e}", "ERROR".bold());
+                        }
+                        return;
+                    }
+
+                    #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+                    Err(_e) => {
+                        println!(
+                            "Starting reset of VSC with serial number {}. This may take a few seconds.",
+                            serial
+                        );
+
+                        match get_vsc(&serial.to_string()).await {
+                            Ok(sc) => {
+                                let _ = reset_vsc(&sc).await;
+                                return;
+                            }
+                            Err(e) => {
+                                println!("{}: {e:?}", "ERROR".bold());
+                                return;
+                            }
+                        };
+                    }
+                    #[cfg(not(all(
+                        target_os = "windows",
+                        feature = "vsc",
+                        feature = "reset_vsc"
+                    )))]
+                    Err(e) => {
+                        log::error!("ERROR: failed to parse the serial number as a YubiKey serial number: {:?}", e);
+                        println!("ERROR: failed to parse the serial number as a YubiKey serial number. Resetting virtual smart cards is not currently supported.");
+                    }
+                }
             }
+            None => {}
         };
-
-        println!(
-            "Starting reset of YubiKey with serial number {}. Use Ctrl+C to cancel.",
-            yubikey.serial()
-        );
-
-        // The rules below are culled from here: https://docs.yubico.com/yesdk/users-manual/application-piv/pin-puk-mgmt-key.html
-        let pin = loop {
-            let pin = rpassword::prompt_password(
-                format!(
-                    "{}: ",
-                    "Enter new PIN; PINs must contain 6 to 8 ASCII characters".bold()
-                )
-                .to_string(),
-            )
-            .unwrap();
-            let pin2 =
-                rpassword::prompt_password(format!("{}: ", "Re-enter new PIN".bold()).to_string())
-                    .unwrap();
-            if pin != pin2 {
-                println!("{}: PINs do not match", "ERROR".bold());
-            } else if pin.len() < 6 {
-                println!("{}: PIN is not at least 6 characters long", "ERROR".bold());
-            } else if pin.len() > 8 {
-                println!("{}: PIN is longer than 8 characters long", "ERROR".bold());
-            } else if !pin.is_ascii() {
-                println!("{}: PIN contains non-ASCII characters", "ERROR".bold());
-            } else {
-                break pin;
-            }
-        };
-        let puk = loop {
-            let puk = rpassword::prompt_password(
-                format!(
-                    "{}: ",
-                    "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length".bold()
-                )
-                .to_string(),
-            )
-            .unwrap();
-            let puk2 = rpassword::prompt_password(
-                format!("{}: ", "Re-enter new PIN Unlock Key (PUK)".bold()).to_string(),
-            )
-            .unwrap();
-            if puk != puk2 {
-                println!("{}: PUKs do not match", "ERROR".bold());
-            } else if puk.len() < 6 {
-                println!("{}: PUK is not at least 6 characters long", "ERROR".bold());
-            } else if puk.len() > 8 {
-                println!("{}: PUK is longer than 8 characters long", "ERROR".bold());
-            } else {
-                break puk;
-            }
-        };
-        // comment out above two loops and uncomment below to run in debugger
-        // let pin = "123456".to_string();
-        // let puk = "12345678".to_string();
-
-        if let Err(e) = reset_yubikey(&mut yubikey, &pin, &puk, &PB_MGMT_KEY) {
-            println!("{}: reset failed with: {e}", "ERROR".bold());
-        }
-        return;
     }
+
+    // todo - do we need a VSC reset or is that going to just be destroy and recreate (external to this tool)?
 
     // ----------------------------------------------------------------------------------
     // operations that require an environment but no YubiKey (diagnostics)
@@ -479,53 +647,97 @@ async fn interactive_main() {
     //  - ukm
     //  - recover
     // ----------------------------------------------------------------------------------
-    let mut yubikey = match get_yubikey(serial) {
-        Ok(yk) => yk,
-        Err(e) => {
-            println!("{}: {e}", "ERROR".bold());
+    #[allow(unused_assignments)]
+    let mut require_pin = false;
+    let mut cm = match &args.serial {
+        Some(serial) => match serial.parse::<u32>() {
+            Ok(s) => {
+                let mut yubikey = match get_yubikey(Some(Serial(s))) {
+                    Ok(yk) => yk,
+                    Err(e) => {
+                        println!("{}: {e}", "ERROR".bold());
+                        return;
+                    }
+                };
+
+                if yubikey.authenticate(PB_MGMT_KEY.clone()).is_err() {
+                    println!("{}: this YubiKey is not using the expected management key. Please reset the device then try again.", "ERROR".bold());
+                    return;
+                }
+                require_pin = true;
+                CryptoModule::YubiKey(yubikey)
+            }
+            Err(err) => {
+                #[cfg(all(target_os = "windows", feature = "vsc"))]
+                {
+                    info!("Ignoring error and searching for VSC: {err}");
+                    let sc = match get_vsc(&serial.to_string()).await {
+                        Ok(sc) => {
+                            args.serial = Some(get_vsc_id_from_serial(serial).unwrap());
+                            sc
+                        }
+                        Err(e) => {
+                            println!("{}: {e:?}", "ERROR".bold());
+                            return;
+                        }
+                    };
+                    CryptoModule::SmartCard(sc)
+                }
+                #[cfg(not(all(target_os = "windows", feature = "vsc")))]
+                {
+                    println!("{}: {err:?}", "ERROR".bold());
+                    return;
+                }
+            }
+        },
+        None => {
+            println!("No serial number was provided. Try again");
             return;
         }
     };
 
-    if yubikey.authenticate(PB_MGMT_KEY.clone()).is_err() {
-        println!("{}: this YubiKey is not using the expected management key. Please reset the device then try again.", "ERROR".bold());
-        return;
+    let mut pin = None;
+    if require_pin {
+        loop {
+            let entered_pin = Zeroizing::new(
+                rpassword::prompt_password(
+                    format!(
+                        "Enter PIN for device with serial number {}: ",
+                        args.serial.clone().unwrap_or_default()
+                    )
+                    .bold(),
+                )
+                .unwrap(),
+            );
+
+            #[allow(irrefutable_let_patterns)]
+            if let CryptoModule::YubiKey(yubikey) = &mut cm {
+                match yubikey.verify_pin(entered_pin.as_bytes()) {
+                    Ok(_) => {
+                        pin = Some(entered_pin);
+                        break;
+                    }
+                    Err(_) => {
+                        println!("{}: PIN verification failed. Try again.", "ERROR".bold())
+                    }
+                };
+            }
+        }
     }
 
-    let pin = loop {
-        let pin = rpassword::prompt_password(
-            format!(
-                "Enter PIN for YubiKey with serial number {}: ",
-                yubikey.serial()
-            )
-            .bold(),
-        )
-        .unwrap();
-        match yubikey.verify_pin(pin.as_bytes()) {
-            Ok(_) => break pin,
-            Err(_) => {
-                println!("{}: PIN verification failed. Try again.", "ERROR".bold())
-            }
-        };
-    };
     // comment out above loop and uncomment below to run in debugger
     // let pin = "123456";
 
     let mgmt_key = PB_MGMT_KEY.clone();
-    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
-        error!("Failed to authenticate using management key in generate_self_signed_cert: {e:?}");
-        println!("Failed to authenticate using management key in generate_self_signed_cert: {e:?}");
-        return;
-    }
 
     if args.pre_enroll_otp.is_some() {
         match pre_enroll(
-            &mut yubikey,
+            &mut cm,
             &args.agent_edipi.unwrap(),
             &args.pre_enroll_otp.unwrap(),
             &pb_base_url,
-            pin.as_bytes(),
-            &mgmt_key,
+            pin,
+            Some(&mgmt_key),
         )
         .await
         {
@@ -555,13 +767,12 @@ async fn interactive_main() {
             &pb_base_url,
             &app,
         );
-
         match enroll(
-            &mut yubikey,
+            &mut cm,
             &args.agent_edipi.unwrap().to_string(),
             &oai,
-            pin.as_bytes(),
-            &mgmt_key,
+            pin,
+            Some(&mgmt_key),
             &env,
         )
         .await
@@ -592,8 +803,7 @@ async fn interactive_main() {
             &pb_base_url,
             &app,
         );
-
-        match ukm(&mut yubikey, &oai, pin.as_bytes(), &mgmt_key, &env).await {
+        match ukm(&mut cm, &oai, pin, Some(&mgmt_key), &env).await {
             Ok(_) => {
                 println!("UKM completed successfully");
             }
@@ -620,8 +830,7 @@ async fn interactive_main() {
             &pb_base_url,
             &app,
         );
-
-        match recover(&mut yubikey, &oai, pin.as_bytes(), &mgmt_key, &env).await {
+        match recover(&mut cm, &oai, pin, Some(&mgmt_key), &env).await {
             Ok(_) => {
                 println!("Recover completed successfully");
             }

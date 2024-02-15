@@ -3,10 +3,7 @@
 #![cfg(feature = "gui")]
 #![allow(non_snake_case)]
 
-use std::{
-    fs,
-    fs::{create_dir_all, File},
-};
+use std::{fs, fs::File};
 
 use dioxus::prelude::*;
 use home::home_dir;
@@ -18,7 +15,7 @@ use dioxus_desktop::use_window;
 
 use crate::args::PbYkArgs;
 use crate::gui::gui_main::Phase;
-use pbyklib::{utils::get_cert_from_slot, Error, Result};
+use pbyklib::{utils::get_cert_from_slot, utils::state::create_app_home, Error, Result};
 
 /// Read saved arguments from (home dir)/.pbyk/pbyk.cfg, which is a JSON-formatted representation of
 /// a PbYkArgs structure.
@@ -40,25 +37,15 @@ pub(crate) fn read_saved_args_or_default() -> PbYkArgs {
 // TODO: fire this from app close event handler if possible
 /// Save a JSON-formatted representation of a PbYkArgs structure to \<home dir\>/.pbyk/pbyk.cfg.
 pub(crate) fn save_args(args: &PbYkArgs) -> Result<()> {
-    if let Some(hd) = home_dir() {
-        let app_home = hd.join(".pbyk");
-        if !app_home.exists() && create_dir_all(&app_home).is_err() {
-            error!(
-                "Failed to create {} directory",
-                app_home.to_str().unwrap_or_default()
-            );
-            return Err(Error::Unrecognized);
-        }
-
-        let app_cfg = app_home.join("pbyk.cfg");
-        if let Ok(json_args) = serde_json::to_string(&args) {
-            if let Err(e) = fs::write(app_cfg, json_args) {
-                error!("Unable to write args to file: {e}");
-                return Err(Error::Unrecognized);
-            } else {
-                return Ok(());
-            }
-        }
+    let app_home = create_app_home()?;
+    let app_cfg = app_home.join("pbyk.cfg");
+    if let Ok(json_args) = serde_json::to_string(&args) {
+        return if let Err(e) = fs::write(app_cfg, json_args) {
+            error!("Unable to write args to file: {e}");
+            Err(Error::Unrecognized)
+        } else {
+            Ok(())
+        };
     }
     Err(Error::Unrecognized)
 }
@@ -68,7 +55,7 @@ use serde::{Deserialize, Serialize};
 /// Default window width
 static PBYK_DEFAULT_WIDTH: u32 = 625;
 /// Default window height
-static PBYK_DEFAULT_HEIGHT: u32 = 400;
+static PBYK_DEFAULT_HEIGHT: u32 = 500;
 
 /// Structure to serialize and deserialize window size information
 #[derive(Serialize, Deserialize, Debug)]
@@ -105,25 +92,15 @@ pub(crate) fn save_window_size(cx: Scope<'_>) -> Result<()> {
     };
     debug!("save_window_size: {sws:?}");
 
-    if let Some(hd) = home_dir() {
-        let app_home = hd.join(".pbyk");
-        if !app_home.exists() && create_dir_all(&app_home).is_err() {
-            error!(
-                "Failed to create {} directory",
-                app_home.to_str().unwrap_or_default()
-            );
-            return Err(Error::Unrecognized);
-        }
-
-        let app_cfg = app_home.join("sws.json");
-        if let Ok(json_args) = serde_json::to_string(&sws) {
-            if let Err(e) = fs::write(app_cfg, json_args) {
-                error!("Unable to write SavedWindowSize to file: {e}");
-                return Err(Error::Unrecognized);
-            } else {
-                return Ok(());
-            }
-        }
+    let app_home = create_app_home()?;
+    let app_cfg = app_home.join("sws.json");
+    if let Ok(json_args) = serde_json::to_string(&sws) {
+        return if let Err(e) = fs::write(app_cfg, json_args) {
+            error!("Unable to write SavedWindowSize to file: {e}");
+            Err(Error::Unrecognized)
+        } else {
+            Ok(())
+        };
     }
     Err(Error::Unrecognized)
 }
@@ -197,7 +174,7 @@ pub(crate) fn determine_phase(yubikey: &mut YubiKey) -> Phase {
                     Phase::Ukm
                 }
             } else {
-                Phase::PreEnroll
+                Phase::Enroll
             }
         }
         Err(e) => {
@@ -297,5 +274,14 @@ pub(crate) fn get_default_env_radio_selections(
             use_state(cx, || false),
             use_state(cx, || false),
         ),
+    }
+}
+
+#[cfg(all(target_os = "windows", feature = "vsc"))]
+pub fn parse_reader_from_vsc_display(serial: &str) -> String {
+    let parts = serial.split(" - ").collect::<Vec<&str>>();
+    match parts.first() {
+        Some(s) => s.to_string(),
+        None => "".to_string(),
     }
 }

@@ -1,24 +1,18 @@
-use std::{
-    collections::BTreeMap,
-    io::Cursor,
-    str::FromStr,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+//! Utility functions for use within pbyklib
 
-use log::{error, info};
+use std::{collections::BTreeMap, io::Cursor, str::FromStr};
+
+use log::error;
 use plist::Dictionary;
-use rand_core::{OsRng, RngCore};
 use subtle_encoding::hex;
 
-use cipher::{generic_array::GenericArray, BlockDecryptMut, KeyIvInit};
-use sha1::Sha1;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 
 use cms::{
     builder::{SignedDataBuilder, SignerInfoBuilder},
     cert::CertificateChoices,
     content_info::ContentInfo,
-    enveloped_data::{EnvelopedData, RecipientIdentifier, RecipientInfo},
+    enveloped_data::RecipientIdentifier,
     signed_data::{EncapsulatedContentInfo, SignedData, SignerIdentifier, SignerInfo},
 };
 use const_oid::{
@@ -28,67 +22,22 @@ use const_oid::{
     },
     ObjectIdentifier,
 };
-use der::{
-    asn1::{OctetString, UtcTime},
-    Any, Decode, Encode, Tag,
-};
-use spki::{AlgorithmIdentifierOwned, SubjectPublicKeyInfoRef};
+use der::{asn1::OctetString, Any, Decode, Encode, Tag};
+use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier};
 use x509_cert::{
-    builder::CertificateBuilder,
     ext::pkix::{BasicConstraints, SubjectKeyIdentifier},
     name::Name,
-    serial_number::SerialNumber,
-    time::{Time, Validity},
     Certificate,
-};
-use yubikey::{
-    certificate::yubikey_signer::{Rsa2048, YubiRsa},
-    piv,
-    piv::{AlgorithmId, SlotId},
-    MgmKey, PinPolicy, TouchPolicy, YubiKey,
 };
 
 use certval::{populate_5280_pki_environment, PkiEnvironment};
+use signature::{Keypair, Signer};
 
-use crate::{
-    misc::{
-        p12::import_p12, pki::validate_cert, rsa_utils::decrypt_inner, scep::process_scep_payload,
-    },
-    Error, Result,
-};
+use crate::{misc::pki::validate_cert, Error, Result};
 
 //------------------------------------------------------------------------------------
 // Local methods
 //------------------------------------------------------------------------------------
-/// Accepts a buffer that notionally contains a PList containing a Dictionary with an
-/// EncryptedPayloadContent entry. Returns the contents of entry upon success and an error otherwise
-fn get_encrypted_payload_content(xml: &[u8]) -> Result<Vec<u8>> {
-    let xml_cursor = Cursor::new(xml);
-    let profile = plist::Value::from_reader(xml_cursor).map_err(|_e| Error::Plist)?;
-
-    let profile_dict = match profile.as_dictionary() {
-        Some(d) => d,
-        None => {
-            error!("Failed to parse profile as a dictionary");
-            return Err(Error::Plist);
-        }
-    };
-
-    match profile_dict.get("EncryptedPayloadContent") {
-        Some(p) => match p.as_data() {
-            Some(v) => Ok(v.to_vec()),
-            None => {
-                error!("Failed to read data from EncryptedPayloadContent entry");
-                Err(Error::Plist)
-            }
-        },
-        None => {
-            error!("Profile did not contain an EncryptedPayloadContent entry");
-            Err(Error::Plist)
-        }
-    }
-}
-
 /// Takes a buffer containing hash of content to compare to value in message digest attribute. Returns
 /// Ok if the value matches and an Err if it does not match or there is no message digest attribute.
 fn check_message_digest_attr(
@@ -213,90 +162,32 @@ fn get_candidate_signer_cert(sd: &SignedData) -> Result<(Vec<Certificate>, Certi
 //------------------------------------------------------------------------------------
 // Public methods
 //------------------------------------------------------------------------------------
-/// Generates a self-signed certificate containing a public key corresponding to the given algorithm
-/// and a subject DN set to the provided value using the indicated slot on the provided YubiKey.
-pub(crate) fn generate_self_signed_cert(
-    yubikey: &mut YubiKey,
-    slot: SlotId,
-    algorithm: AlgorithmId,
-    name: &str,
-    pin: &[u8],
-    mgmt_key: &MgmKey,
-) -> Result<Certificate> {
-    // Generate a new key in the selected slot.
-    let public_key = match piv::generate(
-        yubikey,
-        slot,
-        algorithm,
-        PinPolicy::Default,
-        TouchPolicy::Default,
-    ) {
-        Ok(public_key) => public_key,
-        Err(e) => return Err(Error::YubiKey(e)),
+/// Accepts a buffer that notionally contains a PList containing a Dictionary with an
+/// EncryptedPayloadContent entry. Returns the contents of entry upon success and an error otherwise
+pub(crate) fn get_encrypted_payload_content(xml: &[u8]) -> Result<Vec<u8>> {
+    let xml_cursor = Cursor::new(xml);
+    let profile = plist::Value::from_reader(xml_cursor).map_err(|_e| Error::Plist)?;
+
+    let profile_dict = match profile.as_dictionary() {
+        Some(d) => d,
+        None => {
+            error!("Failed to parse profile as a dictionary");
+            return Err(Error::Plist);
+        }
     };
 
-    let mut serial = [0u8; 20];
-    OsRng.fill_bytes(&mut serial);
-    serial[0] = 0x01;
-    let serial = SerialNumber::new(&serial[..]).expect("serial can't be more than 20 bytes long");
-
-    // Generate a self-signed certificate for the new key.
-    let ten_years_duration = Duration::from_secs(365 * 24 * 60 * 60 * 10);
-    let ten_years_time = match SystemTime::now().checked_add(ten_years_duration) {
-        Some(t) => t,
-        None => return Err(Error::Unrecognized),
-    };
-    let not_after = Time::UtcTime(
-        UtcTime::from_unix_duration(
-            ten_years_time
-                .duration_since(UNIX_EPOCH)
-                .map_err(|_| Error::Unrecognized)?,
-        )
-        .map_err(|_| Error::Unrecognized)?,
-    );
-    let validity = Validity {
-        not_before: Time::UtcTime(
-            UtcTime::from_unix_duration(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map_err(|_| Error::Unrecognized)?,
-            )
-            .map_err(|_| Error::Unrecognized)?,
-        ),
-        not_after,
-    };
-    let name = Name::from_str(name)?;
-    let spkibuf = public_key.to_der()?;
-    let b = Sha1::digest(spkibuf);
-    let os = OctetString::new(b.as_slice())?;
-    let skid = SubjectKeyIdentifier(os);
-
-    if let Err(e) = yubikey.verify_pin(pin) {
-        error!("Failed to verify PIN in generate_self_signed_cert: {e:?}");
-        return Err(Error::YubiKey(e));
-    }
-    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
-        error!("Failed to authenticate using management key in generate_self_signed_cert: {e:?}");
-        return Err(Error::YubiKey(e));
-    }
-
-    match yubikey::certificate::Certificate::generate_self_signed(
-        yubikey,
-        slot,
-        serial,
-        validity,
-        name,
-        public_key,
-        |builder: &mut CertificateBuilder<
-            '_,
-            yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>>,
-        >| {
-            builder.add_extension(&skid).unwrap();
-            Ok(())
+    match profile_dict.get("EncryptedPayloadContent") {
+        Some(p) => match p.as_data() {
+            Some(v) => Ok(v.to_vec()),
+            None => {
+                error!("Failed to read data from EncryptedPayloadContent entry");
+                Err(Error::Plist)
+            }
         },
-    ) {
-        Ok(cert) => Ok(cert.cert),
-        Err(e) => Err(Error::YubiKey(e)),
+        None => {
+            error!("Profile did not contain an EncryptedPayloadContent entry");
+            Err(Error::Plist)
+        }
     }
 }
 
@@ -319,11 +210,13 @@ pub(crate) fn get_encap_content(eci: &EncapsulatedContentInfo) -> Result<Vec<u8>
         None => return Err(Error::ParseError),
     };
 
-    let encos = encap.to_der()?;
-    let os = OctetString::from_der(&encos)?;
+    let enc_os = encap.to_der()?;
+    let os = OctetString::from_der(&enc_os)?;
     Ok(os.as_bytes().to_vec())
 }
 
+/// Processes the provided content as a SignedData message and verifies the signer's certificate relative to the given
+/// environment. Returns the encapsulated content as a byte array.
 pub(crate) async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec<u8>> {
     let ci_sd = ContentInfo::from_der(content)?;
     if ci_sd.content_type != const_oid::db::rfc5911::ID_SIGNED_DATA {
@@ -367,108 +260,22 @@ pub(crate) async fn purebred_authorize_request(content: &[u8], env: &str) -> Res
             )
             .is_ok()
         {
-            match validate_cert(&leaf_cert_buf, intermediate_ca_certs, env).await {
-                Ok(_) => {
-                    return Ok(xml);
-                }
+            return match validate_cert(&leaf_cert_buf, intermediate_ca_certs, env).await {
+                Ok(_) => Ok(xml),
                 Err(e) => {
                     error!("Failed to validate certificate purebred_authorize_request: {e:?}");
-                    return Err(Error::BadInput);
+                    Err(Error::BadInput)
                 }
-            }
+            };
         }
     }
     Err(Error::BadInput)
 }
 
-/// Verifies a SignedData then decrypts an encapsulated EnvelopedData and returns the encapsulated
-/// contents from it as a buffer.
-pub(crate) async fn verify_and_decrypt(
-    yubikey: &mut YubiKey,
-    slot: SlotId,
-    content: &[u8],
-    is_ota: bool,
-    pin: &[u8],
-    mgmt_key: &MgmKey,
-    env: &str,
-) -> Result<Vec<u8>> {
-    if let Err(e) = yubikey.verify_pin(pin) {
-        error!("Failed to verify PIN in verify_and_decrypt: {e:?}");
-        return Err(Error::YubiKey(e));
-    }
-    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
-        error!("Failed to authenticate using management key in verify_and_decrypt: {e:?}");
-        return Err(Error::YubiKey(e));
-    }
-
-    let xml = purebred_authorize_request(content, env).await?;
-
-    let enc_ci = match is_ota {
-        true => get_encrypted_payload_content(&xml)?,
-        false => xml.to_vec(),
-    };
-
-    let ci_ed = ContentInfo::from_der(&enc_ci)?;
-    if ci_ed.content_type != const_oid::db::rfc5911::ID_ENVELOPED_DATA {
-        error!(
-            "Unexpected content type (expected ID_ENVELOPED_DATA): {:?}",
-            ci_ed.content_type
-        );
-        return Err(Error::ParseError);
-    }
-    let bytes2ed = ci_ed.content.to_der()?;
-    let ed = EnvelopedData::from_der(&bytes2ed)?;
-
-    let params = match ed.encrypted_content.content_enc_alg.parameters {
-        Some(p) => p,
-        None => return Err(Error::Unrecognized),
-    };
-    let enc_params = params.to_der()?;
-
-    let os_iv = OctetString::from_der(&enc_params)?;
-    let iv = os_iv.as_bytes();
-
-    let ct = match ed.encrypted_content.encrypted_content {
-        Some(ct) => ct.as_bytes().to_vec(),
-        None => return Err(Error::Unrecognized),
-    };
-
-    for ri in ed.recip_infos.0.iter() {
-        let dec_key = match ri {
-            RecipientInfo::Ktri(ktri) => {
-                let dk = match piv::decrypt_data(
-                    yubikey,
-                    ktri.enc_key.as_bytes(),
-                    AlgorithmId::Rsa2048,
-                    slot,
-                ) {
-                    Ok(dk) => dk,
-                    Err(_e) => continue,
-                };
-                match decrypt_inner(dk.to_vec(), 256) {
-                    Ok(dec_key) => dec_key,
-                    Err(_) => continue,
-                }
-            }
-            _ => continue,
-        };
-
-        let key = GenericArray::from_slice(&dec_key.1[dec_key.2 as usize..]);
-
-        // decryption
-        type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-        let cipher = Aes256CbcDec::new(key, iv.into());
-        if let Ok(pt) = cipher.decrypt_padded_vec_mut::<aes::cipher::block_padding::Pkcs7>(&ct) {
-            return Ok(pt);
-        }
-    }
-    Err(Error::Unrecognized)
-}
-
 /// Create a SKID-based SignerIdentifier from certificate
 pub(crate) fn signer_identifier_from_cert(cert: &Certificate) -> Result<SignerIdentifier> {
-    let skidbytes = skid_from_cert(cert)?;
-    let os = match OctetString::new(skidbytes) {
+    let skid_bytes = skid_from_cert(cert)?;
+    let os = match OctetString::new(skid_bytes) {
         Ok(os) => os,
         Err(e) => return Err(Error::Asn1(e)),
     };
@@ -479,8 +286,8 @@ pub(crate) fn signer_identifier_from_cert(cert: &Certificate) -> Result<SignerId
 
 /// Create a SKID-based RecipientIdentifier from certificate
 pub(crate) fn recipient_identifier_from_cert(cert: &Certificate) -> Result<RecipientIdentifier> {
-    let skidbytes = skid_from_cert(cert)?;
-    let os = match OctetString::new(skidbytes) {
+    let skid_bytes = skid_from_cert(cert)?;
+    let os = match OctetString::new(skid_bytes) {
         Ok(os) => os,
         Err(e) => return Err(Error::Asn1(e)),
     };
@@ -491,26 +298,18 @@ pub(crate) fn recipient_identifier_from_cert(cert: &Certificate) -> Result<Recip
 
 /// Generates a SignedData object covering the `data_to_sign` using the provided `yubikey` and `slot_id`, which
 /// are assumed to related to the provided `signers_certificate`.
-pub(crate) fn get_signed_data(
-    yubikey: &mut YubiKey,
-    slot_id: SlotId,
+pub(crate) fn get_signed_data<S>(
+    signer: &S,
     signers_cert: &Certificate,
     data_to_sign: &[u8],
-) -> Result<Vec<u8>> {
+) -> Result<Vec<u8>>
+where
+    S: Keypair + DynSignatureAlgorithmIdentifier + Signer<rsa::pkcs1v15::Signature>,
+{
     let content = EncapsulatedContentInfo {
         econtent_type: const_oid::db::rfc5911::ID_DATA,
         econtent: Some(Any::new(Tag::OctetString, data_to_sign)?),
     };
-
-    let enc_spki = signers_cert
-        .tbs_certificate
-        .subject_public_key_info
-        .to_der()?;
-    let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
-
-    let signer: yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>> =
-        yubikey::certificate::yubikey_signer::Signer::new(yubikey, slot_id, spki_ref)
-            .map_err(|_| Error::Unrecognized)?;
 
     let digest_algorithm = AlgorithmIdentifierOwned {
         oid: const_oid::db::rfc5912::ID_SHA_256,
@@ -521,7 +320,7 @@ pub(crate) fn get_signed_data(
 
     let external_message_digest = None;
     let signer_info_builder_1 = match SignerInfoBuilder::new(
-        &signer,
+        signer,
         si,
         digest_algorithm.clone(),
         &content,
@@ -581,129 +380,10 @@ pub(crate) fn skid_from_cert(cert: &Certificate) -> Result<Vec<u8>> {
     }
 }
 
-/// Processes payloads from the presented `xml` generating and import keys using the provided YubiKey
-pub(crate) async fn process_payloads(
-    yubikey: &mut YubiKey,
-    xml: &[u8],
-    pin: &[u8],
-    mgmt_key: &MgmKey,
-    env: &str,
-    is_recover: bool,
-) -> Result<()> {
-    let xml_cursor = Cursor::new(xml);
-    let profile = match plist::Value::from_reader(xml_cursor) {
-        Ok(p) => p,
-        Err(e) => {
-            error!("Failed to parse XML in process_payloads: {e:?}");
-            return Err(Error::Plist);
-        }
-    };
-    let payloads = match profile.as_array() {
-        Some(d) => d,
-        None => {
-            error!("Failed to parse profile as an array");
-            return Err(Error::Plist);
-        }
-    };
-
-    let mut p12_index = 0;
-    let mut recovered_index = 0;
-    for payload in payloads {
-        if let Some(dict) = payload.as_dictionary() {
-            if let Some(payload_type) = dict.get("PayloadType") {
-                match payload_type.as_string() {
-                    Some(t) => {
-                        if "com.apple.security.scep" == t {
-                            let payload_content = match dict.get("PayloadContent") {
-                                Some(pc) => match pc.as_dictionary() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!("Failed to parse PayloadContent as a dictionary for SCEP payload.");
-                                        return Err(Error::Plist);
-                                    }
-                                },
-                                None => {
-                                    error!("SCEP payload missing PayloadContent.");
-                                    return Err(Error::Plist);
-                                }
-                            };
-
-                            if let Err(e) = process_scep_payload(
-                                yubikey,
-                                payload_content,
-                                false,
-                                pin,
-                                mgmt_key,
-                                get_as_string(dict, "PayloadDisplayName"),
-                                env,
-                            )
-                            .await
-                            {
-                                error!("Failed to process SCEP payload: {e:?}.");
-                                return Err(e);
-                            }
-                        } else if "com.apple.security.pkcs12" == t {
-                            let payload_content = match dict.get("PayloadContent") {
-                                Some(pc) => match pc.as_data() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!("Failed to parse PayloadContent as a data for PKCS #12 payload.");
-                                        return Err(Error::Plist);
-                                    }
-                                },
-                                None => {
-                                    error!("PKCS #12 payload missing PayloadContent.");
-                                    return Err(Error::Plist);
-                                }
-                            };
-
-                            let password = match dict.get("Password") {
-                                Some(pc) => match pc.as_string() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!("Failed to parse Password as a data for PKCS #12 payload.");
-                                        return Err(Error::Plist);
-                                    }
-                                },
-                                None => {
-                                    error!("PKCS #12 payload missing Password.");
-                                    return Err(Error::Plist);
-                                }
-                            };
-
-                            info!("Processing PKCS #12 payload with index {p12_index}");
-                            if let Err(e) = import_p12(
-                                yubikey,
-                                payload_content,
-                                password,
-                                recovered_index,
-                                None,
-                            )
-                            .await
-                            {
-                                error!("Failed to process PKCS #12 payload at index {p12_index}: {e:?}.");
-                                return Err(e);
-                            }
-                            p12_index += 1;
-                            if is_recover {
-                                recovered_index += 1;
-                            }
-                        }
-                    }
-                    None => {
-                        continue;
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
 /// Returns a vector containing distinct `rfc822Name` values read from `SubjectAltName` entries in `dict`.
 /// When no `rfc822Name` values are found, an empty vector is returned.
 pub(crate) fn get_email_addresses(dict: &Dictionary) -> Vec<String> {
-    let mut retval: Vec<String> = vec![];
+    let mut rv: Vec<String> = vec![];
     if let Some(san) = dict.get("SubjectAltName") {
         if let Some(san) = san.as_dictionary() {
             if let Some(rfc822_names) = san.get("rfc822Name") {
@@ -711,8 +391,8 @@ pub(crate) fn get_email_addresses(dict: &Dictionary) -> Vec<String> {
                     for email in rfc822_names {
                         if let Some(s) = email.as_string() {
                             let c = s.to_string();
-                            if !retval.contains(&c) {
-                                retval.push(c);
+                            if !rv.contains(&c) {
+                                rv.push(c);
                             }
                         }
                     }
@@ -720,7 +400,7 @@ pub(crate) fn get_email_addresses(dict: &Dictionary) -> Vec<String> {
             }
         }
     }
-    retval
+    rv
 }
 
 /// Returns a Name prepared using elements in the `Subject` entry in `dict`
@@ -730,7 +410,7 @@ pub(crate) fn get_subject_name(dict: &Dictionary) -> Result<Name> {
         if let Some(subject_array) = subject_array.as_array() {
             for elem in subject_array.iter().rev() {
                 if let Some(rdns) = elem.as_array() {
-                    let mut vrdn = vec![];
+                    let mut rdn_vec = vec![];
                     for rdn in rdns {
                         if let Some(type_and_val) = rdn.as_array() {
                             if 2 == type_and_val.len() {
@@ -742,11 +422,11 @@ pub(crate) fn get_subject_name(dict: &Dictionary) -> Result<Name> {
                                     Some(t) => t,
                                     None => return Err(Error::Plist),
                                 };
-                                vrdn.push(format!("{rdn_type}={rdn_value}"));
+                                rdn_vec.push(format!("{rdn_type}={rdn_value}"));
                             }
                         }
                     }
-                    dn.push(vrdn.join("+"))
+                    dn.push(rdn_vec.join("+"))
                 } else {
                     error!("Failed to an RDN entry as an array");
                     return Err(Error::Plist);
@@ -768,10 +448,11 @@ pub(crate) fn get_subject_name(dict: &Dictionary) -> Result<Name> {
     }
 }
 
+/// Retrieves the value associated with the given key from the given dictionary as a String if possible
 pub(crate) fn get_as_string(dict: &Dictionary, key: &str) -> Option<String> {
     if let Some(value) = dict.get(key) {
-        if let Some(retval) = value.as_string() {
-            return Some(retval.to_string());
+        if let Some(rv) = value.as_string() {
+            return Some(rv.to_string());
         }
     }
     None

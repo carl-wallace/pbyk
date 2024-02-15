@@ -14,14 +14,16 @@ use dioxus_toast::{Icon, ToastInfo, ToastManager};
 use fermi::{use_atom_ref, use_init_atom_root, AtomRef};
 use lazy_static::lazy_static;
 use log::{debug, error, info};
+use zeroize::Zeroizing;
 
 use base64ct::{Base64, Encoding};
 
 use pbyklib::{
     ota::{
         data::OtaActionInputs, enroll::enroll, pre_enroll::pre_enroll, recover::recover, ukm::ukm,
+        CryptoModule,
     },
-    utils::list_yubikeys::get_yubikey,
+    utils::list_yubikeys::{get_pre_enroll_hash_yubikey, get_yubikey},
     PB_MGMT_KEY,
 };
 
@@ -31,6 +33,15 @@ use crate::gui::{
     reset::reset,
     utils::*,
 };
+
+#[cfg(all(target_os = "windows", feature = "vsc"))]
+use pbyklib::utils::{
+    get_pre_enroll_hash,
+    list_vscs::{get_vsc, get_vsc_id_from_serial},
+};
+
+#[cfg(all(target_os = "windows", feature = "vsc"))]
+use crate::determine_vsc_phase;
 
 lazy_static! {
     pub static ref DISA_ICON_BASE64: String =
@@ -69,6 +80,57 @@ fn clean_otps() {
     BURNED_OTPS.lock().unwrap().retain(|_, v| cur - *v < limit);
 }
 
+/// Update various UseState variables based on the phase value
+#[allow(clippy::too_many_arguments)]
+fn update_phase<'a>(
+    phase: &Phase,
+    s_edipi_style: &'a UseState<&str>,
+    s_pre_enroll_otp_style: &'a UseState<&str>,
+    s_ukm_otp_style: &'a UseState<&str>,
+    s_hide_recovery: &'a UseState<&str>,
+    s_button_label: &'a UseState<String>,
+    s_hide_reset: &'a UseState<String>,
+    s_enroll_otp_style: &'a UseState<&str>,
+) {
+    match phase {
+        PreEnroll => {
+            s_edipi_style.setter()("display:table-row;");
+            s_pre_enroll_otp_style.setter()("display:table-row;");
+            s_ukm_otp_style.setter()("display:none;");
+            s_hide_recovery.setter()("none");
+            s_button_label.setter()("Pre-enroll".to_string());
+            s_hide_reset.setter()("none".to_string());
+        }
+        Enroll => {
+            s_edipi_style.setter()("display:table-row;");
+            s_pre_enroll_otp_style.setter()("display:none;");
+            s_ukm_otp_style.setter()("display:none;");
+            s_enroll_otp_style.setter()("display:table-row;");
+            s_hide_recovery.setter()("none");
+            s_button_label.setter()("Enroll".to_string());
+            s_hide_reset.setter()("none".to_string());
+        }
+        Ukm => {
+            s_edipi_style.setter()("display:none;");
+            s_pre_enroll_otp_style.setter()("display:none;");
+            s_enroll_otp_style.setter()("display:none;");
+            s_ukm_otp_style.setter()("display:table-row;");
+            s_hide_recovery.setter()("none");
+            s_button_label.setter()("User Key Management".to_string());
+            s_hide_reset.setter()("none".to_string());
+        }
+        UkmOrRecovery => {
+            s_edipi_style.setter()("display:none;");
+            s_pre_enroll_otp_style.setter()("display:none;");
+            s_enroll_otp_style.setter()("display:none;");
+            s_ukm_otp_style.setter()("display:table-row;");
+            s_button_label.setter()("User Key Management".to_string());
+            s_hide_recovery.setter()("inline-block");
+            s_hide_reset.setter()("none".to_string());
+        }
+    }
+}
+
 /// app is the primary component of GUI mode. It draws the forms that comprise the Purebred workflow
 /// and drives execution through the workflow.
 pub(crate) fn app<'a>(
@@ -78,6 +140,7 @@ pub(crate) fn app<'a>(
     s_reset_req: &'a UseState<bool>,
     s_serials: &'a UseState<Vec<String>>,
     s_fatal_error_val: &'a UseState<String>,
+    is_yubikey: bool,
 ) -> Element<'a> {
     // initialize plumbing for status dialogs
     use_init_atom_root(cx);
@@ -125,31 +188,77 @@ pub(crate) fn app<'a>(
     let s_hide_reset = use_state(cx, || "none".to_string());
 
     // Style variables for impermanent UI elements
-    let s_enroll_otp_style = use_state(cx, || "display:none;");
-    let (s_edipi_style, s_pre_enroll_otp_style, s_ukm_otp_style, s_hide_recovery, s_button_label) =
-        match s_phase.get() {
-            Ukm => (
-                use_state(cx, || "display:none;"),
-                use_state(cx, || "display:none;"),
-                use_state(cx, || "display:table-row;"),
-                use_state(cx, || "none"),
-                use_state(cx, || "User Key Management".to_string()),
-            ),
-            UkmOrRecovery => (
-                use_state(cx, || "display:none;"),
-                use_state(cx, || "display:none;"),
-                use_state(cx, || "display:table-row;"),
-                use_state(cx, || "inline-block"),
-                use_state(cx, || "User Key Management".to_string()),
-            ),
-            _ => (
-                use_state(cx, || "display:table-row;"),
-                use_state(cx, || "display:table-row;"),
-                use_state(cx, || "display:none;"),
-                use_state(cx, || "none"),
-                use_state(cx, || "Pre-enroll".to_string()),
-            ),
-        };
+    let s_pin_style = use_state(cx, || {
+        if is_yubikey {
+            "display:table-row;"
+        } else {
+            "display:none;"
+        }
+    });
+    let (
+        s_edipi_style,
+        s_pre_enroll_otp_style,
+        s_ukm_otp_style,
+        s_hide_recovery,
+        s_button_label,
+        s_enroll_otp_style,
+    ) = match s_phase.get() {
+        Ukm => (
+            use_state(cx, || "display:none;"),                   // edipi
+            use_state(cx, || "display:none;"),                   // pre-enroll otp
+            use_state(cx, || "display:table-row;"),              // UKM otp
+            use_state(cx, || "none"),                            // hide recovery
+            use_state(cx, || "User Key Management".to_string()), //label
+            use_state(cx, || "display:none;"),
+        ),
+        UkmOrRecovery => (
+            use_state(cx, || "display:none;"),
+            use_state(cx, || "display:none;"),
+            use_state(cx, || "display:table-row;"),
+            use_state(cx, || "inline-block"),
+            use_state(cx, || "User Key Management".to_string()),
+            use_state(cx, || "display:none;"),
+        ),
+        Enroll => (
+            use_state(cx, || "display:table-row;"),
+            use_state(cx, || "display:none;"),
+            use_state(cx, || "display:none;"),
+            use_state(cx, || "none"),
+            use_state(cx, || "Enroll".to_string()),
+            use_state(cx, || "display:table-row;"),
+        ),
+        PreEnroll => (
+            use_state(cx, || "display:table-row;"),
+            use_state(cx, || "display:table-row;"),
+            use_state(cx, || "display:none;"),
+            use_state(cx, || "none"),
+            use_state(cx, || "Pre-enroll".to_string()),
+            use_state(cx, || "display:none;"),
+        ),
+    };
+
+    if *s_phase.get() == Enroll && s_hash.get().is_empty() {
+        if is_yubikey {
+            match get_pre_enroll_hash_yubikey(s_serial.get()) {
+                Ok(hash) => s_hash.setter()(hash),
+                Err(_e) => {
+                    error!("Failed to calculate pre-enroll. Consider resetting the device and restarting enrollment.");
+                }
+            }
+        } else {
+            #[cfg(all(target_os = "windows", feature = "vsc"))]
+            {
+                let vsc_serial = parse_reader_from_vsc_display(s_serial.get());
+                match get_pre_enroll_hash(&vsc_serial) {
+                    Ok(hash) => s_hash.setter()(hash),
+                    Err(_e) => {
+                        error!("Failed to calculate pre-enroll. Consider resetting the device and restarting enrollment.");
+                    }
+                }
+            }
+        }
+    }
+
     // Only show the environment row/table when there is more than one environment option available
     let s_multi_env_style = if 1 == num_environments() {
         use_state(cx, || "display:none;")
@@ -197,122 +306,125 @@ pub(crate) fn app<'a>(
     if *s_check_phase.get() {
         s_pin.setter()(String::new());
         let serial = s_serial.get().clone();
-        debug!("Connecting to newly selected YubiKey: {serial}");
-        let s = yubikey::Serial(serial.parse::<u32>().unwrap());
-        let yubikey = match get_yubikey(Some(s)) {
-            Ok(yk) => Some(yk),
-            Err(e) => {
-                error!("Failed to connect to YubiKey with serial {serial} with: {e}");
-                s_fatal_error_val.setter()(format!("Failed to connect to YubiKey with serial {serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e));
-                None
-            }
-        };
-
-        if let Some(mut yubikey) = yubikey {
-            debug!("Determining phase of newly selected YubiKey: {serial}");
-            match yubikey.authenticate(PB_MGMT_KEY.clone()) {
-                Ok(_) => {
-                    let phase = determine_phase(&mut yubikey);
-                    if phase != *s_phase.get() {
-                        s_phase.setter()(phase.clone());
-                        match phase {
-                            PreEnroll => {
-                                s_edipi_style.setter()("display:table-row;");
-                                s_pre_enroll_otp_style.setter()("display:table-row;");
-                                s_ukm_otp_style.setter()("display:none;");
-                                s_hide_recovery.setter()("none");
-                                s_button_label.setter()("Pre-enroll".to_string());
-                                s_hide_reset.setter()("none".to_string());
-                            }
-                            Enroll => {
-                                s_edipi_style.setter()("display:table-row;");
-                                s_pre_enroll_otp_style.setter()("display:none;");
-                                s_ukm_otp_style.setter()("display:none;");
-                                s_enroll_otp_style.setter()("display:table-row;");
-                                s_hide_recovery.setter()("none");
-                                s_button_label.setter()("Enroll".to_string());
-                                s_hide_reset.setter()("none".to_string());
-                            }
-                            Ukm => {
-                                s_edipi_style.setter()("display:none;");
-                                s_pre_enroll_otp_style.setter()("display:none;");
-                                s_enroll_otp_style.setter()("display:none;");
-                                s_ukm_otp_style.setter()("display:table-row;");
-                                s_hide_recovery.setter()("none");
-                                s_button_label.setter()("User Key Management".to_string());
-                                s_hide_reset.setter()("none".to_string());
-                            }
-                            UkmOrRecovery => {
-                                s_edipi_style.setter()("display:none;");
-                                s_pre_enroll_otp_style.setter()("display:none;");
-                                s_enroll_otp_style.setter()("display:none;");
-                                s_ukm_otp_style.setter()("display:table-row;");
-                                s_button_label.setter()("User Key Management".to_string());
-                                s_hide_recovery.setter()("inline-block");
-                                s_hide_reset.setter()("none".to_string());
-                            }
-                        }
+        match serial.parse::<u32>() {
+            Ok(yks) => {
+                s_pin_style.setter()("display:table-row;");
+                debug!("Connecting to newly selected YubiKey: {serial}");
+                let s = yubikey::Serial(yks);
+                let yubikey = match get_yubikey(Some(s)) {
+                    Ok(yk) => Some(yk),
+                    Err(e) => {
+                        error!("Failed to connect to YubiKey with serial {serial} with: {e}");
+                        s_fatal_error_val.setter()(format!("Failed to connect to YubiKey with serial {serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e));
+                        None
                     }
-                }
-                Err(e) => {
-                    let err = format!("The YubiKey with serial number {serial} is not using the expected management key. Please reset the device then try again.");
-                    error!("{err}: {e:?}");
+                };
 
-                    #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                    {
-                        let (tx, rx) = std::sync::mpsc::channel();
-                        use native_dialog::{MessageDialog, MessageType};
-                        match MessageDialog::new()
-                            .set_type(MessageType::Info)
-                            .set_title("Reset?")
-                            .set_text(&format!("The YubiKey with serial number {serial} is not using the expected management key. Would you like to reset the device now?"))
-                            .show_confirm()
-                        {
-                            Ok(answer) => {
-                                if answer {
-                                    let _ = tx.send(None);
-                                } else {
-                                    let _ = tx.send(Some(err.to_string()));
-                                }
-                            },
-                            Err(e) => {
-                                error!("Failed to solicit reset answer from user: {e}");
+                if let Some(mut yubikey) = yubikey {
+                    debug!("Determining phase of newly selected YubiKey: {serial}");
+                    match yubikey.authenticate(PB_MGMT_KEY.clone()) {
+                        Ok(_) => {
+                            let phase = determine_phase(&mut yubikey);
+                            if phase != *s_phase.get() {
+                                s_phase.setter()(phase.clone());
+                                update_phase(
+                                    &phase,
+                                    s_edipi_style,
+                                    s_pre_enroll_otp_style,
+                                    s_ukm_otp_style,
+                                    s_hide_recovery,
+                                    s_button_label,
+                                    s_hide_reset,
+                                    s_enroll_otp_style,
+                                );
                             }
                         }
-                        match rx.recv() {
-                            Ok(result) => {
-                                match result {
-                                    Some(err) => {
-                                        if 1 == s_serials.len() {
-                                            s_fatal_error_val.setter()(err);
+                        Err(e) => {
+                            let err = format!("The YubiKey with serial number {serial} is not using the expected management key. Please reset the device then try again.");
+                            error!("{err}: {e:?}");
+
+                            #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
+                            {
+                                let (tx, rx) = std::sync::mpsc::channel();
+                                use native_dialog::{MessageDialog, MessageType};
+                                let msg = format!("The YubiKey with serial number {serial} is not using the expected management key. Would you like to reset the device now?");
+                                match MessageDialog::new()
+                                    .set_type(MessageType::Info)
+                                    .set_title("Reset?")
+                                    .set_text(&msg)
+                                    .show_confirm()
+                                {
+                                    Ok(answer) => {
+                                        if answer {
+                                            let _ = tx.send(None);
                                         } else {
-                                            let serial_str = s_serial.get();
-                                            for cur in s_serials.get().iter() {
-                                                if cur != serial_str {
-                                                    info!("Resetting serial from {serial_str} to {cur}");
-                                                    s_serial.setter()(cur.to_string());
-                                                    break;
+                                            let _ = tx.send(Some(err.to_string()));
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to solicit reset answer from user: {e}");
+                                    }
+                                }
+                                match rx.recv() {
+                                    Ok(result) => match result {
+                                        Some(err) => {
+                                            if 1 == s_serials.len() {
+                                                s_fatal_error_val.setter()(err);
+                                            } else {
+                                                let serial_str = s_serial.get();
+                                                for cur in s_serials.get().iter() {
+                                                    if cur != serial_str {
+                                                        info!("Resetting serial from {serial_str} to {cur}");
+                                                        s_serial.setter()(cur.to_string());
+                                                        break;
+                                                    }
                                                 }
                                             }
                                         }
+                                        None => reset_setter(true),
+                                    },
+                                    Err(e) => {
+                                        let sm = format!("Failed to spawn thread for reset: {e}")
+                                            .to_string();
+                                        error!("{}", sm);
+                                        s_fatal_error_val.setter()(sm);
                                     }
-                                    None => reset_setter(true),
                                 }
                             }
-                            Err(e) => {
-                                let sm =
-                                    format!("Failed to spawn thread for reset: {e}").to_string();
-                                error!("{}", sm);
-                                s_fatal_error_val.setter()(sm);
-                            }
+
+                            #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+                            s_fatal_error_val.setter()(err.to_string());
                         }
                     }
-
-                    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-                    s_fatal_error_val.setter()(err.to_string());
                 }
             }
-        }
+            Err(_e) => {
+                s_pin_style.setter()("display:none;");
+                #[cfg(all(target_os = "windows", feature = "vsc"))]
+                match determine_vsc_phase(&serial) {
+                    Ok(phase) => {
+                        if phase != *s_phase.get() {
+                            s_phase.setter()(phase.clone());
+                            update_phase(
+                                &phase,
+                                s_edipi_style,
+                                s_pre_enroll_otp_style,
+                                s_ukm_otp_style,
+                                s_hide_recovery,
+                                s_button_label,
+                                s_hide_reset,
+                                s_enroll_otp_style,
+                            );
+                        }
+                    }
+                    Err(_e) => {
+                        s_fatal_error_val.setter()(
+                            "Could not determine the state of the VSC named {serial}".to_string(),
+                        );
+                    }
+                };
+            }
+        };
 
         check_phase_setter(false);
     }
@@ -361,6 +473,8 @@ pub(crate) fn app<'a>(
             s_reset_msg,
             s_reset_complete,
             s_disa_icon,
+            s_pin_style,
+            is_yubikey,
         )
     } else {
         cx.render(rsx! {
@@ -382,7 +496,9 @@ pub(crate) fn app<'a>(
                             ukm_otp: None,
                             recover_otp: None,
                             list_yubikeys: false,
-                            reset_yubikey: false,
+                            #[cfg(all(target_os = "windows", feature = "vsc"))]
+                            list_vscs: false,
+                            reset_device: false,
                             logging_config: None,
                             log_to_console: false,
                             environment: None,
@@ -392,15 +508,6 @@ pub(crate) fn app<'a>(
                         };
                         let _ = save_args(&args);
                         let _ = save_window_size(cx);
-                        let serial_u32 = match s_serial.get().parse::<u32>() {
-                            Ok(serial_u32) => Some(serial_u32),
-                            Err(e) => {
-                                let sm = format!("Failed to process YubiKey serial number: {e}.");
-                                error!("{}", sm);
-                                error_msg_setter(sm.to_string());
-                                None
-                            }
-                        };
 
                         let PB_BASE_URL = match environment.as_str() {
                             #[cfg(feature = "dev")]
@@ -435,6 +542,7 @@ pub(crate) fn app<'a>(
                         let cursor_setter = s_cursor.setter();
                         let disabled_setter = s_disabled.setter();
                         let recover_setter = s_recover.setter();
+                        let pin_style_setter = s_pin_style.setter();
 
                         macro_rules! enter_enroll_phase {
                                 () => {
@@ -477,6 +585,21 @@ pub(crate) fn app<'a>(
                             s_reset_abandoned.setter()(false);
                         }
 
+                        #[cfg(all(target_os = "windows", feature = "vsc"))]
+                        let mut serial_str_ota = s_serial.get().to_string();
+                        #[cfg(not(all(target_os = "windows", feature = "vsc")))]
+                        let serial_str_ota = s_serial.get().to_string();
+
+                        let serial_u32 = match s_serial.get().parse::<u32>() {
+                            Ok(serial_u32) => Some(serial_u32),
+                            Err(e) => {
+                                let sm = format!("Failed to process serial number as YubiKey serial number: {e}.");
+                                error!("{}", sm);
+                                // error_msg_setter(sm.to_string());
+                                None
+                            }
+                        };
+
                         async move {
                             if reset_abandoned {
                                 // if we arrive here due to an aborted reset, just bail out
@@ -491,52 +614,98 @@ pub(crate) fn app<'a>(
                                 return;
                             }
 
-                            let yks = match serial_u32 {
-                                Some(serial_u32) => yubikey::Serial(serial_u32),
-                                None => {
-                                    // error message is set up in match statement above if serial number
-                                    // conversion fails
-                                    cursor_setter("default".to_string());
-                                    disabled_setter(false);
-                                    return;
-                                }
-                            };
-
-                            debug!("Connecting to target YubiKey: {yks}");
-                            let mut yubikey = match get_yubikey(Some(yks)) {
-                                Ok(yk) => yk,
-                                Err(e) => {
-                                    let sm = format!("Could not get the YubiKey with serial number {yks}. Please make sure the device is available then try again. Error: {e}");
-                                    error!("{}", sm);
-                                    error_msg_setter(sm.to_string());
-                                    cursor_setter("default".to_string());
-                                    disabled_setter(false);
-                                    return;
-                                }
-                            };
-
-                            if yubikey.authenticate(PB_MGMT_KEY.clone()).is_err() {
-                                let sm = format!("The YubiKey with serial number {} is not using the expected management key. Please reset the device then try again.", yubikey.serial());
-                                error!("{}", sm);
-                                error_msg_setter(sm.to_string());
-                                cursor_setter("default".to_string());
-                                disabled_setter(false);
-                                return;
-                            }
-
                             let app = format!("{}-ui {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
-                            let pin = match string_or_none(&ev, "pin") {
-                                Some(str) => str,
+                            let (mut cm, pin) = match serial_u32 {
+                                Some(serial_u32) => {
+                                    let yks = yubikey::Serial(serial_u32);
+                                    debug!("Connecting to target YubiKey: {yks}");
+                                    let mut yubikey = match get_yubikey(Some(yks)) {
+                                        Ok(yk) => yk,
+                                        Err(e) => {
+                                            let sm = format!("Could not get the YubiKey with serial number {yks}. Please make sure the device is available then try again. Error: {e}");
+                                            error!("{}", sm);
+                                            error_msg_setter(sm.to_string());
+                                            cursor_setter("default".to_string());
+                                            disabled_setter(false);
+                                            return;
+                                        }
+                                    };
+
+                                    if yubikey.authenticate(PB_MGMT_KEY.clone()).is_err() {
+                                        let sm = format!("The YubiKey with serial number {} is not using the expected management key. Please reset the device then try again.", yubikey.serial());
+                                        error!("{}", sm);
+                                        error_msg_setter(sm.to_string());
+                                        cursor_setter("default".to_string());
+                                        disabled_setter(false);
+                                        return;
+                                    }
+
+                                    let pin = match string_or_none(&ev, "pin") {
+                                        Some(str) => str,
+                                        None => {
+                                            let sm = format!("No PIN was provided. Please enter the PIN for the YubiKey with serial number {} and try again", yks);
+                                            error!("{}", sm);
+                                            error_msg_setter(sm.to_string());
+                                            cursor_setter("default".to_string());
+                                            disabled_setter(false);
+                                            return;
+                                        }
+                                    };
+                                    pin_style_setter("display:table-row;");
+                                    (CryptoModule::YubiKey(yubikey), pin)
+                                }
                                 None => {
-                                    let sm = format!("No PIN was provided. Please enter the PIN for the YubiKey with serial number {} and try again", yks);
-                                    error!("{}", sm);
-                                    error_msg_setter(sm.to_string());
-                                    cursor_setter("default".to_string());
-                                    disabled_setter(false);
-                                    return;
+                                    #[cfg(all(target_os = "windows", feature = "vsc"))]
+                                    {
+                                        let vsc_serial = parse_reader_from_vsc_display(&serial_str_ota);
+                                        let vsc = match get_vsc(&vsc_serial).await {
+                                            Ok(vsc) => vsc,
+                                            Err(e) => {
+                                                let sm = format!("Could not get the VSC with serial number {serial_str_ota}. Please make sure the device is available then try again. Error: {e:?}");
+                                                error!("{}", sm);
+                                                error_msg_setter(sm.to_string());
+                                                cursor_setter("default".to_string());
+                                                disabled_setter(false);
+                                                return;
+                                            }
+                                        };
+                                        serial_str_ota = match get_vsc_id_from_serial(&vsc_serial) {
+                                            Ok(s) => s,
+                                            Err(e) => {
+                                                let sm = format!("Could not get the VSC ID for VSC with serial number {serial_str_ota}. Error: {e:?}");
+                                                error!("{}", sm);
+                                                error_msg_setter(sm.to_string());
+                                                cursor_setter("default".to_string());
+                                                disabled_setter(false);
+                                                return;
+                                            }
+                                        };
+                                        pin_style_setter("display:none;");
+                                        (CryptoModule::SmartCard(vsc), "".to_string())
+                                    }
+                                    #[cfg(not(all(target_os = "windows", feature = "vsc")))]
+                                    {
+                                        let sm = "Failed to process serial number as YubiKey serial number.";
+                                        error!("{}", sm);
+                                        error_msg_setter(sm.to_string());
+                                        cursor_setter("default".to_string());
+                                        disabled_setter(false);
+                                        return;
+                                    }
                                 }
                             };
+
+                            // let yks = match serial_u32 {
+                            //     Some(serial_u32) => yubikey::Serial(serial_u32),
+                            //     None => {
+                            //         // error message is set up in match statement above if serial number
+                            //         // conversion fails
+                            //         cursor_setter("default".to_string());
+                            //         disabled_setter(false);
+                            //         return;
+                            //     }
+                            // };
 
                             match p {
                                 PreEnroll => {
@@ -586,18 +755,24 @@ pub(crate) fn app<'a>(
                                     }
 
                                     let (tx, rx) = std::sync::mpsc::channel();
-                                    let pin_t = pin.clone();
+                                    let pin_t = if !pin.is_empty() {
+                                        Some(Zeroizing::new(pin.clone()))
+                                    }
+                                    else {
+                                        None
+                                    };
                                     pin_setter(pin);
                                     let agent_edipi_t = agent_edipi.clone();
                                     edipi_setter(agent_edipi);
+                                    //let mut cm = CryptoModule::YubiKey(yubikey);
                                     let _ = tokio::spawn(async move {
                                         match pre_enroll(
-                                            &mut yubikey,
+                                            &mut cm,
                                             &agent_edipi_t,
                                             &pre_enroll_otp,
                                             &PB_BASE_URL,
-                                            pin_t.as_bytes(),
-                                            &PB_MGMT_KEY.clone()
+                                            pin_t,
+                                            Some(&PB_MGMT_KEY.clone())
                                         )
                                         .await
                                         {
@@ -683,21 +858,27 @@ pub(crate) fn app<'a>(
                                     }
 
                                     let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
-                                    let pin_t = pin.clone();
+                                    let pin_t = if !pin.is_empty() {
+                                        Some(Zeroizing::new(pin.clone()))
+                                    }
+                                    else {
+                                        None
+                                    };
                                     pin_setter(pin);
                                     let oai = OtaActionInputs::new(
-                                        &yubikey.serial().to_string(),
+                                        &serial_str_ota,
                                         &enroll_otp,
                                         &PB_BASE_URL.to_string(),
                                         &app,
                                     );
+                                    //let mut cm = CryptoModule::YubiKey(yubikey);
                                     let _ = tokio::spawn(async move {
                                         match enroll(
-                                            &mut yubikey,
+                                            &mut cm,
                                             &agent_edipi,
                                             &oai,
-                                            pin_t.as_bytes(),
-                                            &PB_MGMT_KEY.clone(),
+                                            pin_t,
+                                            Some(&PB_MGMT_KEY.clone()),
                                             &environment
                                         )
                                         .await
@@ -773,7 +954,7 @@ pub(crate) fn app<'a>(
                                     }
 
                                     let oai = OtaActionInputs::new(
-                                        &yks.to_string(),
+                                        &serial_str_ota,
                                         &ukm_otp,
                                         &PB_BASE_URL.to_string(),
                                         &app,
@@ -783,10 +964,16 @@ pub(crate) fn app<'a>(
                                         recover_setter(false);
                                         info!("Starting recover operation...");
                                         let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
-                                        let pin_t = pin.clone();
+                                        let pin_t = if !pin.is_empty() {
+                                            Some(Zeroizing::new(pin.clone()))
+                                        }
+                                        else {
+                                            None
+                                        };
                                         pin_setter(pin);
+                                        //let mut cm = CryptoModule::YubiKey(yubikey);
                                         let _ = tokio::spawn(async move {
-                                            match recover(&mut yubikey, &oai, pin_t.as_bytes(), &PB_MGMT_KEY.clone(), &environment).await {
+                                            match recover(&mut cm, &oai, pin_t, Some(&PB_MGMT_KEY.clone()), &environment).await {
                                                 Ok(_) => {
                                                     info!("Recover completed successfully");
                                                     if let Err(e) = tx.send(None) {
@@ -822,10 +1009,16 @@ pub(crate) fn app<'a>(
                                     else {
                                         info!("Starting UKM operation...");
                                         let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
-                                        let pin_t = pin.clone();
+                                        let pin_t = if !pin.is_empty() {
+                                            Some(Zeroizing::new(pin.clone()))
+                                        }
+                                        else {
+                                            None
+                                        };
                                         pin_setter(pin);
+                                        //let mut cm = CryptoModule::YubiKey(yubikey);
                                         let _ = tokio::spawn(async move {
-                                            match ukm(&mut yubikey, &oai, pin_t.as_bytes(), &PB_MGMT_KEY.clone(), &environment).await {
+                                            match ukm(&mut cm, &oai, pin_t, Some(&PB_MGMT_KEY.clone()), &environment).await {
                                                 Ok(_) => {
                                                     info!("UKM completed successfully");
                                                     if let Err(e) = tx.send(None) {
@@ -869,10 +1062,10 @@ pub(crate) fn app<'a>(
                         tbody {
                             tr{
                                 style: if *s_phase.get() != Enroll { "display:table-row;" } else {"display:none;"},
-                                td{div{label {r#for: "multi_serial", "YubiKey Serial Number"}}}
+                                td{div{label {r#for: "multi_serial", "Serial Number"}}}
                                 td{select {
+                                   disabled: "{s_disabled}",
                                    oninput: move |evt| {
-                                       println!("{evt:?}");
                                        serial_setter(evt.value.to_string());
                                        check_phase_setter(true);
                                    },
@@ -888,8 +1081,8 @@ pub(crate) fn app<'a>(
                             }
                             tr{
                                 style: if *s_phase.get() == Enroll { "display:table-row;" } else {"display:none;"},
-                                td{div{label {r#for: "serial", "YubiKey Serial Number"}}}
-                                td{input { r#type: "text", name: "serial", readonly: true, value: "{s_serial}"}}
+                                td{div{label {r#for: "serial", "Serial Number"}}}
+                                td{input { r#type: "text", disabled: "{s_disabled}", name: "serial", readonly: true, value: "{s_serial}"}}
                             }
                             tr{
                                 style: "{s_edipi_style}",
@@ -917,7 +1110,7 @@ pub(crate) fn app<'a>(
                                 td{input { disabled: "{s_disabled}", r#type: "text", name: "ukm_otp", placeholder: "Enter UKM OTP", value: "{s_ukm_otp}", minlength: "8", maxlength: "8"}}
                             }
                             tr{
-                                style: "display:table-row;",
+                                style: "{s_pin_style}",
                                 td{div{label {r#for: "pin", "YubiKey PIN"}}}
                                 td{input { disabled: "{s_disabled}", r#type: "password", placeholder: "Enter YubiKey PIN", name: "pin", value: "{s_pin}", maxlength: "8"}}
                             }
@@ -928,27 +1121,27 @@ pub(crate) fn app<'a>(
                                     class: "nested_table",
                                     tr {
                                         style: "{s_dev_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "dev", name: "environment", value: "DEV", checked: "{s_dev_checked}" }}
+                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "dev", name: "environment", value: "DEV", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_dev_checked}" } }
                                         td{div{label {r#for: "dev", "Development"}}}
                                     }
                                     tr {
                                         style: "{s_om_nipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "om_nipr", name: "environment", value: "OM_NIPR", checked: "{s_om_nipr_checked}" }}
+                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "om_nipr", name: "environment", value: "OM_NIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_om_nipr_checked}" } }
                                         td{div{label {r#for: "om_nipr", "NIPR O&M"}}}
                                     }
                                     tr {
                                         style: "{s_nipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "nipr", name: "environment", value: "NIPR", checked: "{s_nipr_checked}" }}
+                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "nipr", name: "environment", value: "NIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_nipr_checked}" } }
                                         td{div{label {r#for: "nipr", "NIPR"}}}
                                     }
                                     tr {
                                         style: "{s_om_sipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "om_sipr", name: "environment", value: "OM_SIPR", checked: "{s_om_sipr_checked}" }}
+                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "om_sipr", name: "environment", value: "OM_SIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_om_sipr_checked}" } }
                                         td{div{label {r#for: "om_sipr", "SIPR O&M"}}}
                                     }
                                     tr {
                                         style: "{s_sipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "sipr", name: "environment", value: "SIPR", checked: "{s_sipr_checked}" }}
+                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "sipr", name: "environment", value: "SIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_sipr_checked}", }}
                                         td{div{label {r#for: "sipr", "SIPR"}}}
                                     }
                                 }
@@ -978,11 +1171,22 @@ pub(crate) fn app<'a>(
                                     s_success_msg.setter()(String::new());
                                     s_error_msg.setter()(String::new());
 
+                                    #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+                                    let reset_supported = true;
+                                    #[cfg(not(all(target_os = "windows", feature = "vsc", feature = "reset_vsc")))]
+                                    let reset_supported = *s_pin_style.get() == "display:table-row;";
+                                    if !reset_supported {
+                                        reset_abandoned_setter(true);
+                                        s_error_msg.setter()("VSC reset support is not provided".to_string());
+                                        return;
+                                    }
+
                                     use native_dialog::{MessageDialog, MessageType};
+                                    let msg = format!("Are you sure you want to reset the device with serial number {s_serial} now?");
                                     match MessageDialog::new()
                                         .set_type(MessageType::Info)
                                         .set_title("Reset?")
-                                        .set_text(&format!("Are you sure you want to reset the YubiKey with serial number {s_serial} now?"))
+                                        .set_text(&msg)
                                         .show_confirm()
                                     {
                                         Ok(answer) => {
@@ -1020,7 +1224,12 @@ pub(crate) fn app<'a>(
                                 let disabled = *s_disabled.get();
                                 match SystemTime::now().duration_since(UNIX_EPOCH) {
                                     Ok(n) => {
-                                        if !disabled {
+                                        #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+                                        let reset_supported = true;
+                                        #[cfg(not(all(target_os = "windows", feature = "vsc", feature = "reset_vsc")))]
+                                        let reset_supported = *s_pin_style.get() == "display:table-row;";
+
+                                        if !disabled && reset_supported {
                                             let secs = n.as_secs();
                                             if secs - last_start > 5 {
                                                 click_count_setter(1);
