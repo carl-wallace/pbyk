@@ -1,6 +1,6 @@
 [package]
 name = "pbyk"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.70"
 
@@ -9,18 +9,19 @@ rust-version = "1.70"
 [dependencies]
 pbyklib = {path = "../pbyklib"}
 
-clap = {version = "4.4.11", features=["std", "derive"]}
+clap = {version = "4.5.0", features=["std", "derive"]}
 colored = "2.1.0"
 log = "0.4.20"
 log4rs = {version = "1.2.0"}
 rpassword = "7.3.1"
-tokio = { version = "1.35.0", features = ["full", "time", "rt-multi-thread"]}
+tokio = { version = "1.35.1", features = ["full", "time", "rt-multi-thread"]}
 # the yubikey fork features a length check needed when pbyk is run in presence of some middleware. use fork until upstream is updated with length check added to form.
 #yubikey = { version = "0.8.0", features = ["untested"] }
 yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "pbyk", features = ["untested"]}
+zeroize = "1.7.0"
 
-dioxus = {version = "0.4.0", optional = true}
-dioxus-desktop = {version = "0.4.0", optional = true}
+dioxus = {version = "0.4.3", optional = true}
+dioxus-desktop = {version = "0.4.3", optional = true}
 fermi = { version = "0.4.3", optional = true }
 native-dialog = { version = "0.7.0", optional = true }
 
@@ -28,11 +29,11 @@ native-dialog = { version = "0.7.0", optional = true }
 dioxus-toast = { git = "https://github.com/carl-wallace/dioxus-toast", optional = true, branch = "update" }
 
 cfg-if = "1.0.0"
-home = {version = "0.5.5", optional = true}
-anyhow = {version = "1.0.75", optional = true}
+home = {version = "0.5.9", optional = true}
+anyhow = {version = "1.0.79", optional = true}
 
-serde = { version = "1.0.193", default-features = false, features = ["derive"] }
-serde_json = "1.0.108"
+serde = { version = "1.0.195", default-features = false, features = ["derive"] }
+serde_json = "1.0.111"
 
 lazy_static = "1.4.0"
 base64ct = { version="1.6.0", features = ["alloc"] }
@@ -44,9 +45,9 @@ certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["s
 winapi = {version = "0.3.9", features = ["wincon", "winuser"]}
 
 [dev-dependencies]
-ignore = "0.4.21"
-image = { version = "0.24.7", features = [] }
-png = "0.17.10"
+ignore = "0.4.22"
+image = { version = "0.24.8", features = [] }
+png = "0.17.11"
 
 [features]
 default = ["dev"]
@@ -56,3 +57,5 @@ om_sipr = ["pbyklib/om_sipr"]
 nipr = ["pbyklib/nipr"]
 sipr = ["pbyklib/sipr"]
 gui = ["home", "anyhow", "dioxus-desktop", "dioxus", "dioxus-toast", "fermi", "native-dialog"]
+vsc = ["pbyklib/vsc", "reset_vsc"]
+reset_vsc = ["pbyklib/reset_vsc"] # this feature exists to quarantine non-functional VSC reset code. do not use.

@@ -32,13 +32,11 @@ fn log_certs_in_path(path: &CertificationPath) {
     );
 }
 
-/// Takes a leaf certificate and a set of intermediate certificates and builds and validates a
-/// certification path to a trust anchor from the location identified in the
-/// [apple_attest_ta_folder](crate::configuration::Settings) setting
+/// Takes a leaf certificate and a set of intermediate certificates and builds and validates a certification path to a
+/// trust anchor set populated based on the elected features using resources available at compile time.
 ///
-/// `validate_cert` mostly serves to prepare TaSource and CertSource instances for inclusion in a
-/// `PkiEnvironment` that is passed to `validate_cert_buf`, which executes the validation operation
-/// and returns the result.
+/// `validate_cert` mostly serves to prepare TaSource and CertSource instances for inclusion in a `PkiEnvironment` that
+/// is passed to `validate_cert_buf`, which executes the validation operation and returns the result.
 pub(crate) async fn validate_cert(
     leaf_cert: &Vec<u8>,
     intermediate: Vec<Certificate>,
@@ -196,18 +194,13 @@ async fn validate_cert_buf(
         }
 
         for path in paths.iter_mut() {
-            debug!(
-                "Validating {} certificate path for {}",
-                (path.intermediates.len() + 2),
-                name_to_string(&path.target.decoded_cert.tbs_certificate.subject)
-            );
             let mut cpr = CertificationPathResults::new();
             log_certs_in_path(path);
             match pe.validate_path(pe, cps, path, &mut cpr) {
                 Ok(()) => {
                     info!(
-                        "Validating {} certificate path for {}",
-                        (path.intermediates.len() + 2),
+                        "Validated {} certificate path for {}",
+                        path.intermediates.len() + 2,
                         name_to_string(&path.target.decoded_cert.tbs_certificate.subject)
                     );
                     return Ok(());
@@ -215,7 +208,7 @@ async fn validate_cert_buf(
                 Err(e) => {
                     error!(
                         "Failed to validate {} certificate path for {}: {e:?}",
-                        (path.intermediates.len() + 2),
+                        path.intermediates.len() + 2,
                         name_to_string(&path.target.decoded_cert.tbs_certificate.subject)
                     );
                     //return Err(Error::Attestation);

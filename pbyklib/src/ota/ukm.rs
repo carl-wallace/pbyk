@@ -1,14 +1,11 @@
 //! Interacts with Purebred portal to obtain fresh PIV and signature credentials and current recovered encryption credential
 
-use log::{error, info};
-use yubikey::{piv::SlotId, MgmKey, YubiKey};
+use log::error;
+use yubikey::MgmKey;
+use zeroize::Zeroizing;
 
-use crate::{
-    misc::internal_utils::{process_payloads, verify_and_decrypt},
-    misc::network::get_profile,
-    ota::OtaActionInputs,
-    Result,
-};
+use crate::ota::CryptoModule;
+use crate::{ota::OtaActionInputs, Error, Result, PB_MGMT_KEY};
 
 /// Obtains fresh PIV and signature credentials and current encryption credential using the indicted
 /// YubiKey device using the URL obtained from `ukm_inputs`
@@ -16,46 +13,44 @@ use crate::{
 /// # Arguments
 /// * `yubikey` - handle to YubiKey to enroll
 /// * `ukm_inputs` - structure containing information used to prepare URI to execute UKM action
-/// * `pin` - PIN required to provision user-related slots on the given YubiKey device
-/// * `mgmt_key` - management key required to provision the given YubiKey device
+/// * `pin` - YubiKey PIN required to provision user-related slots on the given YubiKey device (may be omitted for VSC enrollments)
+/// * `mgmt_key` - YubiKey management key value (may be omitted for VSC enrollments)
 /// * `env` - identifies the environment in which enrollment is being performed, i.e., DEV, NIPR, SIPR, OM_NIPR, OM_SIPR
 pub async fn ukm(
-    yubikey: &mut YubiKey,
+    cm: &mut CryptoModule,
     ukm_inputs: &OtaActionInputs,
-    pin: &[u8],
-    mgmt_key: &MgmKey,
+    pin: Option<Zeroizing<String>>,
+    mgmt_key: Option<&MgmKey>,
     env: &str,
 ) -> Result<()> {
-    info!(
-        "Begin user key management operation for YubiKey with serial {}",
-        ukm_inputs.serial
-    );
-
-    let profile = get_profile(&ukm_inputs.to_ukm_url()).await?;
-    let dec = verify_and_decrypt(
-        yubikey,
-        SlotId::CardAuthentication,
-        &profile,
-        true,
-        pin,
-        mgmt_key,
-        env,
-    )
-    .await?;
-    match process_payloads(yubikey, &dec, pin, mgmt_key, env, true).await {
-        Ok(_) => {
-            info!(
-                "Begin user key management operation for YubiKey with serial {}",
-                ukm_inputs.serial
-            );
-            Ok(())
+    match cm {
+        CryptoModule::YubiKey(yk) => {
+            use crate::ota_yubikey::ukm::ukm;
+            let pin = match pin {
+                Some(pin) => pin,
+                None => {
+                    error!("PIN value must be provided when enrolling a YubiKey device");
+                    return Err(Error::BadInput);
+                }
+            };
+            ukm(
+                yk,
+                ukm_inputs,
+                pin.as_bytes(),
+                mgmt_key.unwrap_or(&PB_MGMT_KEY),
+                env,
+            )
+            .await
         }
-        Err(e) => {
-            error!(
-                "User key management operation failed for YubiKey with serial {}",
-                ukm_inputs.serial
-            );
-            Err(e)
+        #[cfg(all(target_os = "windows", feature = "vsc"))]
+        CryptoModule::SmartCard(sc) => {
+            use crate::misc_win::vsc_state::get_vsc_id;
+            use crate::ota_vsc::ukm::ukm;
+            use crate::utils::list_vscs::get_device_cred;
+
+            let vsc_id = get_vsc_id(&sc.Reader().unwrap().Name().unwrap()).unwrap();
+            let cred = get_device_cred(&vsc_id, false).unwrap();
+            ukm(sc, &cred, ukm_inputs, env).await
         }
     }
 }

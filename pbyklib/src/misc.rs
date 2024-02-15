@@ -1,9 +1,9 @@
-//! Internal utility functions
+//! General-purpose utility functions for use in pbyklib
 
-pub(crate) mod internal_utils;
 pub(crate) mod network;
+
 pub(crate) mod p12;
 pub(crate) mod pki;
 pub(crate) mod rsa_utils;
 pub(crate) mod scep;
-pub(crate) mod yubikey_utils;
+pub(crate) mod utils;

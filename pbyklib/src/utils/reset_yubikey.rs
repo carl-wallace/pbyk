@@ -4,6 +4,9 @@ use log::{error, info};
 use rand_core::{OsRng, RngCore};
 use yubikey::{CccId, ChuId, MgmKey, YubiKey};
 
+#[cfg(target_os = "windows")]
+use crate::misc_win::yubikey::cleanup_capi_yubikey;
+
 /// Resets a given YubiKey for enrollment with Purebred
 ///
 /// From the release of Yubikey support, users were required to take some preliminary steps to prepare their Yubikey for use
@@ -39,6 +42,9 @@ pub fn reset_yubikey(
 ) -> yubikey::Result<()> {
     info!("Resetting YubiKey with serial {}", yubikey.serial());
 
+    #[cfg(target_os = "windows")]
+    cleanup_capi_yubikey(yubikey);
+
     let mut failed = 0;
     let mut value = "00000000";
     while failed < 3 {
@@ -71,6 +77,7 @@ pub fn reset_yubikey(
         return Err(e);
     }
 
+    /// Template value for CCC
     const CCC_TMPL: &[u8] = &[
         0xf0, 0x15, 0xa0, 0x00, 0x00, 0x01, 0x16, 0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf1, 0x01, 0x21, 0xf2, 0x01, 0x21, 0xf3,
@@ -94,6 +101,7 @@ pub fn reset_yubikey(
     }
     let _ = CccId::get(yubikey);
 
+    /// Template value for CHUID
     const CHUID_TMPL: &[u8] = &[
         0x30, 0x19, 0xd4, 0xe7, 0x39, 0xda, 0x73, 0x9c, 0xed, 0x39, 0xce, 0x73, 0x9d, 0x83, 0x68,
         0x58, 0x21, 0x08, 0x42, 0x10, 0x84, 0x21, 0xc8, 0x42, 0x10, 0xc3, 0xeb, 0x34, 0x10, 0x00,

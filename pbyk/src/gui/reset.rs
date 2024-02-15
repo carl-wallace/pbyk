@@ -4,6 +4,12 @@ use dioxus::prelude::*;
 use log::error;
 use native_dialog::{MessageDialog, MessageType};
 
+#[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+use pbyklib::utils::{list_vscs::get_vsc, reset_vsc::reset_vsc};
+
+#[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+use crate::gui::utils::parse_reader_from_vsc_display;
+
 use pbyklib::{
     utils::{get_yubikey, reset_yubikey},
     PB_MGMT_KEY,
@@ -20,6 +26,8 @@ pub(crate) fn reset<'a>(
     s_error_msg: &'a UseState<String>,
     s_reset_complete: &'a UseState<bool>,
     s_disa_icon: &'a UseState<String>,
+    s_pin_style: &'a UseState<&str>,
+    is_yubikey: bool,
 ) -> Element<'a> {
     // Non-fatal error handling
     let error_msg_setter = s_error_msg.setter();
@@ -50,116 +58,151 @@ pub(crate) fn reset<'a>(
                     let puk1 = string_or_default(&ev, "puk", "");
                     let puk2 = string_or_default(&ev, "puk2", "");
 
+                    let serial = string_or_default(&ev, "serial", "");
                     let serial_u32 = match s_serial.get().parse::<u32>() {
                         Ok(serial_u32) => Some(serial_u32),
-                        Err(e) => {
-                            let sm = format!("ERROR: failed to process YubiKey serial number: {e}.");
-                            error!("{}", sm);
-                            error_msg_setter(sm.to_string());
+                        Err(_e) => {
+                            // let sm = format!("ERROR: failed to process YubiKey serial number: {e}.");
+                            // error!("{}", sm);
+                            // error_msg_setter(sm.to_string());
                             None
                         }
                     };
 
                     async move {
-                        if pin1.is_empty() || pin2.is_empty() || puk1.is_empty() || puk2.is_empty() {
-                            pin_setter("".to_string());
-                            puk_setter("".to_string());
+                        if is_yubikey{
+                            if pin1.is_empty() || pin2.is_empty() || puk1.is_empty() || puk2.is_empty() {
+                                pin_setter("".to_string());
+                                puk_setter("".to_string());
 
-                            let sm = if pin1.is_empty() || pin2.is_empty() {
-                                "You must enter a new PIN value and confirm that value"
-                            }
-                            else {
-                                "You must enter a new PUK value and confirm that value"
-                            };
-                            error_msg_setter(sm.to_string());
-                            return;
-                        }
-
-                        if !pin1.chars().all(|c| c.is_ascii()) || 6 > pin1.len() || 8 < pin1.len() {
-                            let sm = "PIN values MUST be between 6 and 8 characters long and only contain ASCII values.";
-                            error!("{}", sm);
-                            error_msg_setter(sm.to_string());
-                            return;
-                        }
-
-                        if 6 > puk1.len() || 8 < puk1.len()  {
-                            let sm = "PUK values MUST be between 6 and 8 characters long.";
-                            error!("{}", sm);
-                            error_msg_setter(sm.to_string());
-                            return;
-                        }
-
-                        if pin1 != pin2 || puk1 != puk2 {
-                            pin_setter("".to_string());
-                            puk_setter("".to_string());
-
-                            let sm = if pin1 != pin2 {
-                                "PIN values do not match"
-                            }
-                            else {
-                                "PUK values do not match"
-                            };
-
-                            error_msg_setter(sm.to_string());
-                            return;
-                        }
-
-                        let yks = match serial_u32 {
-                            Some(serial_u32) => yubikey::Serial(serial_u32),
-                            None => {
-                                // error message is set up in match statement above if serial number
-                                // conversion fails
+                                let sm = if pin1.is_empty() || pin2.is_empty() {
+                                    "You must enter a new PIN value and confirm that value"
+                                }
+                                else {
+                                    "You must enter a new PUK value and confirm that value"
+                                };
+                                error_msg_setter(sm.to_string());
                                 return;
                             }
-                        };
 
-                        log::debug!("Connecting to YubiKey to reset: {yks}");
-                        let mut yubikey = match get_yubikey(Some(yks)) {
-                            Ok(yk) => yk,
-                            Err(e) => {
-                                let sm = format!("Could not get the YubiKey with serial number {yks}. Please make sure the device is available then try again. Error: {e}");
+                            if !pin1.chars().all(|c| c.is_ascii()) || 6 > pin1.len() || 8 < pin1.len() {
+                                let sm = "PIN values MUST be between 6 and 8 characters long and only contain ASCII values.";
                                 error!("{}", sm);
                                 error_msg_setter(sm.to_string());
                                 return;
                             }
-                        };
 
-                        if let Err(e) = reset_yubikey(&mut yubikey, &pin1, &puk1, &PB_MGMT_KEY.clone()) {
-                            let sm = format!("Failed to reset YubiKey with serial number {yks}: {e}.");
-                            error!("{}", sm);
-                            pin_setter("".to_string());
-                            puk_setter("".to_string());
-                            error_msg_setter(sm.to_string());
+                            if 6 > puk1.len() || 8 < puk1.len()  {
+                                let sm = "PUK values MUST be between 6 and 8 characters long.";
+                                error!("{}", sm);
+                                error_msg_setter(sm.to_string());
+                                return;
+                            }
+
+                            if pin1 != pin2 || puk1 != puk2 {
+                                pin_setter("".to_string());
+                                puk_setter("".to_string());
+
+                                let sm = if pin1 != pin2 {
+                                    "PIN values do not match"
+                                }
+                                else {
+                                    "PUK values do not match"
+                                };
+
+                                error_msg_setter(sm.to_string());
+                                return;
+                            }
                         }
-                        else {
-                            reset_complete_setter(true);
-                            reset_setter(false);
-                        }
+
+                        match serial_u32 {
+                            Some(serial_u32) => {
+                                let yks = yubikey::Serial(serial_u32);
+                                log::debug!("Connecting to YubiKey to reset: {yks}");
+                                let mut yubikey = match get_yubikey(Some(yks)) {
+                                    Ok(yk) => yk,
+                                    Err(e) => {
+                                        let sm = format!("Could not get the YubiKey with serial number {yks}. Please make sure the device is available then try again. Error: {e}");
+                                        error!("{}", sm);
+                                        error_msg_setter(sm.to_string());
+                                        return;
+                                    }
+                                };
+
+                                if let Err(e) = reset_yubikey(&mut yubikey, &pin1, &puk1, &PB_MGMT_KEY.clone()) {
+                                    let sm = format!("Failed to reset YubiKey with serial number {yks}: {e}.");
+                                    error!("{}", sm);
+                                    pin_setter("".to_string());
+                                    puk_setter("".to_string());
+                                    error_msg_setter(sm.to_string());
+                                }
+                                else {
+                                    reset_complete_setter(true);
+                                    reset_setter(false);
+                                }
+                            },
+                            None => {
+                                #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+                                {
+                                    // error message is set up in match statement above if serial number
+                                    // conversion fails
+                                    let r = parse_reader_from_vsc_display(&serial);
+                                    let smartcard = match get_vsc(&r).await {
+                                        Ok(yk) => yk,
+                                        Err(e) => {
+                                            let sm = format!("Could not get the VSC with serial number {r}. Please make sure the device is available then try again. Error: {e:?}");
+                                            error!("{}", sm);
+                                            error_msg_setter(sm.to_string());
+                                            return;
+                                        }
+                                    };
+
+                                    if let Err(e) = reset_vsc(&smartcard).await {
+                                        let sm = format!("Failed to reset VSC with serial number {r}: {e:?}.");
+                                        error!("{}", sm);
+                                        pin_setter("".to_string());
+                                        puk_setter("".to_string());
+                                        error_msg_setter(sm.to_string());
+                                    }
+                                    else {
+                                        reset_complete_setter(true);
+                                        reset_setter(false);
+                                    }
+                                }
+
+                                #[cfg(not(all(target_os = "windows", feature = "vsc", feature = "reset_vsc")))]
+                                {
+                                    let sm = format!("ERROR: failed to process YubiKey serial number {serial}");
+                                    error!("{}", sm);
+                                    error_msg_setter(sm.to_string());
+                                }
+                            }
+                        };
                     }
                 },
                 table {
                     tbody {
                         tr{
                             style: "display:table-row;",
-                            td{div{label {r#for: "serial", "YubiKey Serial Number"}}}
+                            td{div{label {r#for: "serial", "Serial Number"}}}
                             td{input { r#type: "text", name: "serial", readonly: true, value: "{s_serial}"}}
                         }
                         tr{
-                            style: "display:table-row;",
+                            style: "{s_pin_style}",
                             th{rowspan: "2", div{label {r#for: "pin", "YubiKey PIN"}}}
-                            td{input { r#type: "password", placeholder: "Enter YubiKey PIN", name: "pin", value: "{s_pin}", maxlength: "8"}}
+                            td{input { r#type: "password", placeholder: "Enter YubiKey PIN (6 to 8 ASCII characters)", name: "pin", value: "{s_pin}", maxlength: "8"}}
                         }
                         tr{
-                            style: "display:table-row;",
+                            style: "{s_pin_style}",
                             td{input { r#type: "password", placeholder: "Re-enter YubiKey PIN", name: "pin2", value: "{s_pin}", maxlength: "8"}}
                         }
                         tr{
-                            style: "display:table-row;",
+                            style: "{s_pin_style}",
                             th{rowspan: "2", div{label {r#for: "puk", "YubiKey PUK"}}}
-                            td{input { r#type: "password", placeholder: "Enter YubiKey PUK", name: "puk", value: "{s_pin}", maxlength: "8"}}
+                            td{input { r#type: "password", placeholder: "Enter YubiKey PUK (6 to 8 ASCII characters)", name: "puk", value: "{s_pin}", maxlength: "8"}}
                         }
                         tr{
-                            style: "display:table-row;",
+                            style: "{s_pin_style}",
                             td{input { r#type: "password", placeholder: "Re-enter YubiKey PUK", name: "puk2", value: "{s_pin}", maxlength: "8"}}
                         }
                     }

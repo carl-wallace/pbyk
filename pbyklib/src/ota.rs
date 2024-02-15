@@ -1,4 +1,4 @@
-//! Supports execution of the OTA protocol to enroll YubiKey devices with a Purebred portal instance
+//! Public functions and structures to support execution of the OTA protocol to enroll devices with a Purebred portal instance
 
 pub mod data;
 pub mod enroll;
