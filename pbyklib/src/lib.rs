@@ -4,7 +4,7 @@
 pub mod ota;
 pub mod utils;
 
-mod misc;
+pub mod misc;
 mod ota_yubikey;
 
 #[cfg(target_os = "windows")]
