@@ -258,7 +258,7 @@ pub async fn post_body(uri: &str, body: &[u8], content_type: &str) -> Result<Vec
 
 /// Makes a POST request to the given URL and returns the result as a buffer. Logs error details
 /// before returning.
-pub(crate) async fn post_no_body(uri: &str) -> Result<Vec<u8>> {
+pub async fn post_no_body(uri: &str) -> Result<Vec<u8>> {
     let client = get_client(TIMEOUT)?;
     let response = match client.post(uri).send().await {
         Ok(b) => b,
