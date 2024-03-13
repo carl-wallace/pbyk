@@ -2,7 +2,7 @@
 
 pub mod network;
 
-pub(crate) mod p12;
+pub mod p12;
 pub(crate) mod pki;
 pub(crate) mod rsa_utils;
 pub(crate) mod scep;
