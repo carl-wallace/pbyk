@@ -298,7 +298,7 @@ pub(crate) fn recipient_identifier_from_cert(cert: &Certificate) -> Result<Recip
 
 /// Generates a SignedData object covering the `data_to_sign` using the provided `yubikey` and `slot_id`, which
 /// are assumed to related to the provided `signers_certificate`.
-pub(crate) fn get_signed_data<S>(
+pub fn get_signed_data<S>(
     signer: &S,
     signers_cert: &Certificate,
     data_to_sign: &[u8],
