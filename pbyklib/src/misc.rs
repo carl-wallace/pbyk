@@ -6,4 +6,4 @@ pub mod p12;
 pub(crate) mod pki;
 pub(crate) mod rsa_utils;
 pub(crate) mod scep;
-pub(crate) mod utils;
+pub mod utils;
