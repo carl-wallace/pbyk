@@ -182,12 +182,13 @@ pub(crate) async fn generate_csr(
     sc: &SmartCard,
     with_attestation: bool,
     container_name: Option<HSTRING>,
+    friendly_name: &str,
 ) -> Result<String> {
     let h_subject_name = HSTRING::from(subject_name);
 
     // Generate a new key pair using the selected virtual smart card. This will result in a CSR that we do not need.
     let request = CertificateRequestProperties::new()?;
-    request.SetFriendlyName(&HSTRING::from("Purebred Self-Signed Device Certificate"))?;
+    request.SetFriendlyName(&HSTRING::from(friendly_name))?;
     request.SetKeyAlgorithmName(&KeyAlgorithmNames::Rsa()?)?;
     request
         .SetKeyStorageProviderName(&HSTRING::from("Microsoft Smart Card Key Storage Provider"))?;
@@ -249,8 +250,14 @@ pub(crate) async fn generate_self_signed_cert_vsc(
     let with_attestation = gamble_on_attestation(true);
 
     // generate a fresh key pair (which will yield a CSR we don't want but must use and an attestation)
-    let (csr_to_consume, attestation) = match generate_csr(subject_name, sc, with_attestation, None)
-        .await
+    let (csr_to_consume, attestation) = match generate_csr(
+        subject_name,
+        sc,
+        with_attestation,
+        None,
+        "Purebred Self-Signed Device Certificate",
+    )
+    .await
     {
         Ok(csr_to_consume) => {
             if with_attestation {
@@ -263,7 +270,17 @@ pub(crate) async fn generate_self_signed_cert_vsc(
             if gamble_on_attestation(true) {
                 attestation_does_not_work();
                 debug!("Attempting to generate a fresh key pair without attestation in generate_self_signed_cert_vsc after an attempt with attestation failed with: {e:?}");
-                (generate_csr(subject_name, sc, false, None).await?, None)
+                (
+                    generate_csr(
+                        subject_name,
+                        sc,
+                        false,
+                        None,
+                        "Purebred Self-Signed Device Certificate",
+                    )
+                    .await?,
+                    None,
+                )
             } else {
                 return Err(e);
             }
@@ -320,8 +337,14 @@ pub(crate) async fn generate_self_signed_cert_vsc(
             let container_name = get_key_provider_info(cred)?.get_container_name()?;
 
             // generate a new CSR for the existing key, so we can try to install the self-signed certificate
-            let _csr_to_discard =
-                generate_csr(subject_name, sc, false, Some(container_name.clone())).await?;
+            let _csr_to_discard = generate_csr(
+                subject_name,
+                sc,
+                false,
+                Some(container_name.clone()),
+                "Purebred Self-Signed Device Certificate",
+            )
+            .await?;
 
             let ss_p7 = prepare_base64_certs_only_p7(&self_signed)?;
             if let Err(e) = CertificateEnrollmentManager::UserCertificateEnrollmentManager()?

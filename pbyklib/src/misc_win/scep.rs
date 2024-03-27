@@ -143,11 +143,14 @@ pub(crate) async fn process_scep_payload_vsc(
         return Err(Error::ParseError);
     }
 
-    if let Some(display) = &display {
+    let friendly_name = if let Some(display) = &display {
         info!("Processing SCEP payload {display}");
+        display.clone()
     } else {
+        // only hit here if the SCEP payload has not display name (this ought not happen)
         info!("Processing SCEP payload");
-    }
+        "Purebred Certificate".to_string()
+    };
 
     let (challenge, url) = get_challenge_and_url(scep_instructions)?;
     let email_addresses = get_email_addresses(scep_instructions);
@@ -243,6 +246,7 @@ pub(crate) async fn process_scep_payload_vsc(
                         sc,
                         false,
                         Some(container_name.clone()),
+                        &friendly_name,
                     )
                     .await?;
 
