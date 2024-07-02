@@ -96,7 +96,7 @@ async fn validate_cert_buf(
 
     if let Ok(target_cert) = parse_cert(target.as_slice(), "") {
         let mut paths: Vec<CertificationPath> = vec![];
-        let r = pe.get_paths_for_target(pe, &target_cert, &mut paths, threshold, time_of_interest);
+        let r = pe.get_paths_for_target(&target_cert, &mut paths, threshold, time_of_interest);
         if let Err(e) = r {
             error!(
                 "Failed to find certification paths for target with error {:?}",
