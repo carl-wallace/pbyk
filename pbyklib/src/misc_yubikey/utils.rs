@@ -258,13 +258,7 @@ pub(crate) fn generate_self_signed_cert(
     };
 
     match yubikey::certificate::Certificate::generate_self_signed(
-        yubikey,
-        slot,
-        serial,
-        validity,
-        name,
-        public_key,
-        builder,
+        yubikey, slot, serial, validity, name, public_key, builder,
     ) {
         Ok(cert) => Ok(cert.cert),
         Err(e) => Err(Error::YubiKey(e)),
