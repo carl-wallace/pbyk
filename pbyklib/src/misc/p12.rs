@@ -12,7 +12,7 @@ static INIT: Once = Once::new();
 /// Decrypts the given PKCS #12 object using the provided password and returns a tuple containing the binary DER-encoded
 /// certificate and binary DER-encoded key, i.e., as (certificate, key).
 #[allow(clippy::type_complexity)]
-pub(crate) fn process_p12(
+pub fn process_p12(
     enc_p12: &[u8],
     password: &str,
     want_key: bool,
