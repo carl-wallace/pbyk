@@ -19,6 +19,7 @@ async fn test_om_sipr_pass() {
 #[cfg(feature = "om_nipr")]
 #[tokio::test]
 async fn test_om_nipr_pass() {
+    // init_console_logging();
     assert!(portal_status_check("https://purebred.c3pki.oandm.disa.mil")
         .await
         .is_ok());
@@ -62,4 +63,36 @@ async fn test_nipr_fail() {
     assert!(portal_status_check("https://purebred.csd.disa.mil")
         .await
         .is_err());
+}
+
+// Call this from unit tests when debugging.
+#[allow(dead_code)]
+#[cfg(test)]
+fn init_console_logging() {
+    use log::LevelFilter;
+    use log4rs::{
+        append::console::ConsoleAppender,
+        config::{Appender, Config, Root},
+        encode::pattern::PatternEncoder,
+    };
+    let stdout = ConsoleAppender::builder()
+        .encoder(Box::new(PatternEncoder::new("{m}{n}")))
+        .build();
+    match Config::builder()
+        .appender(Appender::builder().build("stdout", Box::new(stdout)))
+        .build(Root::builder().appender("stdout").build(LevelFilter::Info))
+    {
+        Ok(config) => {
+            let handle = log4rs::init_config(config);
+            if let Err(e) = handle {
+                println!(
+                    "ERROR: failed to configure logging for stdout with {:?}. Continuing without logging.",
+                    e
+                );
+            }
+        }
+        Err(e) => {
+            println!("ERROR: failed to prepare default logging configuration with {:?}. Continuing without logging", e);
+        }
+    }
 }

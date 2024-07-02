@@ -57,6 +57,14 @@ impl From<io::Error> for Error {
         Error::Io
     }
 }
+
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Error {
+        use log::error;
+        error!("reqwest::Error: {err}");
+        Error::Network
+    }
+}
 impl From<der::Error> for Error {
     fn from(err: der::Error) -> Error {
         Error::Asn1(err)
