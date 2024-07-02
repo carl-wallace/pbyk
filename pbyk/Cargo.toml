@@ -39,7 +39,7 @@ lazy_static = "1.4.0"
 base64ct = { version="1.6.0", features = ["alloc"] }
 
 # certval has not yet been released, hence use of private branch
-certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"], branch = "pb"}
+certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"], branch = "rel_with_mods"}
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = {version = "0.3.9", features = ["wincon", "winuser"]}

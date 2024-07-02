@@ -442,44 +442,6 @@ dependencies = [
 [[package]]
 name = "certval"
 version = "0.1.4"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=pb#5f8d01d80d709398ddfecd563f2ede1e9fe4345a"
-dependencies = [
- "base64ct",
- "cfg-if",
- "ciborium",
- "cms 0.2.3",
- "const-oid",
- "der",
- "ecdsa",
- "flagset",
- "lazy_static",
- "log",
- "ndarray",
- "p256",
- "p384",
- "pem-rfc7468",
- "pkiprocmacros 0.1.2 (git+https://github.com/carl-wallace/rust-pki.git?branch=pb)",
- "readonly",
- "regex",
- "reqwest 0.11.23",
- "rsa",
- "serde",
- "serde_json",
- "sha-1",
- "sha2",
- "spki",
- "subtle-encoding",
- "tokio",
- "url",
- "walkdir",
- "webpki-roots 0.25.3",
- "x509-cert",
- "x509-ocsp 0.2.1",
-]
-
-[[package]]
-name = "certval"
-version = "0.1.4"
 source = "git+https://github.com/carl-wallace/rust-pki.git?branch=rel_with_mods#7c598783c7cd20a389feb20a1372e6cd425e99bc"
 dependencies = [
  "base64ct",
@@ -498,7 +460,7 @@ dependencies = [
  "p256",
  "p384",
  "pem-rfc7468",
- "pkiprocmacros 0.1.2 (git+https://github.com/carl-wallace/rust-pki.git?branch=rel_with_mods)",
+ "pkiprocmacros",
  "readonly",
  "regex",
  "reqwest 0.11.23",
@@ -514,7 +476,7 @@ dependencies = [
  "walkdir",
  "webpki-roots 0.25.3",
  "x509-cert",
- "x509-ocsp 0.2.0-pre",
+ "x509-ocsp",
 ]
 
 [[package]]
@@ -3204,7 +3166,7 @@ name = "pb_pki"
 version = "0.1.1"
 source = "git+https://github.com/carl-wallace/pb_pki.git?branch=addl_certs#4b2146bf7f1cd7c0b5cba1737fbfde38c6103a58"
 dependencies = [
- "certval 0.1.4 (git+https://github.com/carl-wallace/rust-pki.git?branch=rel_with_mods)",
+ "certval",
  "log",
  "reqwest 0.12.5",
 ]
@@ -3225,7 +3187,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "base64ct",
- "certval 0.1.4 (git+https://github.com/carl-wallace/rust-pki.git?branch=pb)",
+ "certval",
  "cfg-if",
  "clap",
  "colored",
@@ -3258,7 +3220,7 @@ dependencies = [
  "aes",
  "base64ct",
  "cbc",
- "certval 0.1.4 (git+https://github.com/carl-wallace/rust-pki.git?branch=rel_with_mods)",
+ "certval",
  "cipher",
  "cms 0.2.2",
  "const-oid",
@@ -3501,16 +3463,6 @@ name = "pkg-config"
 version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69d3587f8a9e599cc7ec2c00e331f71c4e69a5f9a4b8a6efd5b07466b9736f9a"
-
-[[package]]
-name = "pkiprocmacros"
-version = "0.1.2"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=pb#5f8d01d80d709398ddfecd563f2ede1e9fe4345a"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.48",
-]
 
 [[package]]
 name = "pkiprocmacros"
@@ -5915,18 +5867,6 @@ name = "x509-ocsp"
 version = "0.2.0-pre"
 source = "git+https://github.com/carl-wallace/formats.git?branch=pbyk#52656aee805a6d3f3355c23d6ffcdf04695b0ebc"
 dependencies = [
- "der",
- "spki",
- "x509-cert",
-]
-
-[[package]]
-name = "x509-ocsp"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e54e695a31f0fecb826cf59ae2093c941d7ef932a1f8508185dd23b29ce2e2e"
-dependencies = [
- "const-oid",
  "der",
  "spki",
  "x509-cert",
