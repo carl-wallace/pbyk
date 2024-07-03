@@ -442,7 +442,7 @@ dependencies = [
 [[package]]
 name = "certval"
 version = "0.1.4"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=rel_with_mods#7c598783c7cd20a389feb20a1372e6cd425e99bc"
+source = "git+https://github.com/carl-wallace/rust-pki.git#2497159ac52cf57918c5f92229463031345a1581"
 dependencies = [
  "base64ct",
  "bitvec",
@@ -3164,7 +3164,7 @@ dependencies = [
 [[package]]
 name = "pb_pki"
 version = "0.1.1"
-source = "git+https://github.com/carl-wallace/pb_pki.git?branch=addl_certs#4b2146bf7f1cd7c0b5cba1737fbfde38c6103a58"
+source = "git+https://github.com/carl-wallace/pb_pki.git#a4e9f008168486b0bc37380ffd8a91ba4daf8254"
 dependencies = [
  "certval",
  "log",
@@ -3467,7 +3467,7 @@ checksum = "69d3587f8a9e599cc7ec2c00e331f71c4e69a5f9a4b8a6efd5b07466b9736f9a"
 [[package]]
 name = "pkiprocmacros"
 version = "0.1.2"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=rel_with_mods#7c598783c7cd20a389feb20a1372e6cd425e99bc"
+source = "git+https://github.com/carl-wallace/rust-pki.git#2497159ac52cf57918c5f92229463031345a1581"
 dependencies = [
  "proc-macro2",
  "quote",
