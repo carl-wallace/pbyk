@@ -247,20 +247,18 @@ pub(crate) fn generate_self_signed_cert(
         return Err(Error::YubiKey(e));
     }
 
+    let builder = |builder: &mut CertificateBuilder<
+        '_,
+        yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>>,
+    >| {
+        if let Err(e) = builder.add_extension(&skid) {
+            error!("Failed to add SKID extension to certificate builder when generating self-signed certificate for Yubikey: {e:?}");
+        }
+        Ok(())
+    };
+
     match yubikey::certificate::Certificate::generate_self_signed(
-        yubikey,
-        slot,
-        serial,
-        validity,
-        name,
-        public_key,
-        |builder: &mut CertificateBuilder<
-            '_,
-            yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>>,
-        >| {
-            builder.add_extension(&skid).unwrap();
-            Ok(())
-        },
+        yubikey, slot, serial, validity, name, public_key, builder,
     ) {
         Ok(cert) => Ok(cert.cert),
         Err(e) => Err(Error::YubiKey(e)),

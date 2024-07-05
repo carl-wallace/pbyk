@@ -30,7 +30,7 @@ use x509_cert::{
     Certificate,
 };
 
-use certval::{populate_5280_pki_environment, PkiEnvironment};
+use certval::PkiEnvironment;
 use signature::{Keypair, Signer};
 
 use crate::{misc::pki::validate_cert, Error, Result};
@@ -241,7 +241,7 @@ pub(crate) async fn purebred_authorize_request(content: &[u8], env: &str) -> Res
     let hashes = hash_content(&sd, &xml)?;
 
     let mut pe = PkiEnvironment::default();
-    populate_5280_pki_environment(&mut pe);
+    pe.populate_5280_pki_environment();
     let (intermediate_ca_certs, leaf_cert) = get_candidate_signer_cert(&sd)?;
     let leaf_cert_buf = leaf_cert.to_der()?;
     for si in sd.signer_infos.0.iter() {

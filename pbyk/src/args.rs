@@ -345,11 +345,6 @@ compile_error! {
     "At least one of feature \"dev\", \"om\", \"om_nipr\", \"om_sipr\", or \"sipr\" must be enabled for this crate."
 }
 
-#[cfg(any(feature = "om_nipr", feature = "nipr"))]
-compile_error! {
-    "The `om_nipr` and `nipr` features are currently disabled until the CA used in those environments has been updated."
-}
-
 #[cfg(all(
     any(feature = "vsc", feature = "reset_vsc"),
     not(target_os = "windows")

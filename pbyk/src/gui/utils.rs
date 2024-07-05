@@ -10,7 +10,7 @@ use home::home_dir;
 use log::{debug, error};
 use yubikey::{piv::SlotId, YubiKey};
 
-use certval::{is_self_signed, populate_5280_pki_environment, PDVCertificate, PkiEnvironment};
+use certval::{is_self_signed, PDVCertificate, PkiEnvironment};
 use dioxus_desktop::use_window;
 
 use crate::args::PbYkArgs;
@@ -163,7 +163,7 @@ pub(crate) fn determine_phase(yubikey: &mut YubiKey) -> Phase {
     match get_cert_from_slot(yubikey, SlotId::CardAuthentication) {
         Ok(c) => {
             let mut pe = PkiEnvironment::default();
-            populate_5280_pki_environment(&mut pe);
+            pe.populate_5280_pki_environment();
             let pdv = PDVCertificate::try_from(c).unwrap();
             if !is_self_signed(&pe, &pdv) {
                 let r1 = get_cert_from_slot(yubikey, SlotId::Authentication);

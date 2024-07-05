@@ -34,15 +34,15 @@ As with other Purebred apps, information is incorporated into the app for a targ
 Unlike other apps, a single `pbyk` build can target multiple environments. Target environments are represented as features
 when `pbyk` is built. The following environment-related features are available:
 
-| Feature  | Description                 |
-|----------|-----------------------------|
-| dev      | Development environment     |
-| om_nipr* | Test environment for NIPR   |
-| nipr*    | NIPR production environment |
-| om_sipr  | Test environment for SIPR   |
-| sipr     | SIPR production environment |
-| gui      | GUI support                 |
-| vsc      | Virtual smart card support  |
+| Feature | Description                 |
+|---------|-----------------------------|
+| dev     | Development environment     |
+| om_nipr | Test environment for NIPR   |
+| nipr    | NIPR production environment |
+| om_sipr | Test environment for SIPR   |
+| sipr    | SIPR production environment |
+| gui     | GUI support                 |
+| vsc     | Virtual smart card support  |
 
 The `dev` feature is the default. At least one environment-related feature must be elected when `pbyk` is built, else compilation fails.
 Features are additive. For example, either of the following commands can be used to build a `pbyk` app that targets dev, om_sipr and sipr.
@@ -56,8 +56,6 @@ When more than one environment is available, the `environment` option must be sp
 ```
 The `vsc` feature is only available on Windows systems. There is also a `reset_vsc` feature that is not currently
 supported and that may be removed.
-
-\* The pbyk application does not support processing BER encoded data. NIPR CAs presently return BER-encoded data. The NIPR features have been temporarily disabled until the NIPR CAs have been updated and return DER-encoded data.
 
 
 ## Status

@@ -7,6 +7,7 @@ use der::Encode;
 use x509_cert::Certificate;
 
 use certval::*;
+use pb_pki::prepare_certval_environment;
 
 use crate::Error;
 
@@ -48,95 +49,12 @@ pub(crate) async fn validate_cert(
     // create a default path settings object and default PKIEnvironment object
     let cps = CertificationPathSettings::new();
     let mut pe = PkiEnvironment::default();
-    populate_5280_pki_environment(&mut pe);
+    pe.populate_5280_pki_environment();
 
     // read trust anchors from apple_attest_ta_folder and populate a TaSource instance
     let mut ta_store = TaSource::new();
 
-    #[cfg(feature = "dev")]
-    if env == "DEV" {
-        let ta_bytes = include_bytes!("../../../roots/NIPR/dev/DoDENGRootCA3.der");
-        let cf = CertFile {
-            filename: "dev root".to_string(),
-            bytes: ta_bytes.to_vec(),
-        };
-        ta_store.push(cf);
-
-        let cbor = include_bytes!("../../../cas/NIPR/dev/dev.cbor");
-        let mut cert_source = CertSource::new_from_cbor(cbor)?;
-        cert_source.initialize(&Default::default())?;
-        pe.add_certificate_source(Box::new(cert_source.clone()));
-    }
-    #[cfg(feature = "om_nipr")]
-    if env == "OM_NIPR" {
-        let ta_bytes = include_bytes!("../../../roots/NIPR/om/DoDJITCRootCA3.der");
-        let cf = CertFile {
-            filename: "om nipr root 3".to_string(),
-            bytes: ta_bytes.to_vec(),
-        };
-        ta_store.push(cf);
-
-        let ta_bytes = include_bytes!("../../../roots/NIPR/om/DoDJITCRootCA6.der");
-        let cf = CertFile {
-            filename: "om nipr root 6".to_string(),
-            bytes: ta_bytes.to_vec(),
-        };
-        ta_store.push(cf);
-
-        let cbor = include_bytes!("../../../cas/NIPR/om/om.cbor");
-        let mut cert_source = CertSource::new_from_cbor(cbor)?;
-        cert_source.initialize(&Default::default())?;
-        pe.add_certificate_source(Box::new(cert_source.clone()));
-    }
-    #[cfg(feature = "om_sipr")]
-    if env == "OM_SIPR" {
-        let ta_bytes = include_bytes!("../../../roots/SIPR/om/NSSJITCRootCA-2.der");
-        let cf = CertFile {
-            filename: "om sipr root".to_string(),
-            bytes: ta_bytes.to_vec(),
-        };
-        ta_store.push(cf);
-
-        let cbor = include_bytes!("../../../cas/SIPR/om/om.cbor");
-        let mut cert_source = CertSource::new_from_cbor(cbor)?;
-        cert_source.initialize(&Default::default())?;
-        pe.add_certificate_source(Box::new(cert_source.clone()));
-    }
-    #[cfg(feature = "nipr")]
-    if env == "NIPR" {
-        let ta_bytes = include_bytes!("../../../roots/NIPR/prod/DoDRootCA3.der");
-        let cf = CertFile {
-            filename: "nipr root 3".to_string(),
-            bytes: ta_bytes.to_vec(),
-        };
-        ta_store.push(cf);
-
-        let ta_bytes = include_bytes!("../../../roots/NIPR/prod/DoDRootCA6.der");
-        let cf = CertFile {
-            filename: "nipr root 6".to_string(),
-            bytes: ta_bytes.to_vec(),
-        };
-        ta_store.push(cf);
-
-        let cbor = include_bytes!("../../../cas/NIPR/prod/prod.cbor");
-        let mut cert_source = CertSource::new_from_cbor(cbor)?;
-        cert_source.initialize(&Default::default())?;
-        pe.add_certificate_source(Box::new(cert_source.clone()));
-    }
-    #[cfg(feature = "sipr")]
-    if env == "SIPR" {
-        let ta_bytes = include_bytes!("../../../roots/SIPR/prod/NSSRootCA-2.der");
-        let cf = CertFile {
-            filename: "sipr root".to_string(),
-            bytes: ta_bytes.to_vec(),
-        };
-        ta_store.push(cf);
-
-        let cbor = include_bytes!("../../../cas/SIPR/prod/prod.cbor");
-        let mut cert_source = CertSource::new_from_cbor(cbor)?;
-        cert_source.initialize(&Default::default())?;
-        pe.add_certificate_source(Box::new(cert_source.clone()));
-    }
+    prepare_certval_environment(&mut pe, &mut ta_store, env)?;
 
     let mut cert_source = CertSource::new();
     for (i, ca_cert) in intermediate.iter().enumerate() {
@@ -174,11 +92,11 @@ async fn validate_cert_buf(
     fresh_uris: &mut Vec<String>,
     threshold: usize,
 ) -> crate::Result<()> {
-    let time_of_interest = get_time_of_interest(cps);
+    let time_of_interest = cps.get_time_of_interest();
 
     if let Ok(target_cert) = parse_cert(target.as_slice(), "") {
         let mut paths: Vec<CertificationPath> = vec![];
-        let r = pe.get_paths_for_target(pe, &target_cert, &mut paths, threshold, time_of_interest);
+        let r = pe.get_paths_for_target(&target_cert, &mut paths, threshold, time_of_interest);
         if let Err(e) = r {
             error!(
                 "Failed to find certification paths for target with error {:?}",
