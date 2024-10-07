@@ -217,7 +217,7 @@ pub(crate) fn get_encap_content(eci: &EncapsulatedContentInfo) -> Result<Vec<u8>
 
 /// Processes the provided content as a SignedData message and verifies the signer's certificate relative to the given
 /// environment. Returns the encapsulated content as a byte array.
-pub(crate) async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec<u8>> {
+pub async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec<u8>> {
     let ci_sd = ContentInfo::from_der(content)?;
     if ci_sd.content_type != const_oid::db::rfc5911::ID_SIGNED_DATA {
         error!(
