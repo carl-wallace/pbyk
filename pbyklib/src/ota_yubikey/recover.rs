@@ -4,11 +4,11 @@ use log::{error, info};
 use yubikey::{piv::SlotId, MgmKey, YubiKey};
 
 use crate::{
-    misc::network::get_profile,
     misc_yubikey::utils::{process_payloads, verify_and_decrypt},
     ota::OtaActionInputs,
     Result,
 };
+use pbykcorelib::misc::network::get_profile;
 
 /// Recovers keys for storage on the indicated YubiKey device using the URL obtained from `recover_inputs`
 ///

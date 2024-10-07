@@ -10,7 +10,7 @@ use pb_pki::get_reqwest_client;
 use crate::{Error, Result};
 
 /// Default value in seconds to use as timeout for network requests
-pub(crate) static TIMEOUT: u64 = 60;
+pub static TIMEOUT: u64 = 60;
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -89,7 +89,7 @@ fn check_response(response: &Response, uri: &str) -> Result<()> {
 // Public methods
 //------------------------------------------------------------------------------------
 /// Retrieves a configuration profile from the indicated URL
-pub(crate) async fn get_profile(url: &str) -> Result<Vec<u8>> {
+pub async fn get_profile(url: &str) -> Result<Vec<u8>> {
     let client = get_reqwest_client(TIMEOUT, None)?;
     match client.get(url).send().await {
         Ok(response) => {
@@ -124,7 +124,7 @@ pub(crate) async fn get_profile(url: &str) -> Result<Vec<u8>> {
 }
 
 /// Fetches a P7 blob from the given URL and returns the first certificate that is not self-issued
-pub(crate) async fn get_ca_cert(url: &str) -> Result<x509_cert::Certificate> {
+pub async fn get_ca_cert(url: &str) -> Result<x509_cert::Certificate> {
     let client = get_reqwest_client(TIMEOUT, None)?;
     match client.get(url).send().await {
         Ok(response) => {
@@ -210,7 +210,7 @@ pub async fn post_no_body(uri: &str) -> Result<Vec<u8>> {
 }
 
 /// Attempts to retrieve data from the given URL within the specified timeout.
-pub(crate) async fn get_url(url: &str, timeout: u64) -> Result<()> {
+pub async fn get_url(url: &str, timeout: u64) -> Result<()> {
     let client = get_reqwest_client(timeout, None)?;
     match client.get(url).send().await {
         Ok(response) => match response.bytes().await {

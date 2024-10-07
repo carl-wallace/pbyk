@@ -42,12 +42,12 @@ use yubikey::{
 };
 
 use crate::{
-    misc::{
-        rsa_utils::decrypt_inner,
-        utils::{get_as_string, get_encrypted_payload_content, purebred_authorize_request},
-    },
+    misc::rsa_utils::decrypt_inner,
     misc_yubikey::{p12::import_p12, scep::process_scep_payload},
     Error, Result,
+};
+use pbykcorelib::misc::utils::{
+    get_as_string, get_encrypted_payload_content, purebred_authorize_request,
 };
 
 /// Generates an attestation for the indicated slot and returns a P7 containing that attestation and

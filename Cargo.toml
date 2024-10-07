@@ -2,7 +2,7 @@
 resolver = "2"
 
 members = [
-    "pbyk",
+    "pbyk", "pbykcorelib",
     "pbyklib",
 ]
 

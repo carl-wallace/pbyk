@@ -4,11 +4,11 @@ use log::{error, info};
 use yubikey::{piv::SlotId, MgmKey, YubiKey};
 
 use crate::{
-    misc::network::get_profile,
     misc_yubikey::utils::{process_payloads, verify_and_decrypt},
     ota::OtaActionInputs,
     Result,
 };
+use pbykcorelib::misc::network::get_profile;
 
 /// Obtains fresh PIV and signature credentials and current encryption credential using the indicted
 /// YubiKey device using the URL obtained from `ukm_inputs`

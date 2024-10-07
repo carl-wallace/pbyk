@@ -11,13 +11,12 @@ use x509_cert::Certificate;
 use yubikey::certificate::yubikey_signer::{Rsa2048, YubiRsa};
 use yubikey::{piv::SlotId::CardAuthentication, MgmKey, YubiKey};
 
+use pbykcorelib::misc::network::post_body;
+use pbykcorelib::misc::utils::{get_as_string, get_signed_data};
+
 use crate::misc_yubikey::yk_signer::YkSigner;
 use crate::ota::phase3;
 use crate::{
-    misc::{
-        network::post_body,
-        utils::{get_as_string, get_signed_data},
-    },
     misc_yubikey::{
         p12::import_p12,
         scep::process_scep_payload,
@@ -54,7 +53,7 @@ async fn phase2(
         Ok(d) => d,
         Err(e) => {
             error!("Failed to generate SignedData for Phase 2 request: {e:?}");
-            return Err(e);
+            return Err(Error::Pbykcorelib(e));
         }
     };
 

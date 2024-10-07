@@ -11,13 +11,13 @@ use spki::DynSignatureAlgorithmIdentifier;
 use x509_cert::Certificate;
 use yubikey::MgmKey;
 
-use crate::misc::utils::purebred_authorize_request;
 use crate::{
-    misc::network::{post_body, post_no_body},
-    misc::utils::get_signed_data,
     ota::{CryptoModule, OtaActionInputs},
     Error, Result, PB_MGMT_KEY,
 };
+use pbykcorelib::misc::network::{post_body, post_no_body};
+use pbykcorelib::misc::utils::get_signed_data;
+use pbykcorelib::misc::utils::purebred_authorize_request;
 
 //------------------------------------------------------------------------------------
 // Local methods

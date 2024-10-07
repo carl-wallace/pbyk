@@ -14,11 +14,12 @@ use yubikey::{
 };
 
 use crate::{
-    misc::{network::post_body, utils::buffer_to_hex},
     misc_yubikey::utils::{generate_self_signed_cert, get_attestation_p7},
     ota::Preenroll,
     Error, Result,
 };
+use pbykcorelib::misc::network::post_body;
+use pbykcorelib::misc::utils::buffer_to_hex;
 
 /// Executes "Phase 0" to prepare a YubiKey for enrollment
 ///
@@ -99,6 +100,6 @@ pub async fn pre_enroll(
     .await
     {
         Ok(_) => Ok(buffer_to_hex(hash.as_slice())),
-        Err(e) => Err(e),
+        Err(e) => Err(Error::Pbykcorelib(e)),
     }
 }

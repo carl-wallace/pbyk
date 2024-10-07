@@ -3,7 +3,7 @@
 use log::{debug, error, info};
 use plist::Dictionary;
 
-use crate::misc::scep::{
+use pbykcorelib::misc::scep::{
     get_challenge_and_url, post_scep_request, prepare_attributes, prepare_enveloped_data,
 };
 use signature::Signer as OtherSigner;
@@ -30,17 +30,14 @@ use yubikey::{
 };
 
 use crate::{
-    misc::{
-        network::get_ca_cert,
-        scep::prepare_scep_signed_data,
-        utils::{get_email_addresses, get_subject_name},
-    },
     misc_yubikey::{
         utils::{generate_self_signed_cert, get_attestation_p7, verify_and_decrypt},
         yk_signer::YkSigner,
     },
     Error, Result, ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE,
 };
+use pbykcorelib::misc::utils::{get_email_addresses, get_subject_name};
+use pbykcorelib::misc::{network::get_ca_cert, scep::prepare_scep_signed_data};
 
 //------------------------------------------------------------------------------------
 // Local methods

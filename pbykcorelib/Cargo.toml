@@ -1,0 +1,31 @@
+[package]
+name = "pbykcorelib"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+base64ct = { version="1.6.0", features = ["alloc"] }
+cms = {version = "0.2.1", git = "https://github.com/carl-wallace/formats.git", features = ["builder"], branch = "pbyk"}
+const-oid = { version = "0.9.5", features = ["db"] }
+der = { version = "0.7.8", features = ["alloc", "derive", "oid", "pem"] }
+spki = "0.7.3"
+x509-cert = "0.2.5"
+
+# certval has not yet been released, hence use of private branch
+certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"]}
+
+rsa = { version = "0.9.6", features = ["sha2"] }
+sha2 = "0.10.8"
+signature = { version = "2.1.0", features = ["digest", "alloc"]}
+
+hex-literal = "0.4.1"
+lazy_static = "1.4.0"
+log = "0.4.20"
+plist = "1.6.0"
+reqwest = {version = "0.12.4", features = ["rustls-tls", "multipart", "blocking"]}
+serde = { version = "1.0.195", default-features = false, features = ["derive"] }
+serde_json = "1.0.111"
+subtle-encoding = "0.5.1"
+
+pb_pki = {git="https://github.com/carl-wallace/pb_pki.git"}
+rand_core = "0.6.4"

@@ -37,14 +37,15 @@ use x509_cert::{
 };
 
 use crate::misc::network::post_body;
+use crate::misc::utils::recipient_identifier_from_cert;
 use crate::misc::utils::signer_identifier_from_cert;
 use crate::{
-    misc::utils::recipient_identifier_from_cert, Error, Result, ID_CHALLENGE_PASSWORD,
-    RFC8894_ID_MESSAGE_TYPE, RFC8894_ID_SENDER_NONCE, RFC8894_ID_TRANSACTION_ID,
+    Error, Result, ID_CHALLENGE_PASSWORD, RFC8894_ID_MESSAGE_TYPE, RFC8894_ID_SENDER_NONCE,
+    RFC8894_ID_TRANSACTION_ID,
 };
 
 /// Returns tuple containing `Challenge` and `URL` values extracted from `scep_instructions`
-pub(crate) fn get_challenge_and_url(scep_instructions: &Dictionary) -> Result<(String, String)> {
+pub fn get_challenge_and_url(scep_instructions: &Dictionary) -> Result<(String, String)> {
     let challenge = match scep_instructions.get("Challenge") {
         Some(challenge) => match challenge.as_string() {
             Some(s) => s,
@@ -69,7 +70,7 @@ pub(crate) fn get_challenge_and_url(scep_instructions: &Dictionary) -> Result<(S
 }
 
 /// Returns set of attributes for inclusion in CSR
-pub(crate) fn prepare_attributes(
+pub fn prepare_attributes(
     challenge: &str,
     email_addresses: &Vec<String>,
     attestation_p7: Option<&[u8]>,
@@ -126,7 +127,7 @@ pub(crate) fn prepare_attributes(
 }
 
 /// Returns public key from a certificate as an RsaPublicKey
-pub(crate) fn get_rsa_key_from_cert(cert: &Certificate) -> Result<RsaPublicKey> {
+pub fn get_rsa_key_from_cert(cert: &Certificate) -> Result<RsaPublicKey> {
     let spki_bytes = cert.tbs_certificate.subject_public_key_info.to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&spki_bytes)?;
     match RsaPublicKey::try_from(spki_ref) {
@@ -139,7 +140,7 @@ pub(crate) fn get_rsa_key_from_cert(cert: &Certificate) -> Result<RsaPublicKey> 
 }
 
 /// Prepares an EnvelopedData containing the given CSR with a key transport recipient based on given certificate.
-pub(crate) fn prepare_enveloped_data(csr_der: &[u8], ca_cert: &Certificate) -> Result<Vec<u8>> {
+pub fn prepare_enveloped_data(csr_der: &[u8], ca_cert: &Certificate) -> Result<Vec<u8>> {
     let recipient_identifier = recipient_identifier_from_cert(ca_cert)?;
     let recipient_public_key = get_rsa_key_from_cert(ca_cert)?;
 
@@ -179,7 +180,7 @@ pub(crate) fn prepare_enveloped_data(csr_der: &[u8], ca_cert: &Certificate) -> R
 
 /// Prepares a SignedData object containing the given data, with SCEP-appropriate signer info, a signature generated
 /// using the given signer and with the given certificate in the certificates bag.
-pub(crate) fn prepare_scep_signed_data<S>(
+pub fn prepare_scep_signed_data<S>(
     signer: &S,
     self_signed_cert: Certificate,
     enc_ed: &[u8],
@@ -255,10 +256,7 @@ where
 }
 
 /// Posts the given SCEP request to the given URL
-pub(crate) async fn post_scep_request(
-    pki_op_url: &str,
-    signed_data_pkcs7_der: &[u8],
-) -> Result<Vec<u8>> {
+pub async fn post_scep_request(pki_op_url: &str, signed_data_pkcs7_der: &[u8]) -> Result<Vec<u8>> {
     match post_body(
         pki_op_url,
         signed_data_pkcs7_der,

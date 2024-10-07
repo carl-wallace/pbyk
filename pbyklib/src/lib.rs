@@ -41,6 +41,7 @@ pub enum Error {
     Decryption,
     MissingAttribute,
     UnexpectedValue,
+    Pbykcorelib(pbykcorelib::Error),
     #[cfg(all(target_os = "windows", feature = "vsc"))]
     Vsc,
     #[cfg(all(target_os = "windows", feature = "vsc"))]
@@ -65,6 +66,13 @@ impl From<reqwest::Error> for Error {
         Error::Network
     }
 }
+
+impl From<pbykcorelib::Error> for Error {
+    fn from(err: pbykcorelib::Error) -> Error {
+        Error::Pbykcorelib(err)
+    }
+}
+
 impl From<der::Error> for Error {
     fn from(err: der::Error) -> Error {
         Error::Asn1(err)
@@ -139,30 +147,6 @@ lazy_static! {
     /// by the device.
     pub static ref PB_MGMT_KEY: MgmKey =
         MgmKey::new(hex!("020203040506070801020304050607080102030405060708")).unwrap();
-
-    /// `pkcs-9-at-challengePassword` from [RFC 2985 Section 5.4.1]
-    ///
-    /// [RFC 2985 Section 5.4.1]: https://www.rfc-editor.org/rfc/rfc2985#section-5.4.1
-    pub static ref ID_CHALLENGE_PASSWORD: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.7");
-
-    /// `id-messageType` from [RFC 8894 Section 3.2.1.2]
-    ///
-    /// [RFC 8894 Section 3.2.1.2]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.2
-    pub static ref  RFC8894_ID_MESSAGE_TYPE: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.2");
-
-    /// `id-senderNonce` from [RFC 8894 Section 3.2.1.5]
-    ///
-    /// [RFC 8894 Section 3.2.1.5]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.5
-    pub static ref  RFC8894_ID_SENDER_NONCE: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.5");
-
-    /// `id-transactionID` from [RFC 8894 Section 3.2.1.1]
-    ///
-    /// [RFC 8894 Section 3.2.1.1]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.1
-    pub static ref  RFC8894_ID_TRANSACTION_ID: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.7");
 
     /// `id-purebred-yubikey-attestation-attribute` from Red Hound's OID arc
     pub static ref ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE: ObjectIdentifier =

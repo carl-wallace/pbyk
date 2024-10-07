@@ -3220,6 +3220,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "pbykcorelib"
+version = "0.1.0"
+dependencies = [
+ "base64ct",
+ "certval",
+ "cms 0.2.2",
+ "const-oid",
+ "der",
+ "hex-literal",
+ "lazy_static",
+ "log",
+ "pb_pki",
+ "plist",
+ "rand_core 0.6.4",
+ "reqwest 0.12.5",
+ "rsa",
+ "serde",
+ "serde_json",
+ "sha2",
+ "signature",
+ "spki",
+ "subtle-encoding",
+ "x509-cert",
+]
+
+[[package]]
 name = "pbyklib"
 version = "0.3.0"
 dependencies = [
@@ -3238,6 +3264,7 @@ dependencies = [
  "log4rs",
  "openssl",
  "pb_pki",
+ "pbykcorelib",
  "pkcs1",
  "pkcs12",
  "pkcs5",
