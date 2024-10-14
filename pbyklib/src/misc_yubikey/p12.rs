@@ -99,7 +99,7 @@ fn check_key_encipherment(cert: &Certificate) -> Result<bool> {
 /// - When index is 0, KeyManagement is used (i.e., the current decryption key)
 /// - When index is > 0 and < 20, the 0x81 is added to index to determine slot
 /// - For all other values, R20 is returned (the highest retired slot)
-/// 
+///
 /// This function assumes that the certificate has already been analyzed to determine it is not a
 /// signature cert or authentication cert.
 pub(crate) fn get_slot_from_index(index: u8) -> SlotId {

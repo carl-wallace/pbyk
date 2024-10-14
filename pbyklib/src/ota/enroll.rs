@@ -1,43 +1,20 @@
 //! Executes OTA protocol in support of Purebred enrollment
 
-use std::io::Cursor;
 use zeroize::Zeroizing;
 
 use log::{error, info};
-use plist::Value;
-
-use signature::{Keypair, Signer};
-use spki::DynSignatureAlgorithmIdentifier;
-use x509_cert::Certificate;
-use yubikey::MgmKey;
 
 use crate::{
     ota::{CryptoModule, OtaActionInputs},
     Error, Result, PB_MGMT_KEY,
 };
-use pbykcorelib::misc::network::{post_body, post_no_body};
+use pbykcorelib::misc::enroll::fetch_phase1;
+use pbykcorelib::misc::network::post_body;
 use pbykcorelib::misc::utils::get_signed_data;
-use pbykcorelib::misc::utils::purebred_authorize_request;
-
-//------------------------------------------------------------------------------------
-// Local methods
-//------------------------------------------------------------------------------------
-/// Retrieves Phase 1 response, verifies it and returns result as a plist::Value.
-async fn fetch_phase1(url: &str, env: &str) -> Result<Value> {
-    let p1resp = post_no_body(url).await?;
-    let xml = purebred_authorize_request(&p1resp, env).await?;
-
-    let xml_cursor = Cursor::new(xml);
-    match Value::from_reader(xml_cursor) {
-        Ok(profile) => Ok(profile),
-        Err(e) => {
-            error!(
-                "Failed to parse Phase 1 encapsulated content as a configuration profile: {e:?}"
-            );
-            Err(Error::Plist)
-        }
-    }
-}
+use signature::{Keypair, Signer};
+use spki::DynSignatureAlgorithmIdentifier;
+use x509_cert::Certificate;
+use yubikey::MgmKey;
 
 //------------------------------------------------------------------------------------
 // Public methods
