@@ -128,50 +128,49 @@ impl From<cms::builder::Error> for Error {
 
 use const_oid::ObjectIdentifier;
 use hex_literal::hex;
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 use yubikey::MgmKey;
-lazy_static! {
-    /// Default management key for YubiKey devices enrolled with Purebred
-    ///
-    /// The value used by Purebred is a slight modification (020203040506070801020304050607080102030405060708) to
-    /// the [default value](https://docs.yubico.com/hardware/yubikey/yk-tech-manual/fips-specifics.html#id4) used natively
-    /// by the device.
-    pub static ref PB_MGMT_KEY: MgmKey =
-        MgmKey::new(hex!("020203040506070801020304050607080102030405060708")).unwrap();
+/// Default management key for YubiKey devices enrolled with Purebred
+///
+/// The value used by Purebred is a slight modification (020203040506070801020304050607080102030405060708) to
+/// the [default value](https://docs.yubico.com/hardware/yubikey/yk-tech-manual/fips-specifics.html#id4) used natively
+/// by the device.
+pub static PB_MGMT_KEY: LazyLock<MgmKey> = LazyLock::new(|| {
+    MgmKey::new(hex!("020203040506070801020304050607080102030405060708")).unwrap()
+});
 
-    /// `pkcs-9-at-challengePassword` from [RFC 2985 Section 5.4.1]
-    ///
-    /// [RFC 2985 Section 5.4.1]: https://www.rfc-editor.org/rfc/rfc2985#section-5.4.1
-    pub static ref ID_CHALLENGE_PASSWORD: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.7");
+/// `pkcs-9-at-challengePassword` from [RFC 2985 Section 5.4.1]
+///
+/// [RFC 2985 Section 5.4.1]: https://www.rfc-editor.org/rfc/rfc2985#section-5.4.1
+pub static ID_CHALLENGE_PASSWORD: LazyLock<ObjectIdentifier> =
+    LazyLock::new(|| ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.7"));
 
-    /// `id-messageType` from [RFC 8894 Section 3.2.1.2]
-    ///
-    /// [RFC 8894 Section 3.2.1.2]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.2
-    pub static ref  RFC8894_ID_MESSAGE_TYPE: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.2");
+/// `id-messageType` from [RFC 8894 Section 3.2.1.2]
+///
+/// [RFC 8894 Section 3.2.1.2]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.2
+pub static RFC8894_ID_MESSAGE_TYPE: LazyLock<ObjectIdentifier> =
+    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.2"));
 
-    /// `id-senderNonce` from [RFC 8894 Section 3.2.1.5]
-    ///
-    /// [RFC 8894 Section 3.2.1.5]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.5
-    pub static ref  RFC8894_ID_SENDER_NONCE: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.5");
+/// `id-senderNonce` from [RFC 8894 Section 3.2.1.5]
+///
+/// [RFC 8894 Section 3.2.1.5]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.5
+pub static RFC8894_ID_SENDER_NONCE: LazyLock<ObjectIdentifier> =
+    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.5"));
 
-    /// `id-transactionID` from [RFC 8894 Section 3.2.1.1]
-    ///
-    /// [RFC 8894 Section 3.2.1.1]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.1
-    pub static ref  RFC8894_ID_TRANSACTION_ID: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.7");
+/// `id-transactionID` from [RFC 8894 Section 3.2.1.1]
+///
+/// [RFC 8894 Section 3.2.1.1]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.1
+pub static RFC8894_ID_TRANSACTION_ID: LazyLock<ObjectIdentifier> =
+    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.7"));
 
-    /// `id-purebred-yubikey-attestation-attribute` from Red Hound's OID arc
-    pub static ref ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("1.3.6.1.4.1.37623.26.4");
+/// `id-purebred-yubikey-attestation-attribute` from Red Hound's OID arc
+pub static ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE: LazyLock<ObjectIdentifier> =
+    LazyLock::new(|| ObjectIdentifier::new_unwrap("1.3.6.1.4.1.37623.26.4"));
 
-    /// `id-purebred-microsoft-attestation-attribute` from Red Hound's OID arc
-    pub static ref ID_PUREBRED_MICROSOFT_ATTESTATION_ATTRIBUTE: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("1.3.6.1.4.1.37623.26.3");
-}
+/// `id-purebred-microsoft-attestation-attribute` from Red Hound's OID arc
+pub static ID_PUREBRED_MICROSOFT_ATTESTATION_ATTRIBUTE: LazyLock<ObjectIdentifier> =
+    LazyLock::new(|| ObjectIdentifier::new_unwrap("1.3.6.1.4.1.37623.26.3"));
 
 // lazy_static seems to dislike compound cfg statements so moved CERT_SYSTEM_STORE_CURRENT_USER here
 

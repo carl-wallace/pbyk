@@ -38,9 +38,9 @@ use crate::misc_win::scep::get_vsc_id_from_smartcard;
 use crate::misc_win::vsc_state::{read_saved_state_or_default, save_state};
 use certval::PDVCertificate;
 use der::zeroize::Zeroizing;
-use lazy_static::lazy_static;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use sha2::{Digest, Sha256};
+use std::sync::LazyLock;
 
 use crate::misc_win::cert_store::delete_cert_from_store;
 use crate::misc_win::csr::consume_attested_csr;
@@ -61,11 +61,9 @@ use crate::{
 //------------------------------------------------------------------------------------
 // Global variable
 //------------------------------------------------------------------------------------
-lazy_static! {
-    /// Attestation support works inconsistently. It appears to require elevation. Thus, if we try and fail we can
-    /// make note of that in a run-time variable.
-    static ref GAMBLE_ON_ATTESTATION: Mutex<bool> = Mutex::new(true);
-}
+/// Attestation support works inconsistently. It appears to require elevation. Thus, if we try and fail we can
+/// make note of that in a run-time variable.
+pub static GAMBLE_ON_ATTESTATION: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(true));
 
 //------------------------------------------------------------------------------------
 // Local methods

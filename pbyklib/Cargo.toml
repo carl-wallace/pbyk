@@ -2,7 +2,7 @@
 name = "pbyklib"
 version = "0.3.0"
 edition = "2021"
-rust-version = "1.65"
+rust-version = "1.80.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -32,7 +32,6 @@ signature = { version = "2.1.0", features = ["digest", "alloc"]}
 
 hex-literal = "0.4.1"
 home = "0.5.9"
-lazy_static = "1.4.0"
 log = "0.4.20"
 plist = "1.6.0"
 rand_core = { version = "0.6.4", features = ["std"] }

@@ -3448,7 +3448,6 @@ dependencies = [
  "der",
  "hex-literal",
  "home",
- "lazy_static",
  "log",
  "log4rs",
  "openssl",
