@@ -12,8 +12,8 @@ use std::{
 use dioxus::prelude::*;
 use dioxus_toast::{Icon, ToastInfo, ToastManager};
 use fermi::{use_atom_ref, use_init_atom_root, AtomRef};
-use lazy_static::lazy_static;
 use log::{debug, error, info};
+use std::sync::LazyLock;
 use zeroize::Zeroizing;
 
 use base64ct::{Base64, Encoding};
@@ -43,11 +43,10 @@ use pbyklib::utils::{
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::determine_vsc_phase;
 
-lazy_static! {
-    pub static ref DISA_ICON_BASE64: String =
-        Base64::encode_string(include_bytes!("../../assets/disa.png"));
-    pub static ref BURNED_OTPS: Mutex<BTreeMap<String, Duration>> = Mutex::new(BTreeMap::new());
-}
+pub static DISA_ICON_BASE64: LazyLock<String> =
+    LazyLock::new(|| Base64::encode_string(include_bytes!("../../assets/disa.png")));
+pub static BURNED_OTPS: LazyLock<Mutex<BTreeMap<String, Duration>>> =
+    LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
 static TOAST_MANAGER: AtomRef<ToastManager> = AtomRef(|_| ToastManager::default());
 

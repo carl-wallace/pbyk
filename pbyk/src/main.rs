@@ -400,133 +400,117 @@ async fn interactive_main() {
     // at this point if we need a serial number we have one
 
     if args.reset_device {
-        match &args.serial {
-            Some(serial) => {
-                match serial.parse::<u32>() {
-                    Ok(s) => {
-                        let mut yubikey = match get_yubikey(Some(Serial(s))) {
-                            Ok(yk) => yk,
-                            Err(e) => {
-                                println!("{}: {:?}", "ERROR".bold(), e);
-                                return;
-                            }
-                        };
+        if let Some(serial) = &args.serial {
+            match serial.parse::<u32>() {
+                Ok(s) => {
+                    let mut yubikey = match get_yubikey(Some(Serial(s))) {
+                        Ok(yk) => yk,
+                        Err(e) => {
+                            println!("{}: {:?}", "ERROR".bold(), e);
+                            return;
+                        }
+                    };
 
-                        println!(
-                            "Starting reset of YubiKey with serial number {}. Use Ctrl+C to cancel.",
-                            yubikey.serial()
-                        );
+                    println!(
+                        "Starting reset of YubiKey with serial number {}. Use Ctrl+C to cancel.",
+                        yubikey.serial()
+                    );
 
-                        // The rules below are culled from here: https://docs.yubico.com/yesdk/users-manual/application-piv/pin-puk-mgmt-key.html
-                        let pin = loop {
-                            let pin = Zeroizing::new(
-                                rpassword::prompt_password(
-                                    format!(
-                                        "{}: ",
-                                        "Enter new PIN; PINs must contain 6 to 8 ASCII characters"
-                                            .bold()
-                                    )
-                                    .to_string(),
-                                )
-                                .unwrap(),
-                            );
-                            let pin2 = Zeroizing::new(
-                                rpassword::prompt_password(
-                                    format!("{}: ", "Re-enter new PIN".bold()).to_string(),
-                                )
-                                .unwrap(),
-                            );
-                            if pin != pin2 {
-                                println!("{}: PINs do not match", "ERROR".bold());
-                            } else if pin.len() < 6 {
-                                println!(
-                                    "{}: PIN is not at least 6 characters long",
-                                    "ERROR".bold()
-                                );
-                            } else if pin.len() > 8 {
-                                println!(
-                                    "{}: PIN is longer than 8 characters long",
-                                    "ERROR".bold()
-                                );
-                            } else if !pin.is_ascii() {
-                                println!("{}: PIN contains non-ASCII characters", "ERROR".bold());
-                            } else {
-                                break pin;
-                            }
-                        };
-                        let puk = loop {
-                            let puk = Zeroizing::new(rpassword::prompt_password(
+                    // The rules below are culled from here: https://docs.yubico.com/yesdk/users-manual/application-piv/pin-puk-mgmt-key.html
+                    let pin = loop {
+                        let pin = Zeroizing::new(
+                            rpassword::prompt_password(
                                 format!(
                                     "{}: ",
-                                    "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length".bold()
+                                    "Enter new PIN; PINs must contain 6 to 8 ASCII characters"
+                                        .bold()
                                 )
+                                .to_string(),
+                            )
+                            .unwrap(),
+                        );
+                        let pin2 = Zeroizing::new(
+                            rpassword::prompt_password(
+                                format!("{}: ", "Re-enter new PIN".bold()).to_string(),
+                            )
+                            .unwrap(),
+                        );
+                        if pin != pin2 {
+                            println!("{}: PINs do not match", "ERROR".bold());
+                        } else if pin.len() < 6 {
+                            println!("{}: PIN is not at least 6 characters long", "ERROR".bold());
+                        } else if pin.len() > 8 {
+                            println!("{}: PIN is longer than 8 characters long", "ERROR".bold());
+                        } else if !pin.is_ascii() {
+                            println!("{}: PIN contains non-ASCII characters", "ERROR".bold());
+                        } else {
+                            break pin;
+                        }
+                    };
+                    let puk = loop {
+                        let puk = Zeroizing::new(rpassword::prompt_password(
+                            format!(
+                                "{}: ",
+                                "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length".bold()
+                            )
+                                .to_string(),
+                        )
+                            .unwrap());
+                        let puk2 = Zeroizing::new(
+                            rpassword::prompt_password(
+                                format!("{}: ", "Re-enter new PIN Unlock Key (PUK)".bold())
                                     .to_string(),
                             )
-                                .unwrap());
-                            let puk2 = Zeroizing::new(
-                                rpassword::prompt_password(
-                                    format!("{}: ", "Re-enter new PIN Unlock Key (PUK)".bold())
-                                        .to_string(),
-                                )
-                                .unwrap(),
-                            );
-                            if puk != puk2 {
-                                println!("{}: PUKs do not match", "ERROR".bold());
-                            } else if puk.len() < 6 {
-                                println!(
-                                    "{}: PUK is not at least 6 characters long",
-                                    "ERROR".bold()
-                                );
-                            } else if puk.len() > 8 {
-                                println!(
-                                    "{}: PUK is longer than 8 characters long",
-                                    "ERROR".bold()
-                                );
-                            } else {
-                                break puk;
-                            }
-                        };
-                        // comment out above two loops and uncomment below to run in debugger
-                        // let pin = "123456".to_string();
-                        // let puk = "12345678".to_string();
-
-                        if let Err(e) = reset_yubikey(&mut yubikey, &pin, &puk, &PB_MGMT_KEY) {
-                            println!("{}: reset failed with: {e}", "ERROR".bold());
-                        }
-                        return;
-                    }
-
-                    #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
-                    Err(_e) => {
-                        println!(
-                            "Starting reset of VSC with serial number {}. This may take a few seconds.",
-                            serial
+                            .unwrap(),
                         );
+                        if puk != puk2 {
+                            println!("{}: PUKs do not match", "ERROR".bold());
+                        } else if puk.len() < 6 {
+                            println!("{}: PUK is not at least 6 characters long", "ERROR".bold());
+                        } else if puk.len() > 8 {
+                            println!("{}: PUK is longer than 8 characters long", "ERROR".bold());
+                        } else {
+                            break puk;
+                        }
+                    };
+                    // comment out above two loops and uncomment below to run in debugger
+                    // let pin = "123456".to_string();
+                    // let puk = "12345678".to_string();
 
-                        match get_vsc(&serial.to_string()).await {
-                            Ok(sc) => {
-                                let _ = reset_vsc(&sc).await;
-                                return;
-                            }
-                            Err(e) => {
-                                println!("{}: {e:?}", "ERROR".bold());
-                                return;
-                            }
-                        };
+                    if let Err(e) = reset_yubikey(&mut yubikey, &pin, &puk, &PB_MGMT_KEY) {
+                        println!("{}: reset failed with: {e}", "ERROR".bold());
                     }
-                    #[cfg(not(all(
-                        target_os = "windows",
-                        feature = "vsc",
-                        feature = "reset_vsc"
-                    )))]
-                    Err(e) => {
-                        log::error!("ERROR: failed to parse the serial number as a YubiKey serial number: {:?}", e);
-                        println!("ERROR: failed to parse the serial number as a YubiKey serial number. Resetting virtual smart cards is not currently supported.");
-                    }
+                    return;
+                }
+
+                #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+                Err(_e) => {
+                    println!(
+                        "Starting reset of VSC with serial number {}. This may take a few seconds.",
+                        serial
+                    );
+
+                    match get_vsc(&serial.to_string()).await {
+                        Ok(sc) => {
+                            let _ = reset_vsc(&sc).await;
+                            return;
+                        }
+                        Err(e) => {
+                            println!("{}: {e:?}", "ERROR".bold());
+                            return;
+                        }
+                    };
+                }
+                #[cfg(not(all(target_os = "windows", feature = "vsc", feature = "reset_vsc")))]
+                Err(e) => {
+                    log::error!(
+                        "ERROR: failed to parse the serial number as a YubiKey serial number: {:?}",
+                        e
+                    );
+                    println!("ERROR: failed to parse the serial number as a YubiKey serial number. Resetting virtual smart cards is not currently supported.");
                 }
             }
-            None => {}
-        };
+        }
     }
 
     // todo - do we need a VSC reset or is that going to just be destroy and recreate (external to this tool)?
