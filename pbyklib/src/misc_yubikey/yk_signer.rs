@@ -47,14 +47,14 @@ impl<'y, KT: KeyType> YkSigner<'y, KT> {
     }
 }
 
-impl<'y, KT: KeyType> Keypair for YkSigner<'y, KT> {
+impl<KT: KeyType> Keypair for YkSigner<'_, KT> {
     type VerifyingKey = KT::VerifyingKey;
     fn verifying_key(&self) -> <Self as Keypair>::VerifyingKey {
         self.public_key.clone()
     }
 }
 
-impl<'y, KT: KeyType> DynSignatureAlgorithmIdentifier for YkSigner<'y, KT> {
+impl<KT: KeyType> DynSignatureAlgorithmIdentifier for YkSigner<'_, KT> {
     fn signature_algorithm_identifier(&self) -> spki::Result<AlgorithmIdentifierOwned> {
         self.verifying_key().signature_algorithm_identifier()
     }
@@ -62,7 +62,7 @@ impl<'y, KT: KeyType> DynSignatureAlgorithmIdentifier for YkSigner<'y, KT> {
 
 /// Error type
 type YkSigResult<T> = Result<T, signature::Error>;
-impl<'y, KT: KeyType> signature::Signer<KT::Signature> for YkSigner<'y, KT> {
+impl<KT: KeyType> signature::Signer<KT::Signature> for YkSigner<'_, KT> {
     fn try_sign(&self, msg: &[u8]) -> YkSigResult<KT::Signature> {
         let data = KT::prepare(msg)?;
 
