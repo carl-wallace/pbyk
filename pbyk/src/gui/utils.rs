@@ -74,14 +74,15 @@ impl Default for SavedWindowsSize {
 
 /// Saves the current window size to a file named sws.json in the .pbyk folder in the user's home directory.
 pub(crate) fn save_window_size() -> Result<()> {
-    let window = use_window();
-    let scale_factor = if let Some(m) = window.current_monitor() {
-        m.scale_factor()
-    } else {
-        1.0
-    };
-
     // todo revisit
+    let _window = use_window();
+    // let window = use_window();
+    // let scale_factor = if let Some(m) = window.current_monitor() {
+    //     m.scale_factor()
+    // } else {
+    //     1.0
+    // };
+    //
     // let inner_size = window
     //     .webview
     //     .window()

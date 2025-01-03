@@ -25,14 +25,14 @@ use crate::gui::utils::parse_reader_from_vsc_display;
 ///
 /// The UI elements for each state are as shown below:
 ///
-/// Pre-enroll
-///  - serial, agent_edipi, pre_enroll_otp, submit, PIN
-/// Enroll
-///  - serial, agent_edipi, enroll_otp, submit, PIN
-/// UKM
-///  - serial, ukm_otp, submit, PIN
-/// UKM or recover
-/// - serial, ukm_otp, recover checkbox, submit, PIN
+///     Pre-enroll
+///         - serial, agent_edipi, pre_enroll_otp, submit, PIN
+///     Enroll
+///         - serial, agent_edipi, enroll_otp, submit, PIN
+///     UKM
+///         - serial, ukm_otp, submit, PIN
+///     UKM or recover
+///         - serial, ukm_otp, recover checkbox, submit, PIN
 #[derive(Clone, PartialEq, Debug)]
 pub(crate) enum Phase {
     PreEnroll,

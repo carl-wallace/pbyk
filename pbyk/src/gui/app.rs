@@ -2,6 +2,9 @@
 
 #![cfg(feature = "gui")]
 #![allow(non_snake_case)]
+// todo: revisit
+// onsubmit, onclick, etc. are causing these warnings
+#![allow(unused_qualifications)]
 
 use std::{
     collections::BTreeMap,
@@ -11,7 +14,6 @@ use std::{
 
 use dioxus::prelude::*;
 use dioxus_toast::{Icon, ToastInfo, ToastManager};
-use fermi::{use_atom_ref, use_init_atom_root, AtomRef};
 use log::{debug, error, info};
 use std::sync::LazyLock;
 use zeroize::Zeroizing;
@@ -48,8 +50,6 @@ pub static DISA_ICON_BASE64: LazyLock<String> =
 pub static BURNED_OTPS: LazyLock<Mutex<BTreeMap<String, Duration>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
-static TOAST_MANAGER: AtomRef<ToastManager> = AtomRef(|_| ToastManager::default());
-
 fn add_otp(otp: &str) {
     clean_otps();
     match SystemTime::now().duration_since(UNIX_EPOCH) {
@@ -81,7 +81,7 @@ fn clean_otps() {
 
 /// Update various UseState variables based on the phase value
 #[allow(clippy::too_many_arguments)]
-fn update_phase<'a>(
+fn update_phase(
     phase: &Phase,
     mut s_edipi_style: Signal<String>,
     mut s_pre_enroll_otp_style: Signal<String>,
@@ -141,20 +141,17 @@ fn update_phase<'a>(
 
 /// app is the primary component of GUI mode. It draws the forms that comprise the Purebred workflow
 /// and drives execution through the workflow.
-pub(crate) fn app<'a>(
+pub(crate) fn app(
     mut s_phase: Signal<Phase>,
     mut s_serial: Signal<String>,
     mut s_reset_req: Signal<bool>,
-    mut s_serials: Signal<Vec<String>>,
+    s_serials: Signal<Vec<String>>,
     mut s_fatal_error_val: Signal<String>,
     is_yubikey: bool,
 ) -> Element {
     // initialize plumbing for status dialogs
 
-    // todo - affirm and remove
-    // use_init_atom_root(cx);
-    // let toast = use_atom_ref(cx, &TOAST_MANAGER);
-    let mut toast = use_signal(|| ToastManager::default());
+    let mut toast = use_signal(ToastManager::default);
 
     let s_disa_icon = use_signal(|| DISA_ICON_BASE64.clone());
 
@@ -174,7 +171,7 @@ pub(crate) fn app<'a>(
     let (s_dev_checked, s_om_nipr_checked, s_om_sipr_checked, s_nipr_checked, s_sipr_checked) =
         get_default_env_radio_selections();
 
-    let serials = s_serials.read();
+    //let serials = s_serials.read();
     //let serial_setter = s_serial.write();
     let mut s_check_phase = use_signal(|| false);
     //let check_phase_setter = s_check_phase.write();
@@ -249,7 +246,7 @@ pub(crate) fn app<'a>(
 
     if *s_phase.read() == Enroll && s_hash.read().is_empty() {
         if is_yubikey {
-            match get_pre_enroll_hash_yubikey(&*s_serial.read()) {
+            match get_pre_enroll_hash_yubikey(&s_serial.read()) {
                 Ok(hash) => {
                     s_hash.write().clear();
                     s_hash.write().push_str(&hash);
@@ -341,7 +338,7 @@ pub(crate) fn app<'a>(
                         Ok(_) => {
                             let phase = determine_phase(&mut yubikey);
                             if phase != *s_phase.read() {
-                                *s_phase.write() = (phase.clone());
+                                *s_phase.write() = phase.clone();
                                 update_phase(
                                     &phase,
                                     s_edipi_style,
@@ -477,7 +474,7 @@ pub(crate) fn app<'a>(
         debug!("Showing reset view");
         if !s_pin.read().is_empty() || !s_puk.read().is_empty() {
             *s_pin.write() = String::new();
-            *s_pin.write() = String::new();
+            *s_puk.write() = String::new();
         }
         reset(
             s_serial,
@@ -1240,8 +1237,8 @@ pub(crate) fn app<'a>(
                                 // #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
                                 // let hide_reset_setter = s_hide_reset.write();
 
-                                let last_count = s_click_count.read().clone();
-                                let last_start = s_click_start.read().clone();
+                                let last_count = *s_click_count.read();
+                                let last_start = *s_click_start.read();
                                 let disabled = *s_disabled.read();
                                 match SystemTime::now().duration_since(UNIX_EPOCH) {
                                     Ok(n) => {

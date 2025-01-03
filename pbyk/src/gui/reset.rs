@@ -1,4 +1,7 @@
 //! Solicits PIN and PUK information in support of resetting the available YubiKey device
+// todo: revisit
+// onsubmit, onclick, etc. are causing these warnings
+#![allow(unused_qualifications)]
 
 use dioxus::prelude::*;
 use log::error;
@@ -17,7 +20,7 @@ use pbyklib::{
 
 use crate::gui::utils::string_or_default;
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn reset<'a>(
+pub(crate) fn reset(
     s_serial: Signal<String>,
     mut s_reset_req: Signal<bool>,
     mut s_pin: Signal<String>,

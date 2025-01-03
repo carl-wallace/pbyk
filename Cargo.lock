@@ -403,15 +403,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bitmaps"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "031043d04099746d8db04daf1fa424b2bc8bd69d92b25962dcde24da39ab64a2"
-dependencies = [
- "typenum",
-]
-
-[[package]]
 name = "bitstream-io"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1273,7 +1264,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2ce361786137509f7fbf6326d1029b8fef6c959650ea0ba587fcf379e593e14"
 dependencies = [
  "dioxus-config-macro",
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "dioxus-core-macro",
  "dioxus-desktop",
  "dioxus-devtools",
@@ -1305,22 +1296,6 @@ checksum = "183e101722209bd00d560f3f20867fedf0b3545496066b7c167cbc1d5aa6a352"
 dependencies = [
  "proc-macro2",
  "quote",
-]
-
-[[package]]
-name = "dioxus-core"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f33186615b2e90bceab24a195b3cfad4e0b4d91a33ec44a94845876bfb25c13"
-dependencies = [
- "bumpalo",
- "futures-channel",
- "futures-util",
- "longest-increasing-subsequence",
- "rustc-hash 1.1.0",
- "slab",
- "smallbox",
- "tracing",
 ]
 
 [[package]]
@@ -1376,7 +1351,7 @@ dependencies = [
  "cocoa 0.25.0",
  "core-foundation 0.9.4",
  "dioxus-cli-config",
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-history",
@@ -1421,7 +1396,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2cca475d00152799b2750f26667d75df9da215e2fd6b60ef92589a6e073f286"
 dependencies = [
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "dioxus-devtools-types",
  "dioxus-signals",
  "serde",
@@ -1437,7 +1412,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "152852a7de4df2fda36767db93d871a6249e1f698ac586cfc6a81373fe81d09f"
 dependencies = [
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "serde",
 ]
 
@@ -1447,7 +1422,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac82ac2a41f369f6d2d38375aa4004762297e0c9f7039a62484ed0aa24244260"
 dependencies = [
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "dioxus-core-macro",
  "dioxus-core-types",
  "dioxus-html",
@@ -1490,7 +1465,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b2b24b84c384973e41b9a42beefc0535f86b1e58f01a871a27aac3720bfdc72"
 dependencies = [
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "tracing",
 ]
 
@@ -1500,7 +1475,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2eb65a083c01d192478106adcf55609bfae4911816065d1f4fa850ed36eea77a"
 dependencies = [
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "dioxus-signals",
  "futures-channel",
  "futures-util",
@@ -1518,7 +1493,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "676541e90fbacd78fb723d5c492fcbbc13c34177d5693b333c913836e7715253"
 dependencies = [
  "async-trait",
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "dioxus-core-macro",
  "dioxus-core-types",
  "dioxus-hooks",
@@ -1554,7 +1529,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da2716b62d08dbb2e4e4678f67cd7c9f25204b598eb7c0a569050d68fa3f85e6"
 dependencies = [
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "dioxus-core-types",
  "dioxus-html",
  "js-sys",
@@ -1575,7 +1550,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56c9150858fae1bf2b3b76751ab30a58871a32d265496ddd432011a2c93d1aa4"
 dependencies = [
  "dioxus-config-macro",
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "dioxus-core-macro",
  "dioxus-document",
  "dioxus-history",
@@ -1616,7 +1591,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c24e8226b7ce0c6921066ebe4218fd999eda1603b9b7ddcfac3b8450614b03"
 dependencies = [
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -1646,7 +1621,7 @@ dependencies = [
  "async-trait",
  "ciborium",
  "dioxus-cli-config",
- "dioxus-core 0.6.1",
+ "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools",
  "dioxus-document",
@@ -1963,17 +1938,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c"
 dependencies = [
  "simd-adler32",
-]
-
-[[package]]
-name = "fermi"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bc4bef3f03ad801dac8ffda8dc272bbabc70e0f7d18fb23fb40db86d3b166c1"
-dependencies = [
- "dioxus-core 0.4.3",
- "im-rc",
- "tracing",
 ]
 
 [[package]]
@@ -3079,21 +3043,6 @@ dependencies = [
  "same-file",
  "walkdir",
  "winapi-util",
-]
-
-[[package]]
-name = "im-rc"
-version = "15.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af1955a75fa080c677d3972822ec4bad316169ab1cfc6c257a942c2265dbe5fe"
-dependencies = [
- "bitmaps",
- "rand_core 0.6.4",
- "rand_xoshiro",
- "serde",
- "sized-chunks",
- "typenum",
- "version_check",
 ]
 
 [[package]]
@@ -4299,7 +4248,6 @@ dependencies = [
  "dioxus",
  "dioxus-desktop",
  "dioxus-toast",
- "fermi",
  "futures",
  "home",
  "ignore",
@@ -4935,15 +4883,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
  "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_xoshiro"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f97cdb2a36ed4183de61b2f824cc45c9f1037f28afe0a322e9fff4c108b5aaa"
-dependencies = [
- "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -5793,16 +5732,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d"
 
 [[package]]
-name = "sized-chunks"
-version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16d69225bde7a69b235da73377861095455d298f2b970996eec25ddbb42b3d1e"
-dependencies = [
- "bitmaps",
- "typenum",
-]
-
-[[package]]
 name = "slab"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5849,12 +5778,6 @@ dependencies = [
  "serde",
  "version_check",
 ]
-
-[[package]]
-name = "smallbox"
-version = "0.8.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43d92e0947c1c04c508c9fd39608a1557226141410fd33b5b314d73fa76508d3"
 
 [[package]]
 name = "smallvec"

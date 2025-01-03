@@ -23,9 +23,6 @@ use zeroize::Zeroizing;
 use crate::no_bold::NoBold;
 #[cfg(not(target_os = "windows"))]
 use colored::Colorize;
-// todo revisit
-// #[cfg(feature = "gui")]
-// use dioxus_desktop::tao::menu::{MenuBar, MenuItem};
 
 #[cfg(feature = "gui")]
 use dioxus_desktop::tao::window::Icon;
@@ -57,6 +54,9 @@ use pbyklib::utils::list_vscs::{get_vsc, get_vsc_id_from_serial, list_vscs, num_
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use log::info;
+
+#[cfg(feature = "gui")]
+use log::error;
 
 use log::debug;
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
@@ -196,9 +196,15 @@ cfg_if! {
                                 .with_inner_size(dioxus_desktop::LogicalSize::new(sws.width, sws.height),);
                 let menu = Menu::new();
                 let app_menu = Submenu::new("&pbyk", true);
-                app_menu.append(&PredefinedMenuItem::minimize(None));
-                app_menu.append(&PredefinedMenuItem::quit(None));
-                menu.append(&app_menu);
+                if let Err(e) = app_menu.append(&PredefinedMenuItem::minimize(None)) {
+                    error!("Failed to add minimize menu item with: {e}");
+                }
+                if let Err(e) = app_menu.append(&PredefinedMenuItem::quit(None)) {
+                    error!("Failed to add quit menu item with: {e}");
+                }
+                if let Err(e) = menu.append(&app_menu) {
+                    error!("Failed to add pbyk sub-menu item with: {e}");
+                }
                 let config = match home_dir() {
                     Some(home_dir) => {
                         Config::new().with_window(window).with_data_directory(home_dir.join(".pbyk"))
