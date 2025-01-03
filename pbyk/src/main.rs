@@ -9,6 +9,9 @@
 #[macro_use]
 extern crate cfg_if;
 
+#[cfg(feature = "gui")]
+use dioxus::desktop::muda::{Menu, PredefinedMenuItem, Submenu};
+
 use clap::{CommandFactory, Parser};
 #[cfg(feature = "gui")]
 use dioxus::LaunchBuilder;
@@ -20,7 +23,6 @@ use zeroize::Zeroizing;
 use crate::no_bold::NoBold;
 #[cfg(not(target_os = "windows"))]
 use colored::Colorize;
-
 // todo revisit
 // #[cfg(feature = "gui")]
 // use dioxus_desktop::tao::menu::{MenuBar, MenuItem};
@@ -191,26 +193,18 @@ cfg_if! {
                 // available environments).
                 let window = WindowBuilder::new().with_resizable(true)
                                 .with_title(title).with_window_icon(Some(icon))
-                                .with_inner_size(dioxus_desktop::LogicalSize::new(sws.width, sws.height),)
-                // todo revisit
-                // .with_menu({
-                //                 let mut menu = MenuBar::new();
-                //
-                //                 let mut app_menu = MenuBar::new();
-                //                 app_menu.add_native_item(MenuItem::Minimize);
-                //                 app_menu.add_native_item(MenuItem::Quit);
-                //
-                //                 menu.add_submenu("&pbyk", true, app_menu);
-                //                 menu
-                //             })
-                ;
+                                .with_inner_size(dioxus_desktop::LogicalSize::new(sws.width, sws.height),);
+                let menu = Menu::new();
+                let app_menu = Submenu::new("&pbyk", true);
+                app_menu.append(&PredefinedMenuItem::minimize(None));
+                app_menu.append(&PredefinedMenuItem::quit(None));
+                menu.append(&app_menu);
                 let config = match home_dir() {
                     Some(home_dir) => {
                         Config::new().with_window(window).with_data_directory(home_dir.join(".pbyk"))
                     }
                     None => Config::new().with_window(window)
-                };
-                //dioxus_desktop::launch_cfg(GuiMain, config,);
+                }.with_menu(menu);
 
                 LaunchBuilder::desktop().with_cfg(config).launch(GuiMain);
             }
