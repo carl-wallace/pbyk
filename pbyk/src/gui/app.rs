@@ -83,49 +83,58 @@ fn clean_otps() {
 #[allow(clippy::too_many_arguments)]
 fn update_phase<'a>(
     phase: &Phase,
-    s_edipi_style: &'a UseState<&str>,
-    s_pre_enroll_otp_style: &'a UseState<&str>,
-    s_ukm_otp_style: &'a UseState<&str>,
-    s_hide_recovery: &'a UseState<&str>,
-    s_button_label: &'a UseState<String>,
-    s_hide_reset: &'a UseState<String>,
-    s_enroll_otp_style: &'a UseState<&str>,
+    mut s_edipi_style: Signal<String>,
+    mut s_pre_enroll_otp_style: Signal<String>,
+    mut s_ukm_otp_style: Signal<String>,
+    mut s_hide_recovery: Signal<String>,
+    mut s_button_label: Signal<String>,
+    mut s_hide_reset: Signal<String>,
+    mut s_enroll_otp_style: Signal<String>,
 ) {
+    s_edipi_style.write().clear();
+    s_pre_enroll_otp_style.write().clear();
+    s_enroll_otp_style.write().clear();
+    s_ukm_otp_style.write().clear();
+    s_hide_recovery.write().clear();
+    s_button_label.write().clear();
+    s_hide_reset.write().clear();
     match phase {
         PreEnroll => {
-            s_edipi_style.setter()("display:table-row;");
-            s_pre_enroll_otp_style.setter()("display:table-row;");
-            s_ukm_otp_style.setter()("display:none;");
-            s_hide_recovery.setter()("none");
-            s_button_label.setter()("Pre-enroll".to_string());
-            s_hide_reset.setter()("none".to_string());
+            s_edipi_style.write().push_str("display:table-row;");
+            s_pre_enroll_otp_style
+                .write()
+                .push_str("display:table-row;");
+            s_ukm_otp_style.write().push_str("display:none;");
+            s_hide_recovery.write().push_str("none");
+            s_button_label.write().push_str("Pre-enroll");
+            s_hide_reset.write().push_str("none");
         }
         Enroll => {
-            s_edipi_style.setter()("display:table-row;");
-            s_pre_enroll_otp_style.setter()("display:none;");
-            s_ukm_otp_style.setter()("display:none;");
-            s_enroll_otp_style.setter()("display:table-row;");
-            s_hide_recovery.setter()("none");
-            s_button_label.setter()("Enroll".to_string());
-            s_hide_reset.setter()("none".to_string());
+            s_edipi_style.write().push_str("display:table-row;");
+            s_pre_enroll_otp_style.write().push_str("display:none;");
+            s_enroll_otp_style.write().push_str("display:table-row;");
+            s_ukm_otp_style.write().push_str("display:none;");
+            s_hide_recovery.write().push_str("none");
+            s_button_label.write().push_str("Enroll");
+            s_hide_reset.write().push_str("none");
         }
         Ukm => {
-            s_edipi_style.setter()("display:none;");
-            s_pre_enroll_otp_style.setter()("display:none;");
-            s_enroll_otp_style.setter()("display:none;");
-            s_ukm_otp_style.setter()("display:table-row;");
-            s_hide_recovery.setter()("none");
-            s_button_label.setter()("User Key Management".to_string());
-            s_hide_reset.setter()("none".to_string());
+            s_edipi_style.write().push_str("display:none;");
+            s_pre_enroll_otp_style.write().push_str("display:none;");
+            s_enroll_otp_style.write().push_str("display:none;");
+            s_ukm_otp_style.write().push_str("display:table-row;");
+            s_hide_recovery.write().push_str("none");
+            s_button_label.write().push_str("User Key Management");
+            s_hide_reset.write().push_str("none");
         }
         UkmOrRecovery => {
-            s_edipi_style.setter()("display:none;");
-            s_pre_enroll_otp_style.setter()("display:none;");
-            s_enroll_otp_style.setter()("display:none;");
-            s_ukm_otp_style.setter()("display:table-row;");
-            s_button_label.setter()("User Key Management".to_string());
-            s_hide_recovery.setter()("inline-block");
-            s_hide_reset.setter()("none".to_string());
+            s_edipi_style.write().push_str("display:none;");
+            s_pre_enroll_otp_style.write().push_str("display:none;");
+            s_enroll_otp_style.write().push_str("display:none;");
+            s_ukm_otp_style.write().push_str("display:table-row;");
+            s_hide_recovery.write().push_str("inline-block");
+            s_button_label.write().push_str("User Key Management");
+            s_hide_reset.write().push_str("none");
         }
     }
 }
@@ -133,113 +142,118 @@ fn update_phase<'a>(
 /// app is the primary component of GUI mode. It draws the forms that comprise the Purebred workflow
 /// and drives execution through the workflow.
 pub(crate) fn app<'a>(
-    cx: Scope<'a>,
-    s_phase: &'a UseState<Phase>,
-    s_serial: &'a UseState<String>,
-    s_reset_req: &'a UseState<bool>,
-    s_serials: &'a UseState<Vec<String>>,
-    s_fatal_error_val: &'a UseState<String>,
+    mut s_phase: Signal<Phase>,
+    mut s_serial: Signal<String>,
+    mut s_reset_req: Signal<bool>,
+    s_serials: Signal<Vec<String>>,
+    mut s_fatal_error_val: Signal<String>,
     is_yubikey: bool,
-) -> Element<'a> {
+) -> Element {
     // initialize plumbing for status dialogs
-    use_init_atom_root(cx);
-    let toast = use_atom_ref(cx, &TOAST_MANAGER);
 
-    let s_disa_icon = use_state(cx, || DISA_ICON_BASE64.clone());
+    // todo - affirm and remove
+    // use_init_atom_root(cx);
+    // let toast = use_atom_ref(cx, &TOAST_MANAGER);
+    let mut toast = use_signal(|| ToastManager::default());
+
+    let s_disa_icon = use_signal(|| DISA_ICON_BASE64.clone());
 
     // State variables for input fields
-    let s_edipi = use_state(cx, || {
+    let mut s_edipi = use_signal(|| {
         // Only saved element at present is agent edipi
         let sa = read_saved_args_or_default();
         sa.agent_edipi.unwrap_or_default()
     });
-    let s_pin = use_state(cx, String::new);
-    let s_puk = use_state(cx, String::new);
-    let s_pre_enroll_otp = use_state(cx, String::new);
-    let s_enroll_otp = use_state(cx, String::new);
-    let s_hash = use_state(cx, String::new);
-    let s_ukm_otp = use_state(cx, String::new);
-    let s_recover = use_state(cx, || false);
+    let mut s_pin = use_signal(String::new);
+    let mut s_puk = use_signal(String::new);
+    let s_pre_enroll_otp = use_signal(String::new);
+    let s_enroll_otp = use_signal(String::new);
+    let mut s_hash = use_signal(String::new);
+    let s_ukm_otp = use_signal(String::new);
+    let mut s_recover = use_signal(|| false);
     let (s_dev_checked, s_om_nipr_checked, s_om_sipr_checked, s_nipr_checked, s_sipr_checked) =
-        get_default_env_radio_selections(cx);
+        get_default_env_radio_selections();
 
-    let serials = s_serials.get();
-    let serial_setter = s_serial.setter();
-    let s_check_phase = use_state(cx, || false);
-    let check_phase_setter = s_check_phase.setter();
+    let serials = s_serials.read();
+    //let serial_setter = s_serial.write();
+    let mut s_check_phase = use_signal(|| false);
+    //let check_phase_setter = s_check_phase.write();
 
     // Style variables for enabling/disabling UI elements. One governs the cursor. The other governs
     // elements that benefit from disabling, i.e., clickable elements and editable elements. Read-only
     // elements are not changed based on app state.
-    let s_cursor = use_state(cx, || "default".to_string());
-    let s_disabled = use_state(cx, || false);
+    let mut s_cursor = use_signal(|| "default".to_string());
+    let mut s_disabled = use_signal(|| false);
 
-    let s_reset_abandoned = use_state(cx, || false);
-    let reset_setter = s_reset_req.setter();
-    let reset_abandoned_setter = s_reset_abandoned.setter();
-    let pin_setter = s_pin.setter();
-    let puk_setter = s_puk.setter();
-    let s_reset_complete = use_state(cx, || false);
+    let mut s_reset_abandoned = use_signal(|| false);
+    // let reset_setter = s_reset_req.write();
+    //let reset_abandoned_setter = s_reset_abandoned.write();
+    // let pin_setter = s_pin.write();
+    // let puk_setter = s_puk.write();
+    let mut s_reset_complete = use_signal(|| false);
 
     // icon click variables
-    let s_click_count = use_state(cx, || 0);
-    let s_click_start = use_state(cx, || 0);
-    let s_hide_reset = use_state(cx, || "none".to_string());
+    let mut s_click_count = use_signal(|| 0);
+    let mut s_click_start = use_signal(|| 0);
+    let mut s_hide_reset = use_signal(|| "none".to_string());
 
     // Style variables for impermanent UI elements
-    let s_pin_style = use_state(cx, || {
+    let mut s_pin_style = use_signal(|| {
         if is_yubikey {
-            "display:table-row;"
+            "display:table-row;".to_string()
         } else {
-            "display:none;"
+            "display:none;".to_string()
         }
     });
     let (
-        s_edipi_style,
-        s_pre_enroll_otp_style,
-        s_ukm_otp_style,
-        s_hide_recovery,
-        s_button_label,
-        s_enroll_otp_style,
-    ) = match s_phase.get() {
+        mut s_edipi_style,
+        mut s_pre_enroll_otp_style,
+        mut s_ukm_otp_style,
+        mut s_hide_recovery,
+        mut s_button_label,
+        mut s_enroll_otp_style,
+    ) = match *s_phase.read() {
         Ukm => (
-            use_state(cx, || "display:none;"),                   // edipi
-            use_state(cx, || "display:none;"),                   // pre-enroll otp
-            use_state(cx, || "display:table-row;"),              // UKM otp
-            use_state(cx, || "none"),                            // hide recovery
-            use_state(cx, || "User Key Management".to_string()), //label
-            use_state(cx, || "display:none;"),
+            use_signal(|| "display:none;".to_string()),       // edipi
+            use_signal(|| "display:none;".to_string()),       // pre-enroll otp
+            use_signal(|| "display:table-row;".to_string()),  // UKM otp
+            use_signal(|| "none".to_string()),                // hide recovery
+            use_signal(|| "User Key Management".to_string()), //label
+            use_signal(|| "display:none;".to_string()),
         ),
         UkmOrRecovery => (
-            use_state(cx, || "display:none;"),
-            use_state(cx, || "display:none;"),
-            use_state(cx, || "display:table-row;"),
-            use_state(cx, || "inline-block"),
-            use_state(cx, || "User Key Management".to_string()),
-            use_state(cx, || "display:none;"),
+            use_signal(|| "display:none;".to_string()),
+            use_signal(|| "display:none;".to_string()),
+            use_signal(|| "display:table-row;".to_string()),
+            use_signal(|| "inline-block".to_string()),
+            use_signal(|| "User Key Management".to_string()),
+            use_signal(|| "display:none;".to_string()),
         ),
         Enroll => (
-            use_state(cx, || "display:table-row;"),
-            use_state(cx, || "display:none;"),
-            use_state(cx, || "display:none;"),
-            use_state(cx, || "none"),
-            use_state(cx, || "Enroll".to_string()),
-            use_state(cx, || "display:table-row;"),
+            use_signal(|| "display:table-row;".to_string()),
+            use_signal(|| "display:none;".to_string()),
+            use_signal(|| "display:none;".to_string()),
+            use_signal(|| "none".to_string()),
+            use_signal(|| "Enroll".to_string()),
+            use_signal(|| "display:table-row;".to_string()),
         ),
         PreEnroll => (
-            use_state(cx, || "display:table-row;"),
-            use_state(cx, || "display:table-row;"),
-            use_state(cx, || "display:none;"),
-            use_state(cx, || "none"),
-            use_state(cx, || "Pre-enroll".to_string()),
-            use_state(cx, || "display:none;"),
+            use_signal(|| "display:table-row;".to_string()),
+            use_signal(|| "display:table-row;".to_string()),
+            use_signal(|| "display:none;".to_string()),
+            use_signal(|| "none".to_string()),
+            use_signal(|| "Pre-enroll".to_string()),
+            use_signal(|| "display:none;".to_string()),
         ),
     };
 
-    if *s_phase.get() == Enroll && s_hash.get().is_empty() {
+    if *s_phase.read() == Enroll && s_hash.read().is_empty() {
         if is_yubikey {
-            match get_pre_enroll_hash_yubikey(s_serial.get()) {
-                Ok(hash) => s_hash.setter()(hash),
+            match get_pre_enroll_hash_yubikey(&*s_serial.read()) {
+                Ok(hash) => {
+                    s_hash.write().clear();
+                    s_hash.write().push_str(&hash);
+                }
                 Err(_e) => {
                     error!("Failed to calculate pre-enroll. Consider resetting the device and restarting enrollment.");
                 }
@@ -249,7 +263,7 @@ pub(crate) fn app<'a>(
             {
                 let vsc_serial = parse_reader_from_vsc_display(s_serial.get());
                 match get_pre_enroll_hash(&vsc_serial) {
-                    Ok(hash) => s_hash.setter()(hash),
+                    Ok(hash) => s_hash.write()(hash),
                     Err(_e) => {
                         error!("Failed to calculate pre-enroll. Consider resetting the device and restarting enrollment.");
                     }
@@ -260,61 +274,63 @@ pub(crate) fn app<'a>(
 
     // Only show the environment row/table when there is more than one environment option available
     let s_multi_env_style = if 1 == num_environments() {
-        use_state(cx, || "display:none;")
+        use_signal(|| "display:none;")
     } else {
-        use_state(cx, || "display:table-row;")
+        use_signal(|| "display:table-row;")
     };
 
     #[cfg(feature = "dev")]
-    let s_dev_style = use_state(cx, || "display:table-row;");
+    let s_dev_style = use_signal(|| "display:table-row;");
     #[cfg(not(feature = "dev"))]
-    let s_dev_style = use_state(cx, || "display:none;");
+    let s_dev_style = use_signal(|| "display:none;");
 
     #[cfg(feature = "om_nipr")]
-    let s_om_nipr_style = use_state(cx, || "display:table-row;");
+    let s_om_nipr_style = use_signal(|| "display:table-row;");
     #[cfg(not(feature = "om_nipr"))]
-    let s_om_nipr_style = use_state(cx, || "display:none;");
+    let s_om_nipr_style = use_signal(|| "display:none;");
 
     #[cfg(feature = "om_sipr")]
-    let s_om_sipr_style = use_state(cx, || "display:table-row;");
+    let s_om_sipr_style = use_signal(|| "display:table-row;");
     #[cfg(not(feature = "om_sipr"))]
-    let s_om_sipr_style = use_state(cx, || "display:none;");
+    let s_om_sipr_style = use_signal(|| "display:none;");
 
     #[cfg(feature = "nipr")]
-    let s_nipr_style = use_state(cx, || "display:table-row;");
+    let s_nipr_style = use_signal(|| "display:table-row;");
     #[cfg(not(feature = "nipr"))]
-    let s_nipr_style = use_state(cx, || "display:none;");
+    let s_nipr_style = use_signal(|| "display:none;");
 
     #[cfg(feature = "sipr")]
-    let s_sipr_style = use_state(cx, || "display:table-row;");
+    let s_sipr_style = use_signal(|| "display:table-row;");
     #[cfg(not(feature = "sipr"))]
-    let s_sipr_style = use_state(cx, || "display:none;");
+    let s_sipr_style = use_signal(|| "display:none;");
 
-    if *s_reset_complete.get() {
-        s_pin.setter()(String::new());
-        s_reset_complete.setter()(false);
-        s_edipi_style.setter()("display:table-row;");
-        s_pre_enroll_otp_style.setter()("display:table-row;");
-        s_ukm_otp_style.setter()("display:none;");
-        s_hide_recovery.setter()("none");
-        s_button_label.setter()("Pre-enroll".to_string());
-        s_hide_reset.setter()("none".to_string());
-        s_phase.setter()(PreEnroll);
+    if *s_reset_complete.read() {
+        s_pin.write().clear();
+        s_pin.write().push_str("");
+        *s_reset_complete.write() = false;
+        *s_edipi_style.write() = "display:table-row;".to_string();
+        *s_pre_enroll_otp_style.write() = "display:table-row;".to_string();
+        *s_ukm_otp_style.write() = "display:none;".to_string();
+        *s_hide_recovery.write() = "none".to_string();
+        *s_button_label.write() = "Pre-enroll".to_string();
+        *s_hide_reset.write() = "none".to_string();
+        *s_phase.write() = PreEnroll;
     }
 
-    if *s_check_phase.get() {
-        s_pin.setter()(String::new());
-        let serial = s_serial.get().clone();
+    if *s_check_phase.read() {
+        s_pin.write().clear();
+        s_pin.write().push_str("");
+        let serial = s_serial.read().clone();
         match serial.parse::<u32>() {
             Ok(yks) => {
-                s_pin_style.setter()("display:table-row;");
+                *s_pin_style.write() = "display:table-row;".to_string();
                 debug!("Connecting to newly selected YubiKey: {serial}");
                 let s = yubikey::Serial(yks);
                 let yubikey = match get_yubikey(Some(s)) {
                     Ok(yk) => Some(yk),
                     Err(e) => {
                         error!("Failed to connect to YubiKey with serial {serial} with: {e}");
-                        s_fatal_error_val.setter()(format!("Failed to connect to YubiKey with serial {serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e));
+                        *s_fatal_error_val.write() = format!("Failed to connect to YubiKey with serial {serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e).to_string();
                         None
                     }
                 };
@@ -324,8 +340,8 @@ pub(crate) fn app<'a>(
                     match yubikey.authenticate(PB_MGMT_KEY.clone()) {
                         Ok(_) => {
                             let phase = determine_phase(&mut yubikey);
-                            if phase != *s_phase.get() {
-                                s_phase.setter()(phase.clone());
+                            if phase != *s_phase.read() {
+                                *s_phase.write() = (phase.clone());
                                 update_phase(
                                     &phase,
                                     s_edipi_style,
@@ -368,42 +384,42 @@ pub(crate) fn app<'a>(
                                     Ok(result) => match result {
                                         Some(err) => {
                                             if 1 == s_serials.len() {
-                                                s_fatal_error_val.setter()(err);
+                                                *s_fatal_error_val.write() = err;
                                             } else {
-                                                let serial_str = s_serial.get();
-                                                for cur in s_serials.get().iter() {
-                                                    if cur != serial_str {
+                                                let serial_str = s_serial.read().clone();
+                                                for cur in s_serials.read().iter() {
+                                                    if *cur != *serial_str {
                                                         info!("Resetting serial from {serial_str} to {cur}");
-                                                        s_serial.setter()(cur.to_string());
+                                                        *s_serial.write() = cur.to_string();
                                                         break;
                                                     }
                                                 }
                                             }
                                         }
-                                        None => reset_setter(true),
+                                        None => *s_reset_req.write() = true,
                                     },
                                     Err(e) => {
                                         let sm = format!("Failed to spawn thread for reset: {e}")
                                             .to_string();
                                         error!("{}", sm);
-                                        s_fatal_error_val.setter()(sm);
+                                        *s_fatal_error_val.write() = sm;
                                     }
                                 }
                             }
 
                             #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-                            s_fatal_error_val.setter()(err.to_string());
+                            s_fatal_error_val.write()(err.to_string());
                         }
                     }
                 }
             }
             Err(_e) => {
-                s_pin_style.setter()("display:none;");
+                *s_pin_style.write() = "display:none;".to_string();
                 #[cfg(all(target_os = "windows", feature = "vsc"))]
                 match determine_vsc_phase(&serial) {
                     Ok(phase) => {
                         if phase != *s_phase.get() {
-                            s_phase.setter()(phase.clone());
+                            s_phase.write()(phase.clone());
                             update_phase(
                                 &phase,
                                 s_edipi_style,
@@ -417,7 +433,7 @@ pub(crate) fn app<'a>(
                         }
                     }
                     Err(_e) => {
-                        s_fatal_error_val.setter()(
+                        s_fatal_error_val.write()(
                             "Could not determine the state of the VSC named {serial}".to_string(),
                         );
                     }
@@ -425,14 +441,14 @@ pub(crate) fn app<'a>(
             }
         };
 
-        check_phase_setter(false);
+        *s_check_phase.write() = false;
     }
 
     // Non-fatal error handling
-    let s_error_msg = use_state(cx, String::new);
-    let s_reset_msg = use_state(cx, String::new);
-    let error_msg_setter = s_error_msg.setter();
-    if !s_error_msg.is_empty() {
+    let mut s_error_msg = use_signal(String::new);
+    let s_reset_msg = use_signal(String::new);
+    //let error_msg_setter = s_error_msg.write();
+    if !s_error_msg.read().is_empty() {
         let _id = toast.write().popup(ToastInfo {
             heading: Some("ERROR".to_string()),
             context: s_error_msg.to_string(),
@@ -441,11 +457,11 @@ pub(crate) fn app<'a>(
             icon: Some(Icon::Error),
             hide_after: None,
         });
-        error_msg_setter(String::new());
+        *s_error_msg.write() = String::new();
     }
-    let s_success_msg = use_state(cx, String::new);
-    let success_msg_setter = s_success_msg.setter();
-    if !s_success_msg.is_empty() {
+    let mut s_success_msg = use_signal(String::new);
+    //let mut success_msg_setter = s_success_msg.write();
+    if !s_success_msg.read().is_empty() {
         let _id = toast.write().popup(ToastInfo {
             heading: Some("SUCCESS".to_string()),
             context: s_success_msg.to_string(),
@@ -454,17 +470,16 @@ pub(crate) fn app<'a>(
             icon: Some(Icon::Success),
             hide_after: None,
         });
-        success_msg_setter(String::new());
+        *s_success_msg.write() = String::new();
     }
 
-    if *s_reset_req.get() {
+    if *s_reset_req.read() {
         debug!("Showing reset view");
-        if !s_pin.get().is_empty() || !s_puk.get().is_empty() {
-            pin_setter(String::new());
-            puk_setter(String::new());
+        if !s_pin.read().is_empty() || !s_puk.read().is_empty() {
+            *s_pin.write() = String::new();
+            *s_pin.write() = String::new();
         }
         reset(
-            cx,
             s_serial,
             s_reset_req,
             s_pin,
@@ -476,13 +491,21 @@ pub(crate) fn app<'a>(
             is_yubikey,
         )
     } else {
-        cx.render(rsx! {
-            style { include_str!("../../assets/pbyk.css") }
+        let css = include_str!("../../assets/pbyk.css");
+        let serialRsx = rsx! { option {
+            value : "15995762",
+            label : "15995762",
+            selected: {"true"}
+         }
+        }?;
+
+        rsx! {
+            style { "{css}" }
             div {
                 form {
                     onsubmit: move |ev| {
-                        let error_msg_setter = s_error_msg.setter();
-                        let success_msg_setter = s_success_msg.setter();
+                        // let error_msg_setter = s_error_msg.write();
+                        // let success_msg_setter = s_success_msg.write();
 
                         let environment = string_or_default(&ev, "environment", "DEV");
                         info!("Targeting {environment} environment");
@@ -506,7 +529,7 @@ pub(crate) fn app<'a>(
                             interactive: false
                         };
                         let _ = save_args(&args);
-                        let _ = save_window_size(cx);
+                        let _ = save_window_size();
 
                         let PB_BASE_URL = match environment.as_str() {
                             #[cfg(feature = "dev")]
@@ -522,74 +545,74 @@ pub(crate) fn app<'a>(
                             _ => {
                                 let sm = format!("Unrecognized environment: {}.", environment);
                                 error!("{}", sm);
-                                error_msg_setter(sm.to_string());
+                                *s_error_msg.write() = sm.to_string();
                                 String::new()
                             }
                         };
 
-                        let p = s_phase.get().clone();
-                        let hash_setter = s_hash.setter();
-                        let preenroll_style_setter = s_pre_enroll_otp_style.setter();
-                        let edipi_setter = s_edipi.setter();
-                        let enroll_style_setter = s_enroll_otp_style.setter();
-                        let edipi_style_setter = s_edipi_style.setter();
-                        let ukm_setter = s_ukm_otp_style.setter();
-                        let pin_setter = s_pin.setter();
-                        let phase_setter = s_phase.setter();
-                        let button_setter = s_button_label.setter();
-                        let hide_recovery_setter = s_hide_recovery.setter();
-                        let cursor_setter = s_cursor.setter();
-                        let disabled_setter = s_disabled.setter();
-                        let recover_setter = s_recover.setter();
-                        let pin_style_setter = s_pin_style.setter();
+                        let p = s_phase.read().clone();
+                        // let hash_setter = s_hash.write();
+                        // let preenroll_style_setter = s_pre_enroll_otp_style.write();
+                        // let edipi_setter = s_edipi.write();
+                        // let enroll_style_setter = s_enroll_otp_style.write();
+                        // let edipi_style_setter = s_edipi_style.write();
+                        // let ukm_setter = s_ukm_otp_style.write();
+                        // let pin_setter = s_pin.write();
+                        // let phase_setter = s_phase.write();
+                        // let button_setter = s_button_label.write();
+                        // let hide_recovery_setter = s_hide_recovery.write();
+                        // let cursor_setter = s_cursor.write();
+                        // let disabled_setter = s_disabled.write();
+                        // let recover_setter = s_recover.write();
+                        // let pin_style_setter = s_pin_style.write();
 
                         macro_rules! enter_enroll_phase {
                                 () => {
-                                    preenroll_style_setter("display:none;");
-                                    enroll_style_setter("display:table-row;");
-                                    phase_setter(Enroll);
-                                    button_setter("Enroll".to_string());
+                                    *s_pre_enroll_otp_style.write() = "display:none;".to_string();
+                                    *s_enroll_otp_style.write() = "display:table-row;".to_string();
+                                    *s_phase.write() = Enroll;
+                                    *s_button_label.write() = "Enroll".to_string();
                                 };
                             }
                         macro_rules! enter_ukm_phase {
                                 () => {
-                                    preenroll_style_setter("display:none;");
-                                    enroll_style_setter("display:none;");
-                                    edipi_style_setter("display:none;");
-                                    ukm_setter("display:table-row;");
-                                    phase_setter(Ukm);
-                                    button_setter("User Key Management".to_string());
+                                    *s_pre_enroll_otp_style.write() = "display:none;".to_string();
+                                    *s_enroll_otp_style.write() = "display:none;".to_string();
+                                    *s_edipi_style.write() = "display:none;".to_string();
+                                    *s_ukm_otp_style.write() = "display:table-row;".to_string();
+                                    *s_phase.write() = Ukm;
+                                    *s_button_label.write() = "User Key Management".to_string();
                                 };
                             }
                         macro_rules! enter_ukm_or_recovery_phase {
                                 () => {
-                                    hide_recovery_setter("inline-block");
-                                    preenroll_style_setter("display:none;");
-                                    enroll_style_setter("display:none;");
-                                    edipi_style_setter("display:none;");
-                                    ukm_setter("display:table-row;");
-                                    phase_setter(UkmOrRecovery);
-                                    button_setter("User Key Management".to_string());
+                                    *s_hide_recovery.write()  = "inline-block".to_string();
+                                    *s_pre_enroll_otp_style.write() = "display:none;".to_string();
+                                    *s_enroll_otp_style.write() = "display:none;".to_string();
+                                    *s_edipi_style.write() = "display:none;".to_string();
+                                    *s_ukm_otp_style.write() = "display:table-row;".to_string();
+                                    *s_phase.write() = UkmOrRecovery;
+                                    *s_button_label.write() = "User Key Management".to_string();
                                 };
                             }
 
-                        let recovery_active = *s_recover.get();
-                        let reset_abandoned = *s_reset_abandoned.get();
+                        let recovery_active = *s_recover.read();
+                        let reset_abandoned = *s_reset_abandoned.read();
 
                         if !reset_abandoned {
-                            cursor_setter("wait".to_string());
-                            disabled_setter(true);
+                            *s_cursor.write() = "wait".to_string();
+                            *s_disabled.write() = true;
                         }
                         else {
-                            s_reset_abandoned.setter()(false);
+                            *s_reset_abandoned.write() = false;
                         }
 
                         #[cfg(all(target_os = "windows", feature = "vsc"))]
                         let mut serial_str_ota = s_serial.get().to_string();
                         #[cfg(not(all(target_os = "windows", feature = "vsc")))]
-                        let serial_str_ota = s_serial.get().to_string();
+                        let serial_str_ota = s_serial.read().to_string();
 
-                        let serial_u32 = match s_serial.get().parse::<u32>() {
+                        let serial_u32 = match s_serial.read().parse::<u32>() {
                             Ok(serial_u32) => Some(serial_u32),
                             Err(e) => {
                                 let sm = format!("Failed to process serial number as YubiKey serial number: {e}.");
@@ -608,8 +631,9 @@ pub(crate) fn app<'a>(
                             if PB_BASE_URL.is_empty() {
                                 // error message is set up in match statement above if environment
                                 // is unrecognized and PB_BASE_URL is set to empty
-                                cursor_setter("default".to_string());
-                                disabled_setter(false);
+                                *s_cursor.write() = "default".to_string();
+                                *s_cursor.write() = "wait".to_string();
+                                *s_disabled.write() = false;
                                 return;
                             }
 
@@ -624,9 +648,9 @@ pub(crate) fn app<'a>(
                                         Err(e) => {
                                             let sm = format!("Could not get the YubiKey with serial number {yks}. Please make sure the device is available then try again. Error: {e}");
                                             error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            *s_error_msg.write() = sm.to_string();
+                                            *s_cursor.write() = "default".to_string();
+                                            *s_disabled.write() = false;
                                             return;
                                         }
                                     };
@@ -634,9 +658,9 @@ pub(crate) fn app<'a>(
                                     if yubikey.authenticate(PB_MGMT_KEY.clone()).is_err() {
                                         let sm = format!("The YubiKey with serial number {} is not using the expected management key. Please reset the device then try again.", yubikey.serial());
                                         error!("{}", sm);
-                                        error_msg_setter(sm.to_string());
-                                        cursor_setter("default".to_string());
-                                        disabled_setter(false);
+                                        *s_error_msg.write() = sm.to_string();
+                                        *s_cursor.write() = "default".to_string();
+                                        *s_disabled.write() = false;
                                         return;
                                     }
 
@@ -645,13 +669,13 @@ pub(crate) fn app<'a>(
                                         None => {
                                             let sm = format!("No PIN was provided. Please enter the PIN for the YubiKey with serial number {} and try again", yks);
                                             error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            *s_error_msg.write() = sm.to_string();
+                                            *s_cursor.write() = "default".to_string();
+                                            *s_disabled.write() = false;
                                             return;
                                         }
                                     };
-                                    pin_style_setter("display:table-row;");
+                                    *s_pin.write() = "display:table-row;".to_string();
                                     (CryptoModule::YubiKey(yubikey), pin)
                                 }
                                 None => {
@@ -663,9 +687,9 @@ pub(crate) fn app<'a>(
                                             Err(e) => {
                                                 let sm = format!("Could not get the VSC with serial number {serial_str_ota}. Please make sure the device is available then try again. Error: {e:?}");
                                                 error!("{}", sm);
-                                                error_msg_setter(sm.to_string());
-                                                cursor_setter("default".to_string());
-                                                disabled_setter(false);
+                                                *s_error_msg.write() = sm.to_string();
+                                                *s_cursor.write() = "default".to_string();
+                                                *s_disabled.write() = false;
                                                 return;
                                             }
                                         };
@@ -674,9 +698,9 @@ pub(crate) fn app<'a>(
                                             Err(e) => {
                                                 let sm = format!("Could not get the VSC ID for VSC with serial number {serial_str_ota}. Error: {e:?}");
                                                 error!("{}", sm);
-                                                error_msg_setter(sm.to_string());
-                                                cursor_setter("default".to_string());
-                                                disabled_setter(false);
+                                                *s_error_msg.write() = sm.to_string();
+                                                *s_cursor.write() = "default".to_string();
+                                                *s_disabled.write() = false;
                                                 return;
                                             }
                                         };
@@ -687,9 +711,9 @@ pub(crate) fn app<'a>(
                                     {
                                         let sm = "Failed to process serial number as YubiKey serial number.";
                                         error!("{}", sm);
-                                        error_msg_setter(sm.to_string());
-                                        cursor_setter("default".to_string());
-                                        disabled_setter(false);
+                                        *s_error_msg.write() = sm.to_string();
+                                        *s_cursor.write() = "default".to_string();
+                                        *s_disabled.write() = false;
                                         return;
                                     }
                                 }
@@ -700,8 +724,8 @@ pub(crate) fn app<'a>(
                             //     None => {
                             //         // error message is set up in match statement above if serial number
                             //         // conversion fails
-                            //         cursor_setter("default".to_string());
-                            //         disabled_setter(false);
+                            //         *s_cursor.write() = "default".to_string();
+                            //         *s_disabled.write() = false;
                             //         return;
                             //     }
                             // };
@@ -714,9 +738,9 @@ pub(crate) fn app<'a>(
                                         None => {
                                             let sm = "No Agent EDIPI was provided. Please enter the EDIPI of the cooperating Purebred Agent and try again";
                                             error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            *s_error_msg.write() = sm.to_string();
+                                            *s_cursor.write() = "default".to_string();
+                                            *s_disabled.write() = false;
                                             return;
                                         }
                                     };
@@ -725,9 +749,9 @@ pub(crate) fn app<'a>(
                                             if !pre_enroll_otp.chars().all(|c| c.is_numeric()) || 8 != pre_enroll_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
                                                 error!("{}", sm);
-                                                error_msg_setter(sm.to_string());
-                                                cursor_setter("default".to_string());
-                                                disabled_setter(false);
+                                                *s_error_msg.write() = sm.to_string();
+                                                *s_cursor.write() = "default".to_string();
+                                                *s_disabled.write() = false;
                                                 return;
                                             }
                                             pre_enroll_otp
@@ -735,18 +759,18 @@ pub(crate) fn app<'a>(
                                         None => {
                                             let sm = "No pre-enroll OTP was provided. Please enter a pre-enroll OTP and try again";
                                             error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            *s_error_msg.write() = sm.to_string();
+                                            *s_cursor.write() = "default".to_string();
+                                            *s_disabled.write() = false;
                                             return;
                                         }
                                     };
                                     if check_otp(&pre_enroll_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
                                         error!("{}", sm);
-                                        error_msg_setter(sm.to_string());
-                                        cursor_setter("default".to_string());
-                                        disabled_setter(false);
+                                        *s_error_msg.write() = sm.to_string();
+                                        *s_cursor.write() = "default".to_string();
+                                        *s_disabled.write() = false;
                                         return;
                                     }
                                     else {
@@ -760,9 +784,9 @@ pub(crate) fn app<'a>(
                                     else {
                                         None
                                     };
-                                    pin_setter(pin);
+                                    *s_pin.write() = pin;
                                     let agent_edipi_t = agent_edipi.clone();
-                                    edipi_setter(agent_edipi);
+                                    *s_edipi.write() = agent_edipi;
                                     //let mut cm = CryptoModule::YubiKey(yubikey);
                                     let _ = tokio::spawn(async move {
                                         match pre_enroll(
@@ -794,21 +818,21 @@ pub(crate) fn app<'a>(
                                     match rx.recv() {
                                         Ok(result) => {
                                             if let Some(hash) = result.0 {
-                                                hash_setter(hash.clone());
+                                                *s_hash.write() = hash.clone();
                                                 enter_enroll_phase!();
                                             }
                                             else {
-                                                error_msg_setter(result.1.unwrap_or_default());
+                                                *s_error_msg.write() = result.1.unwrap_or_default();
                                             }
                                         }
                                         Err(e) => {
                                             let sm = format!("Failed to spawn thread for pre-enrollment: {e}").to_string();
                                             error!("{}", sm);
-                                            error_msg_setter(sm);
+                                            *s_error_msg.write() = sm.to_string();
                                         }
                                     }
-                                    cursor_setter("default".to_string());
-                                    disabled_setter(false);
+                                    *s_cursor.write() = "default".to_string();
+                                    *s_disabled.write() = false;
                                 }
                                 Enroll => {
                                     info!("Starting Enroll operation...");
@@ -817,9 +841,9 @@ pub(crate) fn app<'a>(
                                         None => {
                                             let sm = "No Agent EDIPI was provided. Please enter the EDIPI of the cooperating Purebred Agent and try again";
                                             error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            *s_error_msg.write() = sm.to_string();
+                                            *s_cursor.write() = "default".to_string();
+                                            *s_disabled.write() = false;
                                             return;
                                         }
                                     };
@@ -828,9 +852,9 @@ pub(crate) fn app<'a>(
                                             if !enroll_otp.chars().all(|c| c.is_numeric()) || 8 != enroll_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
                                                 error!("{}", sm);
-                                                error_msg_setter(sm.to_string());
-                                                cursor_setter("default".to_string());
-                                                disabled_setter(false);
+                                                *s_error_msg.write() = sm.to_string();
+                                                *s_cursor.write() = "default".to_string();
+                                                *s_disabled.write() = false;
                                                 return;
                                             }
                                             enroll_otp
@@ -838,18 +862,18 @@ pub(crate) fn app<'a>(
                                         None => {
                                             let sm = "No enroll OTP was provided. Please enter an enroll OTP and try again";
                                             error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            *s_error_msg.write() = sm.to_string();
+                                            *s_cursor.write() = "default".to_string();
+                                            *s_disabled.write() = false;
                                             return;
                                         }
                                     };
                                     if check_otp(&enroll_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
                                         error!("{}", sm);
-                                        error_msg_setter(sm.to_string());
-                                        cursor_setter("default".to_string());
-                                        disabled_setter(false);
+                                        *s_error_msg.write() = sm.to_string();
+                                        *s_cursor.write() = "default".to_string();
+                                        *s_disabled.write() = false;
                                         return;
                                     }
                                     else {
@@ -863,7 +887,7 @@ pub(crate) fn app<'a>(
                                     else {
                                         None
                                     };
-                                    pin_setter(pin);
+                                    *s_pin.write() = pin;
                                     let oai = OtaActionInputs::new(
                                         &serial_str_ota,
                                         &enroll_otp,
@@ -901,7 +925,7 @@ pub(crate) fn app<'a>(
                                     match rx.recv() {
                                         Ok(result) => {
                                             if let Some(error) = result {
-                                                error_msg_setter(error);
+                                                *s_error_msg.write() = error.to_string();
                                             }
                                             else {
                                                 enter_ukm_phase!();
@@ -910,11 +934,11 @@ pub(crate) fn app<'a>(
                                         Err(e) => {
                                             let sm = format!("Failed to spawn thread for enrollment: {e}").to_string();
                                             error!("{}", sm);
-                                            error_msg_setter(sm);
+                                            *s_error_msg.write() = sm.to_string();
                                         }
                                     }
-                                    cursor_setter("default".to_string());
-                                    disabled_setter(false);
+                                    *s_cursor.write() = "default".to_string();
+                                    *s_disabled.write() = false;
                                 }
                                 Ukm | UkmOrRecovery => {
                                     info!("Ukm | UkmOrRecovery");
@@ -924,9 +948,9 @@ pub(crate) fn app<'a>(
                                             if !ukm_otp.chars().all(|c| c.is_numeric()) || 8 != ukm_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
                                                 error!("{}", sm);
-                                                error_msg_setter(sm.to_string());
-                                                cursor_setter("default".to_string());
-                                                disabled_setter(false);
+                                                *s_error_msg.write() = sm.to_string();
+                                                *s_cursor.write() = "default".to_string();
+                                                *s_disabled.write() = false;
                                                 return;
                                             }
                                             ukm_otp
@@ -934,18 +958,18 @@ pub(crate) fn app<'a>(
                                         None => {
                                             let sm = "No UKM OTP was provided. Please enter a UKM OTP and try again";
                                             error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            *s_error_msg.write() = sm.to_string();
+                                            *s_cursor.write() = "default".to_string();
+                                            *s_disabled.write() = false;
                                             return;
                                         }
                                     };
                                     if check_otp(&ukm_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
                                         error!("{}", sm);
-                                        error_msg_setter(sm.to_string());
-                                        cursor_setter("default".to_string());
-                                        disabled_setter(false);
+                                        *s_error_msg.write() = sm.to_string();
+                                        *s_cursor.write() = "default".to_string();
+                                        *s_disabled.write() = false;
                                         return;
                                     }
                                     else {
@@ -960,7 +984,7 @@ pub(crate) fn app<'a>(
                                     );
 
                                     if recovery_active {
-                                        recover_setter(false);
+                                        *s_recover.write() = false;
                                         info!("Starting recover operation...");
                                         let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
                                         let pin_t = if !pin.is_empty() {
@@ -969,7 +993,7 @@ pub(crate) fn app<'a>(
                                         else {
                                             None
                                         };
-                                        pin_setter(pin);
+                                        *s_pin.write() = pin;
                                         //let mut cm = CryptoModule::YubiKey(yubikey);
                                         let _ = tokio::spawn(async move {
                                             match recover(&mut cm, &oai, pin_t, Some(&PB_MGMT_KEY.clone()), &environment).await {
@@ -991,17 +1015,17 @@ pub(crate) fn app<'a>(
                                         match rx.recv() {
                                             Ok(result) => {
                                                 if let Some(error) = result {
-                                                    error_msg_setter(error);
+                                                    *s_error_msg.write() = error.to_string();
                                                 }
                                                 else {
-                                                    recover_setter(false);
-                                                    success_msg_setter("Recover completed successfully".to_string());
+                                                    *s_recover.write() = false;
+                                                    *s_success_msg.write() = "Recover completed successfully".to_string();
                                                 }
                                             }
                                             Err(e) => {
                                                 let sm = format!("Failed to spawn thread for recover: {e}").to_string();
                                                 error!("{}", sm);
-                                                error_msg_setter(sm);
+                                                *s_error_msg.write() = sm.to_string();
                                             }
                                         }
                                     }
@@ -1014,7 +1038,7 @@ pub(crate) fn app<'a>(
                                         else {
                                             None
                                         };
-                                        pin_setter(pin);
+                                        *s_pin.write() = pin;
                                         //let mut cm = CryptoModule::YubiKey(yubikey);
                                         let _ = tokio::spawn(async move {
                                             match ukm(&mut cm, &oai, pin_t, Some(&PB_MGMT_KEY.clone()), &environment).await {
@@ -1036,22 +1060,22 @@ pub(crate) fn app<'a>(
                                         match rx.recv() {
                                             Ok(result) => {
                                                 if let Some(error) = result {
-                                                    error_msg_setter(error);
+                                                    *s_error_msg.write() = error;
                                                 }
                                                 else {
                                                     enter_ukm_or_recovery_phase!();
-                                                    success_msg_setter("UKM completed successfully".to_string());
+                                                    *s_success_msg.write() = "UKM completed successfully".to_string();
                                                 }
                                             }
                                             Err(e) => {
                                                 let sm = format!("Failed to spawn thread for UKM: {e}").to_string();
                                                 error!("{}", sm);
-                                                error_msg_setter(sm);
+                                                *s_error_msg.write() = sm.to_string();
                                             }
                                         }
                                     }
-                                    cursor_setter("default".to_string());
-                                    disabled_setter(false);
+                                    *s_cursor.write() = "default".to_string();
+                                    *s_disabled.write() = false;
                                 }
                              }// end match phase
                         } // end async move
@@ -1060,26 +1084,28 @@ pub(crate) fn app<'a>(
                         class: "{s_cursor}",
                         tbody {
                             tr{
-                                style: if *s_phase.get() != Enroll { "display:table-row;" } else {"display:none;"},
+                                style: if *s_phase.read() != Enroll { "display:table-row;" } else {"display:none;"},
                                 td{div{label {r#for: "multi_serial", "Serial Number"}}}
                                 td{select {
                                    disabled: "{s_disabled}",
                                    oninput: move |evt| {
-                                       serial_setter(evt.value.to_string());
-                                       check_phase_setter(true);
+                                       *s_serial.write() = evt.value().to_string();
+                                       *s_check_phase.write() = true;
                                    },
                                    name: "serials", value: "{s_serial}",
-                                   serials.iter().map(|s|
-                                       rsx!{ option {
-                                           value : "{s}",
-                                           label : "{s}",
-                                           selected: if *s_serial.get() == *s {"true"} else {"false"}
-                                       }
-                                   })
+                                    {serialRsx}
+                                   // todo revisit
+                                   // serials.iter().map(|s|
+                                   //     rsx!{ option {
+                                   //         value : "{s}",
+                                   //         label : "{s}",
+                                   //         selected: if *s_serial.get() == *s {"true"} else {"false"}
+                                   //     }
+                                   // })
                                 }}
                             }
                             tr{
-                                style: if *s_phase.get() == Enroll { "display:table-row;" } else {"display:none;"},
+                                style: if *s_phase.read() == Enroll { "display:table-row;" } else {"display:none;"},
                                 td{div{label {r#for: "serial", "Serial Number"}}}
                                 td{input { r#type: "text", disabled: "{s_disabled}", name: "serial", readonly: true, value: "{s_serial}"}}
                             }
@@ -1120,27 +1146,27 @@ pub(crate) fn app<'a>(
                                     class: "nested_table",
                                     tr {
                                         style: "{s_dev_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "dev", name: "environment", value: "DEV", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_dev_checked}" } }
+                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "dev", name: "environment", value: "DEV", onclick: move |_| {*s_edipi.write() = "".to_string();}, checked: "{s_dev_checked}" } }
                                         td{div{label {r#for: "dev", "Development"}}}
                                     }
                                     tr {
                                         style: "{s_om_nipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "om_nipr", name: "environment", value: "OM_NIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_om_nipr_checked}" } }
+                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "om_nipr", name: "environment", value: "OM_NIPR", onclick: move |_| {*s_edipi.write() = "".to_string();}, checked: "{s_om_nipr_checked}" } }
                                         td{div{label {r#for: "om_nipr", "NIPR O&M"}}}
                                     }
                                     tr {
                                         style: "{s_nipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "nipr", name: "environment", value: "NIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_nipr_checked}" } }
+                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "nipr", name: "environment", value: "NIPR", onclick: move |_| {*s_edipi.write() = "".to_string();}, checked: "{s_nipr_checked}" } }
                                         td{div{label {r#for: "nipr", "NIPR"}}}
                                     }
                                     tr {
                                         style: "{s_om_sipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "om_sipr", name: "environment", value: "OM_SIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_om_sipr_checked}" } }
+                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "om_sipr", name: "environment", value: "OM_SIPR", onclick: move |_| {*s_edipi.write() = "".to_string();}, checked: "{s_om_sipr_checked}" } }
                                         td{div{label {r#for: "om_sipr", "SIPR O&M"}}}
                                     }
                                     tr {
                                         style: "{s_sipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "sipr", name: "environment", value: "SIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_sipr_checked}", }}
+                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "sipr", name: "environment", value: "SIPR", onclick: move |_| {*s_edipi.write() = "".to_string();}, checked: "{s_sipr_checked}", }}
                                         td{div{label {r#for: "sipr", "SIPR"}}}
                                     }
                                 }
@@ -1160,23 +1186,23 @@ pub(crate) fn app<'a>(
                             }
                             div{
                                 style: "text-align:center; display: {s_hide_recovery}; margin-right:5px;",
-                                button { disabled: "{s_disabled}", r#type: "submit", onclick: move |_| s_recover.setter()(true), value: "Recovery", "Recover Old Decryption Keys" }
+                                button { disabled: "{s_disabled}", r#type: "submit", onclick: move |_| *s_recover.write() = true, value: "Recovery", "Recover Old Decryption Keys" }
                             }
                         }
                         div{
                             style: "text-align:center; display: {s_hide_reset}; margin-right:5px;",
                             button { disabled: "{s_disabled}", value: "Reset",
                                 onclick: move |_| {
-                                    s_success_msg.setter()(String::new());
-                                    s_error_msg.setter()(String::new());
+                                    *s_success_msg.write() = String::new();
+                                    *s_error_msg.write() = String::new();
 
                                     #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
                                     let reset_supported = true;
                                     #[cfg(not(all(target_os = "windows", feature = "vsc", feature = "reset_vsc")))]
-                                    let reset_supported = *s_pin_style.get() == "display:table-row;";
+                                    let reset_supported = *s_pin_style.read() == "display:table-row;";
                                     if !reset_supported {
-                                        reset_abandoned_setter(true);
-                                        s_error_msg.setter()("VSC reset support is not provided".to_string());
+                                        *s_reset_abandoned.write() = true;
+                                        *s_error_msg.write() = "VSC reset support is not provided".to_string();
                                         return;
                                     }
 
@@ -1190,11 +1216,11 @@ pub(crate) fn app<'a>(
                                     {
                                         Ok(answer) => {
                                             if answer {
-                                                reset_abandoned_setter(false);
-                                                reset_setter(true);
+                                                *s_reset_abandoned.write() = false;
+                                                *s_reset_req.write() = true;
                                             }
                                             else {
-                                                reset_abandoned_setter(true);
+                                                *s_reset_abandoned.write() = true;
                                             }
                                         },
                                         Err(e) => {
@@ -1213,32 +1239,34 @@ pub(crate) fn app<'a>(
                             max_height: "25%",
                             max_width: "25%",
                             onclick: move |_| {
-                                let click_count_setter = s_click_count.setter();
-                                let click_start_setter = s_click_start.setter();
-                                #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                                let hide_reset_setter = s_hide_reset.setter();
+                                // let click_count_setter = s_click_count.write();
+                                // let click_start_setter = s_click_start.write();
+                                // #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
+                                // let hide_reset_setter = s_hide_reset.write();
 
-                                let last_count = s_click_count.get();
-                                let last_start = s_click_start.get();
-                                let disabled = *s_disabled.get();
+                                let last_count = s_click_count.read().clone();
+                                let last_start = s_click_start.read().clone();
+                                let disabled = *s_disabled.read();
                                 match SystemTime::now().duration_since(UNIX_EPOCH) {
                                     Ok(n) => {
                                         #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
                                         let reset_supported = true;
                                         #[cfg(not(all(target_os = "windows", feature = "vsc", feature = "reset_vsc")))]
-                                        let reset_supported = *s_pin_style.get() == "display:table-row;";
+                                        let reset_supported = *s_pin_style.read() == "display:table-row;";
 
                                         if !disabled && reset_supported {
                                             let secs = n.as_secs();
                                             if secs - last_start > 5 {
-                                                click_count_setter(1);
-                                                click_start_setter(secs);
-                                            } else if *last_count >= 4 {
+                                                *s_click_count.write() = 1;
+                                                *s_click_start.write() = secs;
+                                            } else if last_count >= 4 {
                                                 #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                                                hide_reset_setter("inline-block".to_string());
+                                                {
+                                                    *s_hide_reset.write() = "inline-block".to_string();
+                                                }
                                             }
                                             else {
-                                                click_count_setter(last_count+1);
+                                                *s_click_count.write() = last_count+1;
                                             }
                                         }
                                     }
@@ -1251,6 +1279,6 @@ pub(crate) fn app<'a>(
                     }
                 }
             }
-        }) //end cx.render
+        }
     }
 }

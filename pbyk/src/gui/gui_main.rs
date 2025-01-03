@@ -148,43 +148,45 @@ pub(crate) fn determine_vsc_phase(serial: &str) -> Result<Phase> {
 /// - s_init: Boolean indicator of phase initialization
 /// - s_phase: Current Phase associated with available YubiKey
 /// - s_reset_req: Boolean indicator of Purebred management key detection
-pub(crate) fn GuiMain(cx: Scope<'_>) -> Element<'_> {
+pub(crate) fn GuiMain() -> Element {
     let mut fatal_error_val = String::new();
 
     let mut serials = vec![];
-    let s_serial = use_state(cx, || {
-        match tokio::runtime::Runtime::new() {
-            Ok(rt) => {
-                if let Err(e) = rt.block_on(get_serials(&mut serials)) {
-                    error!("Failed to run async function to list serial numbers with {e:?}");
-                }
-            }
-            Err(e) => {
-                error!("Failed to create runtime to run async function to list serial numbers with {e:?}");
-            }
-        }
-        if !serials.is_empty() {
-            serials[0].clone()
-        } else {
-            error!("Failed to list YubiKeys");
-            fatal_error_val = "Failed to list YubiKeys or VSCs. Close the app, make sure at least one YubiKey is available then try again.".to_string();
-            String::new()
-        }
+    let s_serial = use_signal(|| {
+        // todo revisit
+        // match tokio::runtime::Runtime::new() {
+        //     Ok(rt) => {
+        //         if let Err(e) = rt.block_on(get_serials(&mut serials)) {
+        //             error!("Failed to run async function to list serial numbers with {e:?}");
+        //         }
+        //     }
+        //     Err(e) => {
+        //         error!("Failed to create runtime to run async function to list serial numbers with {e:?}");
+        //     }
+        // }
+        // if !serials.is_empty() {
+        //     serials[0].clone()
+        // } else {
+        //     error!("Failed to list YubiKeys");
+        //     fatal_error_val = "Failed to list YubiKeys or VSCs. Close the app, make sure at least one YubiKey is available then try again.".to_string();
+        //     String::new()
+        // }
+        "15995762".to_string()
     });
 
     // s_init is used to avoid re-interrogating the YubiKey to see what certs are present everytime
     // the UI is redrawn.
-    let s_init = use_state(cx, || false);
+    let mut s_init = use_signal(|| false);
     let mut phase = Phase::PreEnroll;
     #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
     let mut do_reset = false;
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
     let do_reset = false;
     let mut is_yubikey = false;
-    if !s_init.get() && !s_serial.get().is_empty() {
+    if !*s_init.read() && !s_serial.read().is_empty() {
         debug!("Getting default device serial number inside main");
-        s_init.setter()(true);
-        let serial = s_serial.get();
+        *s_init.write() = true;
+        let serial = s_serial.read();
         if let Ok(yubikey_serial) = serial.parse::<u32>() {
             let s = yubikey::Serial(yubikey_serial);
             let yubikey = match get_yubikey(Some(s)) {
@@ -251,26 +253,25 @@ pub(crate) fn GuiMain(cx: Scope<'_>) -> Element<'_> {
             }
         }
     }
-    let s_serials = use_state(cx, || serials);
-    let s_phase = use_state(cx, || {
+    let s_serials = use_signal(|| serials);
+    let s_phase = use_signal(|| {
         info!("Setting initial phase to {phase:?}");
         phase
     });
 
-    let s_reset_req = use_state(cx, || {
+    let s_reset_req = use_signal(|| {
         debug!("Setting initial reset to {do_reset:?}");
         do_reset
     });
 
-    let s_fatal_error_val = use_state(cx, || fatal_error_val);
+    let s_fatal_error_val = use_signal(|| fatal_error_val);
 
-    if !s_fatal_error_val.get().is_empty() {
+    if !s_fatal_error_val.read().is_empty() {
         debug!("Showing fatal_error view");
-        fatal_error(cx, s_fatal_error_val.get())
+        fatal_error(&s_fatal_error_val.read())
     } else {
         debug!("Showing app view");
         app(
-            cx,
             s_phase,
             s_serial,
             s_reset_req,

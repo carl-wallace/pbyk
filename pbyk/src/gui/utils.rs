@@ -73,35 +73,36 @@ impl Default for SavedWindowsSize {
 }
 
 /// Saves the current window size to a file named sws.json in the .pbyk folder in the user's home directory.
-pub(crate) fn save_window_size(cx: Scope<'_>) -> Result<()> {
-    let window = use_window(cx);
+pub(crate) fn save_window_size() -> Result<()> {
+    let window = use_window();
     let scale_factor = if let Some(m) = window.current_monitor() {
         m.scale_factor()
     } else {
         1.0
     };
 
-    let inner_size = window
-        .webview
-        .window()
-        .inner_size()
-        .to_logical(scale_factor);
-    let sws = SavedWindowsSize {
-        width: inner_size.width,
-        height: inner_size.height,
-    };
-    debug!("save_window_size: {sws:?}");
-
-    let app_home = create_app_home()?;
-    let app_cfg = app_home.join("sws.json");
-    if let Ok(json_args) = serde_json::to_string(&sws) {
-        return if let Err(e) = fs::write(app_cfg, json_args) {
-            error!("Unable to write SavedWindowSize to file: {e}");
-            Err(Error::Unrecognized)
-        } else {
-            Ok(())
-        };
-    }
+    // todo revisit
+    // let inner_size = window
+    //     .webview
+    //     .window()
+    //     .inner_size()
+    //     .to_logical(scale_factor);
+    // let sws = SavedWindowsSize {
+    //     width: inner_size.width,
+    //     height: inner_size.height,
+    // };
+    // debug!("save_window_size: {sws:?}");
+    //
+    // let app_home = create_app_home()?;
+    // let app_cfg = app_home.join("sws.json");
+    // if let Ok(json_args) = serde_json::to_string(&sws) {
+    //     return if let Err(e) = fs::write(app_cfg, json_args) {
+    //         error!("Unable to write SavedWindowSize to file: {e}");
+    //         Err(Error::Unrecognized)
+    //     } else {
+    //         Ok(())
+    //     };
+    // }
     Err(Error::Unrecognized)
 }
 
@@ -133,7 +134,7 @@ pub(crate) fn read_saved_window_size() -> SavedWindowsSize {
 
 /// Searches the map for the given key. If an entry is found, the value is returned. Else, None is returned.
 pub(crate) fn string_or_none(ev: &Event<FormData>, key: &str) -> Option<String> {
-    if let Some(v) = ev.values.get(key) {
+    if let Some(v) = ev.values().get(key) {
         if !v[0].is_empty() {
             return Some(v[0].clone());
         }
@@ -143,7 +144,7 @@ pub(crate) fn string_or_none(ev: &Event<FormData>, key: &str) -> Option<String> 
 
 /// Searches the map for the given key. If an entry is found, the value is returned. Else, the provided default value is returned as a String.
 pub(crate) fn string_or_default(ev: &Event<FormData>, key: &str, default: &str) -> String {
-    if let Some(v) = ev.values.get(key) {
+    if let Some(v) = ev.values().get(key) {
         if !v[0].is_empty() {
             return v[0].clone();
         }
@@ -222,57 +223,55 @@ pub(crate) fn get_default_env() -> &'static str {
 ///     - s_nipr_checked,
 ///     - s_sipr_checked
 #[allow(clippy::type_complexity)]
-pub(crate) fn get_default_env_radio_selections(
-    cx: Scope<'_>,
-) -> (
-    &UseState<bool>,
-    &UseState<bool>,
-    &UseState<bool>,
-    &UseState<bool>,
-    &UseState<bool>,
+pub(crate) fn get_default_env_radio_selections() -> (
+    Signal<bool>,
+    Signal<bool>,
+    Signal<bool>,
+    Signal<bool>,
+    Signal<bool>,
 ) {
     match get_default_env() {
         "DEV" => (
-            use_state(cx, || true),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
+            use_signal(|| true),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| false),
         ),
         "OM_NIPR" => (
-            use_state(cx, || false),
-            use_state(cx, || true),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
+            use_signal(|| false),
+            use_signal(|| true),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| false),
         ),
         "OM_SIPR" => (
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || true),
-            use_state(cx, || false),
-            use_state(cx, || false),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| true),
+            use_signal(|| false),
+            use_signal(|| false),
         ),
         "NIPR" => (
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || true),
-            use_state(cx, || false),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| true),
+            use_signal(|| false),
         ),
         "SIPR" => (
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || true),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| true),
         ),
         _ => (
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| false),
+            use_signal(|| false),
         ),
     }
 }
