@@ -180,7 +180,6 @@ pub(crate) fn GuiMain() -> Element {
     let mut is_yubikey = false;
     if !*s_init.read() && !s_serial.read().is_empty() {
         debug!("Getting default device serial number inside main");
-        *s_init.write() = true;
         let serial = s_serial.read();
         if let Ok(yubikey_serial) = serial.parse::<u32>() {
             let s = yubikey::Serial(yubikey_serial);
@@ -260,6 +259,10 @@ pub(crate) fn GuiMain() -> Element {
     });
 
     let s_fatal_error_val = use_signal(|| fatal_error_val);
+
+    use_effect(move || {
+        *s_init.write() = true;
+    });
 
     if !s_fatal_error_val.read().is_empty() {
         debug!("Showing fatal_error view");
