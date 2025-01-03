@@ -153,25 +153,20 @@ pub(crate) fn GuiMain() -> Element {
 
     let mut serials = vec![];
     let s_serial = use_signal(|| {
-        // todo revisit
-        // match tokio::runtime::Runtime::new() {
-        //     Ok(rt) => {
-        //         if let Err(e) = rt.block_on(get_serials(&mut serials)) {
-        //             error!("Failed to run async function to list serial numbers with {e:?}");
-        //         }
-        //     }
-        //     Err(e) => {
-        //         error!("Failed to create runtime to run async function to list serial numbers with {e:?}");
-        //     }
-        // }
-        // if !serials.is_empty() {
-        //     serials[0].clone()
-        // } else {
-        //     error!("Failed to list YubiKeys");
-        //     fatal_error_val = "Failed to list YubiKeys or VSCs. Close the app, make sure at least one YubiKey is available then try again.".to_string();
-        //     String::new()
-        // }
-        "15995762".to_string()
+        futures::executor::block_on(async {
+            if let Err(e) = get_serials(&mut serials).await {
+                error!("Failed to run async function to list serial numbers with {e:?}");
+            }
+        });
+
+        if !serials.is_empty() {
+            serials[0].clone()
+        } else {
+            error!("Failed to list YubiKeys");
+            fatal_error_val = "Failed to list YubiKeys or VSCs. Close the app, make sure at least one YubiKey is available then try again.".to_string();
+            String::new()
+        }
+        // "15995762".to_string()
     });
 
     // s_init is used to avoid re-interrogating the YubiKey to see what certs are present everytime

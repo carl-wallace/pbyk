@@ -145,7 +145,7 @@ pub(crate) fn app<'a>(
     mut s_phase: Signal<Phase>,
     mut s_serial: Signal<String>,
     mut s_reset_req: Signal<bool>,
-    s_serials: Signal<Vec<String>>,
+    mut s_serials: Signal<Vec<String>>,
     mut s_fatal_error_val: Signal<String>,
     is_yubikey: bool,
 ) -> Element {
@@ -492,12 +492,16 @@ pub(crate) fn app<'a>(
         )
     } else {
         let css = include_str!("../../assets/pbyk.css");
-        let serialRsx = rsx! { option {
-            value : "15995762",
-            label : "15995762",
-            selected: {"true"}
-         }
-        }?;
+
+        let copy = s_serials.read().clone();
+        let serialRsx = copy.iter().map(|s| {
+            rsx! { option {
+                    value : "{s}",
+                    label : "{s}",
+                    selected: if *s_serial.read().clone() == *s {"true"} else {"false"}
+                }
+            }
+        });
 
         rsx! {
             style { "{css}" }
@@ -1093,15 +1097,7 @@ pub(crate) fn app<'a>(
                                        *s_check_phase.write() = true;
                                    },
                                    name: "serials", value: "{s_serial}",
-                                    {serialRsx}
-                                   // todo revisit
-                                   // serials.iter().map(|s|
-                                   //     rsx!{ option {
-                                   //         value : "{s}",
-                                   //         label : "{s}",
-                                   //         selected: if *s_serial.get() == *s {"true"} else {"false"}
-                                   //     }
-                                   // })
+                                   {serialRsx}
                                 }}
                             }
                             tr{
