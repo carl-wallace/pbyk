@@ -74,36 +74,30 @@ impl Default for SavedWindowsSize {
 
 /// Saves the current window size to a file named sws.json in the .pbyk folder in the user's home directory.
 pub(crate) fn save_window_size() -> Result<()> {
-    // todo revisit
-    let _window = use_window();
-    // let window = use_window();
-    // let scale_factor = if let Some(m) = window.current_monitor() {
-    //     m.scale_factor()
-    // } else {
-    //     1.0
-    // };
-    //
-    // let inner_size = window
-    //     .webview
-    //     .window()
-    //     .inner_size()
-    //     .to_logical(scale_factor);
-    // let sws = SavedWindowsSize {
-    //     width: inner_size.width,
-    //     height: inner_size.height,
-    // };
-    // debug!("save_window_size: {sws:?}");
-    //
-    // let app_home = create_app_home()?;
-    // let app_cfg = app_home.join("sws.json");
-    // if let Ok(json_args) = serde_json::to_string(&sws) {
-    //     return if let Err(e) = fs::write(app_cfg, json_args) {
-    //         error!("Unable to write SavedWindowSize to file: {e}");
-    //         Err(Error::Unrecognized)
-    //     } else {
-    //         Ok(())
-    //     };
-    // }
+    let window = use_window();
+    let scale_factor = if let Some(m) = window.current_monitor() {
+        m.scale_factor()
+    } else {
+        1.0
+    };
+
+    let inner_size = window.window.inner_size().to_logical(scale_factor);
+    let sws = SavedWindowsSize {
+        width: inner_size.width,
+        height: inner_size.height,
+    };
+    debug!("save_window_size: {sws:?}");
+
+    let app_home = create_app_home()?;
+    let app_cfg = app_home.join("sws.json");
+    if let Ok(json_args) = serde_json::to_string(&sws) {
+        return if let Err(e) = fs::write(app_cfg, json_args) {
+            error!("Unable to write SavedWindowSize to file: {e}");
+            Err(Error::Unrecognized)
+        } else {
+            Ok(())
+        };
+    }
     Err(Error::Unrecognized)
 }
 
