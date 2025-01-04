@@ -19,7 +19,7 @@ use std::sync::LazyLock;
 use zeroize::Zeroizing;
 
 use base64ct::{Base64, Encoding};
-
+use dioxus_desktop::use_window;
 use pbyklib::{
     ota::{
         data::OtaActionInputs, enroll::enroll, pre_enroll::pre_enroll, recover::recover, ukm::ukm,
@@ -161,8 +161,14 @@ pub(crate) fn app(
     let mut s_hash = use_signal(String::new);
     let s_ukm_otp = use_signal(String::new);
     let mut s_recover = use_signal(|| false);
-    let (s_dev_checked, s_om_nipr_checked, s_om_sipr_checked, s_nipr_checked, s_sipr_checked) =
+    let (b_dev, b_om_nipr, b_om_sipr, b_nipr, b_sipr) =
         get_default_env_radio_selections();
+
+    let s_dev_checked = use_signal(|| b_dev);
+    let s_om_nipr_checked = use_signal(|| b_om_nipr);
+    let s_om_sipr_checked = use_signal(|| b_om_sipr);
+    let s_nipr_checked = use_signal(|| b_nipr);
+    let s_sipr_checked = use_signal(|| b_sipr);
 
     let mut s_check_phase = use_signal(|| false);
 
@@ -191,46 +197,53 @@ pub(crate) fn app(
         }
     });
     let (
-        mut s_edipi_style,
-        mut s_pre_enroll_otp_style,
-        mut s_ukm_otp_style,
-        mut s_hide_recovery,
-        mut s_button_label,
-        mut s_enroll_otp_style,
+        str_edipi_style,
+        str_pre_enroll_otp_style,
+        str_ukm_otp_style,
+        str_hide_recovery,
+        str_button_label,
+        str_enroll_otp_style,
     ) = match *s_phase.read() {
         Ukm => (
-            use_signal(|| "display:none;".to_string()),       // edipi
-            use_signal(|| "display:none;".to_string()),       // pre-enroll otp
-            use_signal(|| "display:table-row;".to_string()),  // UKM otp
-            use_signal(|| "none".to_string()),                // hide recovery
-            use_signal(|| "User Key Management".to_string()), //label
-            use_signal(|| "display:none;".to_string()),
+            "display:none;".to_string(),       // edipi
+            "display:none;".to_string(),       // pre-enroll otp
+            "display:table-row;".to_string(),  // UKM otp
+            "none".to_string(),                // hide recovery
+            "User Key Management".to_string(), //label
+            "display:none;".to_string(),
         ),
         UkmOrRecovery => (
-            use_signal(|| "display:none;".to_string()),
-            use_signal(|| "display:none;".to_string()),
-            use_signal(|| "display:table-row;".to_string()),
-            use_signal(|| "inline-block".to_string()),
-            use_signal(|| "User Key Management".to_string()),
-            use_signal(|| "display:none;".to_string()),
+            "display:none;".to_string(),
+            "display:none;".to_string(),
+            "display:table-row;".to_string(),
+            "inline-block".to_string(),
+            "User Key Management".to_string(),
+            "display:none;".to_string(),
         ),
         Enroll => (
-            use_signal(|| "display:table-row;".to_string()),
-            use_signal(|| "display:none;".to_string()),
-            use_signal(|| "display:none;".to_string()),
-            use_signal(|| "none".to_string()),
-            use_signal(|| "Enroll".to_string()),
-            use_signal(|| "display:table-row;".to_string()),
+            "display:table-row;".to_string(),
+            "display:none;".to_string(),
+            "display:none;".to_string(),
+            "none".to_string(),
+            "Enroll".to_string(),
+            "display:table-row;".to_string(),
         ),
         PreEnroll => (
-            use_signal(|| "display:table-row;".to_string()),
-            use_signal(|| "display:table-row;".to_string()),
-            use_signal(|| "display:none;".to_string()),
-            use_signal(|| "none".to_string()),
-            use_signal(|| "Pre-enroll".to_string()),
-            use_signal(|| "display:none;".to_string()),
+            "display:table-row;".to_string(),
+            "display:table-row;".to_string(),
+            "display:none;".to_string(),
+            "none".to_string(),
+            "Pre-enroll".to_string(),
+            "display:none;".to_string(),
         ),
     };
+
+    let mut s_edipi_style = use_signal(||str_edipi_style);
+    let mut s_pre_enroll_otp_style = use_signal(||str_pre_enroll_otp_style);
+    let mut s_ukm_otp_style = use_signal(||str_ukm_otp_style);
+    let mut s_hide_recovery = use_signal(||str_hide_recovery);
+    let mut s_button_label = use_signal(||str_button_label);
+    let mut s_enroll_otp_style = use_signal(||str_enroll_otp_style);
 
     if *s_phase.read() == Enroll && s_hash.read().is_empty() {
         if is_yubikey {
@@ -257,11 +270,12 @@ pub(crate) fn app(
     }
 
     // Only show the environment row/table when there is more than one environment option available
-    let s_multi_env_style = if 1 == num_environments() {
-        use_signal(|| "display:none;")
+    let str_multi_env_style = if 1 == num_environments() {
+        "display:none;"
     } else {
-        use_signal(|| "display:table-row;")
+        "display:table-row;"
     };
+    let s_multi_env_style = use_signal(|| str_multi_env_style);
 
     #[cfg(feature = "dev")]
     let s_dev_style = use_signal(|| "display:table-row;");
@@ -509,7 +523,8 @@ pub(crate) fn app(
                             interactive: false
                         };
                         let _ = save_args(&args);
-                        let _ = save_window_size();
+                        let window = use_window();
+                        let _ = save_window_size(&window);
 
                         let PB_BASE_URL = match environment.as_str() {
                             #[cfg(feature = "dev")]

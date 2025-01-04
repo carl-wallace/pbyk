@@ -11,7 +11,7 @@ use log::{debug, error};
 use yubikey::{piv::SlotId, YubiKey};
 
 use certval::{is_self_signed, PDVCertificate, PkiEnvironment};
-use dioxus_desktop::use_window;
+use dioxus_desktop::DesktopContext;
 
 use crate::args::PbYkArgs;
 use crate::gui::gui_main::Phase;
@@ -73,8 +73,7 @@ impl Default for SavedWindowsSize {
 }
 
 /// Saves the current window size to a file named sws.json in the .pbyk folder in the user's home directory.
-pub(crate) fn save_window_size() -> Result<()> {
-    let window = use_window();
+pub(crate) fn save_window_size(window: &DesktopContext) -> Result<()> {
     let scale_factor = if let Some(m) = window.current_monitor() {
         m.scale_factor()
     } else {
@@ -219,54 +218,54 @@ pub(crate) fn get_default_env() -> &'static str {
 ///     - s_sipr_checked
 #[allow(clippy::type_complexity)]
 pub(crate) fn get_default_env_radio_selections() -> (
-    Signal<bool>,
-    Signal<bool>,
-    Signal<bool>,
-    Signal<bool>,
-    Signal<bool>,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
 ) {
     match get_default_env() {
         "DEV" => (
-            use_signal(|| true),
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| false),
+            true,
+            false,
+            false,
+            false,
+            false,
         ),
         "OM_NIPR" => (
-            use_signal(|| false),
-            use_signal(|| true),
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| false),
+            false,
+            true,
+            false,
+            false,
+            false,
         ),
         "OM_SIPR" => (
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| true),
-            use_signal(|| false),
-            use_signal(|| false),
+            false,
+            false,
+            true,
+            false,
+            false,
         ),
         "NIPR" => (
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| true),
-            use_signal(|| false),
+            false,
+            false,
+            false,
+            true,
+            false,
         ),
         "SIPR" => (
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| true),
+            false,
+            false,
+            false,
+            false,
+            true,
         ),
         _ => (
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| false),
-            use_signal(|| false),
+            false,
+            false,
+            false,
+            false,
+            false,
         ),
     }
 }
