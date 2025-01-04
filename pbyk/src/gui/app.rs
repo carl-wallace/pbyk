@@ -180,6 +180,8 @@ pub(crate) fn app(
     let mut s_click_start = use_signal(|| 0);
     let mut s_hide_reset = use_signal(|| "none".to_string());
 
+    let mut s_success_msg = use_signal(String::new);
+
     // Style variables for impermanent UI elements
     let mut s_pin_style = use_signal(|| {
         if is_yubikey {
@@ -436,11 +438,8 @@ pub(crate) fn app(
             icon: Some(Icon::Error),
             hide_after: None,
         });
-        use_effect(move || {
-            s_error_msg.set(String::new());
-        });
+        s_error_msg.set(String::new());
     }
-    let mut s_success_msg = use_signal(String::new);
     if !s_success_msg.read().is_empty() {
         let _id = toast.write().popup(ToastInfo {
             heading: Some("SUCCESS".to_string()),
@@ -450,9 +449,7 @@ pub(crate) fn app(
             icon: Some(Icon::Success),
             hide_after: None,
         });
-        use_effect(move || {
-            s_success_msg.set(String::new());
-        });
+        s_success_msg.set(String::new());
     }
 
     if *s_reset_req.read() {
