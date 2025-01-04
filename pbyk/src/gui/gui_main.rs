@@ -261,7 +261,7 @@ pub(crate) fn GuiMain() -> Element {
     let s_fatal_error_val = use_signal(|| fatal_error_val);
 
     use_effect(move || {
-        *s_init.write() = true;
+        s_init.set(true);
     });
 
     if !s_fatal_error_val.read().is_empty() {

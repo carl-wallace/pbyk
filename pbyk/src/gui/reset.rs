@@ -34,9 +34,7 @@ pub(crate) fn reset(
     // Non-fatal error handling
     let error_msg = s_error_msg.read().clone();
     if !error_msg.is_empty() {
-        let mut error_msg_setter = s_error_msg.write();
-        error_msg_setter.clear();
-        error_msg_setter.push_str("");
+        s_error_msg.set("".to_string());
         MessageDialog::new()
             .set_type(MessageType::Error)
             .set_title("Reset Error")
@@ -51,12 +49,6 @@ pub(crate) fn reset(
         div {
             form {
                 onsubmit: move |ev| {
-                    //let mut error_msg_setter = s_error_msg.write();
-                    //let mut reset_setter = s_reset_req.write();
-                    //let mut pin_setter = s_pin.write();
-                    //let mut puk_setter = s_puk.write();
-                    //let mut reset_complete_setter = s_reset_complete.write();
-
                     let pin1 = string_or_default(&ev, "pin", "");
                     let pin2 = string_or_default(&ev, "pin2", "");
                     let puk1 = string_or_default(&ev, "puk", "");
@@ -76,8 +68,8 @@ pub(crate) fn reset(
                     async move {
                         if is_yubikey{
                             if pin1.is_empty() || pin2.is_empty() || puk1.is_empty() || puk2.is_empty() {
-                                *s_pin.write() = "".to_string();
-                                *s_puk.write() = "".to_string();
+                                s_pin.set( "".to_string());
+                                s_puk.set( "".to_string());
 
                                 let sm = if pin1.is_empty() || pin2.is_empty() {
                                     "You must enter a new PIN value and confirm that value"
@@ -85,27 +77,27 @@ pub(crate) fn reset(
                                 else {
                                     "You must enter a new PUK value and confirm that value"
                                 };
-                                *s_error_msg.write() = sm.to_string();
+                                s_error_msg.set(sm.to_string());
                                 return;
                             }
 
                             if !pin1.chars().all(|c| c.is_ascii()) || 6 > pin1.len() || 8 < pin1.len() {
                                 let sm = "PIN values MUST be between 6 and 8 characters long and only contain ASCII values.";
                                 error!("{}", sm);
-                                *s_error_msg.write() = sm.to_string();
+                                s_error_msg.set(sm.to_string());
                                 return;
                             }
 
                             if 6 > puk1.len() || 8 < puk1.len()  {
                                 let sm = "PUK values MUST be between 6 and 8 characters long.";
                                 error!("{}", sm);
-                                *s_error_msg.write() = sm.to_string();
+                                s_error_msg.set(sm.to_string());
                                 return;
                             }
 
                             if pin1 != pin2 || puk1 != puk2 {
-                                *s_pin.write() = "".to_string();
-                                *s_puk.write() = "".to_string();
+                                s_pin.set( "".to_string());
+                                s_puk.set( "".to_string());
 
                                 let sm = if pin1 != pin2 {
                                     "PIN values do not match"
@@ -114,7 +106,7 @@ pub(crate) fn reset(
                                     "PUK values do not match"
                                 };
 
-                                *s_error_msg.write() = sm.to_string();
+                                s_error_msg.set(sm.to_string());
                                 return;
                             }
                         }
@@ -128,7 +120,7 @@ pub(crate) fn reset(
                                     Err(e) => {
                                         let sm = format!("Could not get the YubiKey with serial number {yks}. Please make sure the device is available then try again. Error: {e}");
                                         error!("{}", sm);
-                                        *s_error_msg.write() = sm.to_string();
+                                        s_error_msg.set(sm.to_string());
                                         return;
                                     }
                                 };
@@ -136,13 +128,13 @@ pub(crate) fn reset(
                                 if let Err(e) = reset_yubikey(&mut yubikey, &pin1, &puk1, &PB_MGMT_KEY.clone()) {
                                     let sm = format!("Failed to reset YubiKey with serial number {yks}: {e}.");
                                     error!("{}", sm);
-                                    *s_pin.write() = "".to_string();
-                                    *s_puk.write() = "".to_string();
-                                    *s_error_msg.write() = sm.to_string();
+                                    s_pin.set( "".to_string());
+                                    s_puk.set( "".to_string());
+                                    s_error_msg.set(sm.to_string());
                                 }
                                 else {
-                                    *s_reset_complete.write() = true;
-                                    *s_reset_req.write() = false;
+                                    s_reset_complete.set(true);
+                                    s_reset_req.set(false);
                                 }
                             },
                             None => {
@@ -178,7 +170,7 @@ pub(crate) fn reset(
                                 {
                                     let sm = format!("ERROR: failed to process YubiKey serial number {serial}");
                                     error!("{}", sm);
-                                    *s_error_msg.write() = sm.to_string();
+                                    s_error_msg.set(sm.to_string());
                                 }
                             }
                         };
