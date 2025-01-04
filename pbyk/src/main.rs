@@ -119,8 +119,8 @@ fn gui_sanity_check(args: &PbYkArgs) -> bool {
 cfg_if! {
     if #[cfg(feature = "gui")] {
         use crate::gui::gui_main::*;
-        use dioxus_desktop::Config;
-        use dioxus_desktop::WindowBuilder;
+        use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
+
         /// Point of entry for `pbyk` application.
         ///
         /// See [PbYkArgs] for usage details.
@@ -193,7 +193,7 @@ cfg_if! {
                 // available environments).
                 let window = WindowBuilder::new().with_resizable(true)
                                 .with_title(title).with_window_icon(Some(icon))
-                                .with_inner_size(dioxus_desktop::LogicalSize::new(sws.width, sws.height),);
+                                .with_inner_size(LogicalSize::new(sws.width, sws.height));
                 let menu = Menu::new();
                 let app_menu = Submenu::new("&pbyk", true);
                 if let Err(e) = app_menu.append(&PredefinedMenuItem::minimize(None)) {

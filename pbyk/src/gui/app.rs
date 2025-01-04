@@ -161,8 +161,7 @@ pub(crate) fn app(
     let mut s_hash = use_signal(String::new);
     let s_ukm_otp = use_signal(String::new);
     let mut s_recover = use_signal(|| false);
-    let (b_dev, b_om_nipr, b_om_sipr, b_nipr, b_sipr) =
-        get_default_env_radio_selections();
+    let (b_dev, b_om_nipr, b_om_sipr, b_nipr, b_sipr) = get_default_env_radio_selections();
 
     let s_dev_checked = use_signal(|| b_dev);
     let s_om_nipr_checked = use_signal(|| b_om_nipr);
@@ -238,12 +237,12 @@ pub(crate) fn app(
         ),
     };
 
-    let mut s_edipi_style = use_signal(||str_edipi_style);
-    let mut s_pre_enroll_otp_style = use_signal(||str_pre_enroll_otp_style);
-    let mut s_ukm_otp_style = use_signal(||str_ukm_otp_style);
-    let mut s_hide_recovery = use_signal(||str_hide_recovery);
-    let mut s_button_label = use_signal(||str_button_label);
-    let mut s_enroll_otp_style = use_signal(||str_enroll_otp_style);
+    let mut s_edipi_style = use_signal(|| str_edipi_style);
+    let mut s_pre_enroll_otp_style = use_signal(|| str_pre_enroll_otp_style);
+    let mut s_ukm_otp_style = use_signal(|| str_ukm_otp_style);
+    let mut s_hide_recovery = use_signal(|| str_hide_recovery);
+    let mut s_button_label = use_signal(|| str_button_label);
+    let mut s_enroll_otp_style = use_signal(|| str_enroll_otp_style);
 
     if *s_phase.read() == Enroll && s_hash.read().is_empty() {
         if is_yubikey {

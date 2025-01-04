@@ -217,56 +217,14 @@ pub(crate) fn get_default_env() -> &'static str {
 ///     - s_nipr_checked,
 ///     - s_sipr_checked
 #[allow(clippy::type_complexity)]
-pub(crate) fn get_default_env_radio_selections() -> (
-    bool,
-    bool,
-    bool,
-    bool,
-    bool,
-) {
+pub(crate) fn get_default_env_radio_selections() -> (bool, bool, bool, bool, bool) {
     match get_default_env() {
-        "DEV" => (
-            true,
-            false,
-            false,
-            false,
-            false,
-        ),
-        "OM_NIPR" => (
-            false,
-            true,
-            false,
-            false,
-            false,
-        ),
-        "OM_SIPR" => (
-            false,
-            false,
-            true,
-            false,
-            false,
-        ),
-        "NIPR" => (
-            false,
-            false,
-            false,
-            true,
-            false,
-        ),
-        "SIPR" => (
-            false,
-            false,
-            false,
-            false,
-            true,
-        ),
-        _ => (
-            false,
-            false,
-            false,
-            false,
-            false,
-        ),
+        "DEV" => (true, false, false, false, false),
+        "OM_NIPR" => (false, true, false, false, false),
+        "OM_SIPR" => (false, false, true, false, false),
+        "NIPR" => (false, false, false, true, false),
+        "SIPR" => (false, false, false, false, true),
+        _ => (false, false, false, false, false),
     }
 }
 
