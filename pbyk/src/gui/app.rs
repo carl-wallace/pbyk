@@ -436,7 +436,9 @@ pub(crate) fn app(
             icon: Some(Icon::Error),
             hide_after: None,
         });
-        s_error_msg.set(String::new());
+        use_effect(move || {
+            s_error_msg.set(String::new());
+        });
     }
     let mut s_success_msg = use_signal(String::new);
     if !s_success_msg.read().is_empty() {
@@ -448,7 +450,9 @@ pub(crate) fn app(
             icon: Some(Icon::Success),
             hide_after: None,
         });
-        s_success_msg.set(String::new());
+        use_effect(move || {
+            s_success_msg.set(String::new());
+        });
     }
 
     if *s_reset_req.read() {
