@@ -164,10 +164,7 @@ pub(crate) fn app(
     let (s_dev_checked, s_om_nipr_checked, s_om_sipr_checked, s_nipr_checked, s_sipr_checked) =
         get_default_env_radio_selections();
 
-    //let serials = s_serials.read();
-    //let serial_setter = s_serial.write();
     let mut s_check_phase = use_signal(|| false);
-    //let check_phase_setter = s_check_phase.write();
 
     // Style variables for enabling/disabling UI elements. One governs the cursor. The other governs
     // elements that benefit from disabling, i.e., clickable elements and editable elements. Read-only
@@ -176,10 +173,6 @@ pub(crate) fn app(
     let mut s_disabled = use_signal(|| false);
 
     let mut s_reset_abandoned = use_signal(|| false);
-    // let reset_setter = s_reset_req.write();
-    //let reset_abandoned_setter = s_reset_abandoned.write();
-    // let pin_setter = s_pin.write();
-    // let puk_setter = s_puk.write();
     let mut s_reset_complete = use_signal(|| false);
 
     // icon click variables
@@ -434,7 +427,6 @@ pub(crate) fn app(
     // Non-fatal error handling
     let mut s_error_msg = use_signal(String::new);
     let s_reset_msg = use_signal(String::new);
-    //let error_msg_setter = s_error_msg.write();
     if !s_error_msg.read().is_empty() {
         let _id = toast.write().popup(ToastInfo {
             heading: Some("ERROR".to_string()),
@@ -447,7 +439,6 @@ pub(crate) fn app(
         s_error_msg.set(String::new());
     }
     let mut s_success_msg = use_signal(String::new);
-    //let mut success_msg_setter = s_success_msg.write();
     if !s_success_msg.read().is_empty() {
         let _id = toast.write().popup(ToastInfo {
             heading: Some("SUCCESS".to_string()),
@@ -495,9 +486,6 @@ pub(crate) fn app(
             div {
                 form {
                     onsubmit: move |ev| {
-                        // let error_msg_setter = s_error_msg.write();
-                        // let success_msg_setter = s_success_msg.write();
-
                         let environment = string_or_default(&ev, "environment", "DEV");
                         info!("Targeting {environment} environment");
 
@@ -542,20 +530,6 @@ pub(crate) fn app(
                         };
 
                         let p = s_phase.read().clone();
-                        // let hash_setter = s_hash.write();
-                        // let preenroll_style_setter = s_pre_enroll_otp_style.write();
-                        // let edipi_setter = s_edipi.write();
-                        // let enroll_style_setter = s_enroll_otp_style.write();
-                        // let edipi_style_setter = s_edipi_style.write();
-                        // let ukm_setter = s_ukm_otp_style.write();
-                        // let pin_setter = s_pin.write();
-                        // let phase_setter = s_phase.write();
-                        // let button_setter = s_button_label.write();
-                        // let hide_recovery_setter = s_hide_recovery.write();
-                        // let cursor_setter = s_cursor.write();
-                        // let disabled_setter = s_disabled.write();
-                        // let recover_setter = s_recover.write();
-                        // let pin_style_setter = s_pin_style.write();
 
                         macro_rules! enter_enroll_phase {
                                 () => {
@@ -691,17 +665,18 @@ pub(crate) fn app(
                                                 let sm = format!("Could not get the VSC ID for VSC with serial number {serial_str_ota}. Error: {e:?}");
                                                 error!("{}", sm);
                                                 s_error_msg.set(sm.to_string());
-                                                *s_cursor.set("default".to_string());
-                                                *s_disabled.set(false);
+                                                s_cursor.set("default".to_string());
+                                                s_disabled.set(false);
                                                 return;
                                             }
                                         };
-                                        pin_style_setter("display:none;");
+                                        s_pin_style.set("display:none;".to_string());
                                         (CryptoModule::SmartCard(vsc), "".to_string())
                                     }
                                     #[cfg(not(all(target_os = "windows", feature = "vsc")))]
                                     {
                                         let sm = "Failed to process serial number as YubiKey serial number.";
+                                        error!("{}", sm);
                                         error!("{}", sm);
                                         s_error_msg.set(sm.to_string());
                                         s_cursor.set("default".to_string());

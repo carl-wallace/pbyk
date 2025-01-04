@@ -148,7 +148,7 @@ pub(crate) fn reset(
                                         Err(e) => {
                                             let sm = format!("Could not get the VSC with serial number {r}. Please make sure the device is available then try again. Error: {e:?}");
                                             error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
+                                            s_error_msg.set(sm.to_string());
                                             return;
                                         }
                                     };
@@ -156,13 +156,13 @@ pub(crate) fn reset(
                                     if let Err(e) = reset_vsc(&smartcard).await {
                                         let sm = format!("Failed to reset VSC with serial number {r}: {e:?}.");
                                         error!("{}", sm);
-                                        pin_setter("".to_string());
-                                        puk_setter("".to_string());
-                                        error_msg_setter(sm.to_string());
+                                        s_pin.set("".to_string());
+                                        s_puk.set("".to_string());
+                                        s_error_msg.set(sm.to_string());
                                     }
                                     else {
-                                        reset_complete_setter(true);
-                                        reset_setter(false);
+                                        s_reset_complete.set(true);
+                                        s_reset_req.set(false)
                                     }
                                 }
 
