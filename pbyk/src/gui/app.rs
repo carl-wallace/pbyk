@@ -439,31 +439,7 @@ pub(crate) fn app(
 
     // Non-fatal error handling
     let mut s_error_msg = use_signal(String::new);
-    if !s_error_msg.read().is_empty() {
-        let _id = toast.write().popup(ToastInfo {
-            heading: Some("ERROR".to_string()),
-            context: s_error_msg.to_string(),
-            allow_toast_close: true,
-            position: dioxus_toast::Position::TopLeft,
-            icon: Some(Icon::Error),
-            hide_after: None,
-        });
-        // todo this causes a runtime debug message
-        s_error_msg.set(String::new());
-    }
     let mut s_success_msg = use_signal(String::new);
-    if !s_success_msg.read().is_empty() {
-        let _id = toast.write().popup(ToastInfo {
-            heading: Some("SUCCESS".to_string()),
-            context: s_success_msg.to_string(),
-            allow_toast_close: true,
-            position: dioxus_toast::Position::TopLeft,
-            icon: Some(Icon::Success),
-            hide_after: None,
-        });
-        // todo this causes a runtime debug message
-        s_success_msg.set(String::new());
-    }
 
     let s_reset_msg = use_signal(String::new);
     if *s_reset_req.read() {
@@ -495,6 +471,33 @@ pub(crate) fn app(
                 }
             }
         });
+
+        macro_rules! show_message {
+            () => {
+                if !s_error_msg.read().is_empty() {
+                    let _id = toast.write().popup(ToastInfo {
+                        heading: Some("ERROR".to_string()),
+                        context: s_error_msg.to_string(),
+                        allow_toast_close: true,
+                        position: dioxus_toast::Position::TopLeft,
+                        icon: Some(Icon::Error),
+                        hide_after: None,
+                    });
+                    s_error_msg.set(String::new());
+                }
+                if !s_success_msg.read().is_empty() {
+                    let _id = toast.write().popup(ToastInfo {
+                        heading: Some("SUCCESS".to_string()),
+                        context: s_success_msg.to_string(),
+                        allow_toast_close: true,
+                        position: dioxus_toast::Position::TopLeft,
+                        icon: Some(Icon::Success),
+                        hide_after: None,
+                    });
+                    s_success_msg.set(String::new());
+                }
+            };
+        }
 
         rsx! {
             style { "{css}" }
@@ -989,7 +992,7 @@ pub(crate) fn app(
                                                 Err(e) => {
                                                     let sm = format!("Recover failed: {:?}", e);
                                                     error!("{}", sm);
-                                                    if let Err(e) = tx.send(Some(format!("{sm}. Make sure the UKM OTP are correct and try again."))) {
+                                                    if let Err(e) = tx.send(Some(format!("{sm}. Make sure the UKM OTP is correct and try again."))) {
                                                         error!("Failed to send recover results to main thread: {e}");
                                                     }
                                                 }
@@ -1061,6 +1064,7 @@ pub(crate) fn app(
                                     s_disabled.set(false);
                                 }
                              }// end match phase
+                            show_message!();
                         } // end async move
                     }, // end onsubmit
                     table {
@@ -1178,6 +1182,7 @@ pub(crate) fn app(
                                     if !reset_supported {
                                         s_reset_abandoned.set(true);
                                         s_error_msg.set("VSC reset support is not provided".to_string());
+                                        show_message!();
                                         return;
                                     }
 
