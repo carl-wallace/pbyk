@@ -205,6 +205,29 @@ cfg_if! {
                 if let Err(e) = menu.append(&app_menu) {
                     error!("Failed to add pbyk sub-menu item with: {e}");
                 }
+                let edit_menu = Submenu::new("&Edit", true);
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::undo(None)) {
+                    error!("Failed to add undo menu item with: {e}");
+                }
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::redo(None)) {
+                    error!("Failed to add redo menu item with: {e}");
+                }
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::separator()) {
+                    error!("Failed to add separator menu item with: {e}");
+                }
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::cut(None)) {
+                    error!("Failed to add cut menu item with: {e}");
+                }
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::copy(None)) {
+                    error!("Failed to add copy menu item with: {e}");
+                }
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::paste(None)) {
+                    error!("Failed to add paste menu item with: {e}");
+                }
+                if let Err(e) = menu.append(&edit_menu) {
+                    error!("Failed to add edit sub-menu item with: {e}");
+                }
+
                 let config = match home_dir() {
                     Some(home_dir) => {
                         Config::new().with_window(window).with_data_directory(home_dir.join(".pbyk"))

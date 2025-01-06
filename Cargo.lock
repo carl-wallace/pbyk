@@ -4237,7 +4237,7 @@ dependencies = [
 
 [[package]]
 name = "pbyk"
-version = "0.3.0"
+version = "0.4.0-pre.0"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -4252,7 +4252,6 @@ dependencies = [
  "home",
  "ignore",
  "image",
- "lazy_static",
  "log",
  "log4rs",
  "native-dialog",
@@ -4269,7 +4268,7 @@ dependencies = [
 
 [[package]]
 name = "pbyklib"
-version = "0.3.0"
+version = "0.4.0-pre.0"
 dependencies = [
  "aes",
  "base64ct",
