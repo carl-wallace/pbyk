@@ -217,7 +217,7 @@ pub(crate) async fn generate_csr(
 
     match CertificateEnrollmentManager::UserCertificateEnrollmentManager()?
         .CreateRequestAsync(&request)?
-        .await
+        .get()
     {
         Ok(csr) => Ok(csr.to_string()),
         Err(e) => {
@@ -297,7 +297,7 @@ pub(crate) async fn generate_self_signed_cert_vsc(
             &HSTRING::from(b64_fake_cert_as_p7),
             InstallOptions::DeleteExpired,
         )?
-        .await
+        .get()
     {
         error!("Failed to install fake certificate in generate_self_signed_cert_vsc: {e:?}");
         return Err(Error::Unrecognized);
@@ -347,7 +347,7 @@ pub(crate) async fn generate_self_signed_cert_vsc(
             let ss_p7 = prepare_base64_certs_only_p7(&self_signed)?;
             if let Err(e) = CertificateEnrollmentManager::UserCertificateEnrollmentManager()?
                 .InstallCertificateAsync(&HSTRING::from(ss_p7), InstallOptions::DeleteExpired)?
-                .await
+                .get()
             {
                 error!(
                     "Failed to install self-signed certificate in generate_self_signed_cert_vsc: {e:?}"
@@ -419,7 +419,7 @@ pub(crate) async fn import_p12_vsc(
             &HSTRING::from(password),
             &pfx_import_parameters,
         )?
-        .await
+        .get()
     {
         error!("Failed to install PKCS #12 object into SmartCard: {e:?}. Trying to install into software module.");
         CertificateEnrollmentManager::UserCertificateEnrollmentManager()?
@@ -432,7 +432,7 @@ pub(crate) async fn import_p12_vsc(
                 &friendly_name_h,
                 &provider_name,
             )?
-            .await?;
+            .get()?;
     }
 
     let (der_cert, _) = process_p12(enc_p12, password, false)?;

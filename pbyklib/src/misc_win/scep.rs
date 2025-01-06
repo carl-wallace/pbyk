@@ -257,7 +257,7 @@ pub(crate) async fn process_scep_payload_vsc(
                                 &HSTRING::from(ss_p7),
                                 InstallOptions::DeleteExpired,
                             )?
-                            .await
+                            .get()
                     {
                         error!(
                             "Failed to install self-signed certificate in generate_self_signed_cert: {e:?}"

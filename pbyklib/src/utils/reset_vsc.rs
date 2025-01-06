@@ -86,7 +86,7 @@ impl CertDelete {
                 Ok(cert_to_delete) => {
                     cs.RequestDeleteAsync(&cert_to_delete)
                         .unwrap()
-                        .await
+                        .get()
                         .unwrap();
                 }
                 Err(e) => {
