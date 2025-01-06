@@ -255,9 +255,9 @@ pub(crate) fn app(
         } else {
             #[cfg(all(target_os = "windows", feature = "vsc"))]
             {
-                let vsc_serial = parse_reader_from_vsc_display(s_serial.get());
+                let vsc_serial = parse_reader_from_vsc_display(&s_serial.read());
                 match get_pre_enroll_hash(&vsc_serial) {
-                    Ok(hash) => s_hash.write()(hash),
+                    Ok(hash) => s_hash.set(hash),
                     Err(_e) => {
                         error!("Failed to calculate pre-enroll. Consider resetting the device and restarting enrollment.");
                     }
@@ -411,8 +411,8 @@ pub(crate) fn app(
                 #[cfg(all(target_os = "windows", feature = "vsc"))]
                 match determine_vsc_phase(&serial) {
                     Ok(phase) => {
-                        if phase != *s_phase.get() {
-                            s_phase.write()(phase.clone());
+                        if phase != *s_phase.read() {
+                            s_phase.set(phase.clone());
                             update_phase(
                                 &phase,
                                 s_edipi_style,
@@ -426,7 +426,7 @@ pub(crate) fn app(
                         }
                     }
                     Err(_e) => {
-                        s_fatal_error_val.write()(
+                        s_fatal_error_val.set(
                             "Could not determine the state of the VSC named {serial}".to_string(),
                         );
                     }
@@ -592,7 +592,7 @@ pub(crate) fn app(
                         }
 
                         #[cfg(all(target_os = "windows", feature = "vsc"))]
-                        let mut serial_str_ota = s_serial.get().to_string();
+                        let mut serial_str_ota = s_serial.read().to_string();
                         #[cfg(not(all(target_os = "windows", feature = "vsc")))]
                         let serial_str_ota = s_serial.read().to_string();
 
@@ -673,8 +673,8 @@ pub(crate) fn app(
                                                 let sm = format!("Could not get the VSC with serial number {serial_str_ota}. Please make sure the device is available then try again. Error: {e:?}");
                                                 error!("{}", sm);
                                                 s_error_msg.set(sm.to_string());
-                                                *s_cursor.set("default".to_string());
-                                                *s_disabled.set(false);
+                                                s_cursor.set("default".to_string());
+                                                s_disabled.set(false);
                                                 return;
                                             }
                                         };

@@ -237,7 +237,7 @@ pub(crate) fn GuiMain() -> Element {
         } else {
             #[cfg(all(target_os = "windows", feature = "vsc"))]
             {
-                match determine_vsc_phase(serial) {
+                match determine_vsc_phase(&serial) {
                     Ok(p) => phase = p,
                     Err(e) => {
                         error!("Failed to connect to YubiKey with serial {serial} with: {e:?}");

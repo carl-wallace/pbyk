@@ -81,7 +81,7 @@ pub(crate) fn reset(
                                 return;
                             }
 
-                            if !pin1.chars().all(|c| c.is_ascii()) || 6 > pin1.len() || 8 < pin1.len() {
+                            if !pin1.is_ascii() || 6 > pin1.len() || 8 < pin1.len() {
                                 let sm = "PIN values MUST be between 6 and 8 characters long and only contain ASCII values.";
                                 error!("{}", sm);
                                 s_error_msg.set(sm.to_string());
