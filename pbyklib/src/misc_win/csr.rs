@@ -81,7 +81,7 @@ fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
 ///
 /// # Arguments
 /// * `cert` - `Certificate` object that (presumably) contains a fake certificate used to coerce Crypto API (CAPI) to
-/// allow use a private key before a CA-issued certificate has been issued
+///   allow use a private key before a CA-issued certificate has been issued
 /// * `signer` - [CertContext] object that (presumably) wraps a `CERT_CONTEXT` that references the `Certificate` in `cert`
 pub(crate) fn resign_as_self(cert: &Certificate, signer: &CertContext) -> Result<Certificate> {
     let profile = Profile::Leaf {
