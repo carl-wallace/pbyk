@@ -16,10 +16,11 @@ use pbyklib::{
     Error, Result, PB_MGMT_KEY,
 };
 
-use crate::gui::{app::app, fatal_error::fatal_error, utils::determine_phase};
-
+use crate::gui::app_signals::AppSignals;
+use crate::gui::ui_signals::UiSignals;
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::gui::utils::parse_reader_from_vsc_display;
+use crate::gui::{app::app, fatal_error::fatal_error, utils::determine_phase};
 
 /// Used to establish what UI elements should be displayed during each protocol phase
 ///
@@ -149,7 +150,7 @@ pub(crate) fn determine_vsc_phase(serial: &str) -> Result<Phase> {
 /// - s_phase: Current Phase associated with available YubiKey
 /// - s_reset_req: Boolean indicator of Purebred management key detection
 pub(crate) fn GuiMain() -> Element {
-    let mut fatal_error_val = String::new();
+    let mut startup_fatal_error_val = String::new();
 
     let mut serials = vec![];
     let s_serial = use_signal(|| {
@@ -163,14 +164,16 @@ pub(crate) fn GuiMain() -> Element {
             serials[0].clone()
         } else {
             error!("Failed to list YubiKeys");
-            fatal_error_val = "Failed to list YubiKeys or VSCs. Close the app, make sure at least one YubiKey is available then try again.".to_string();
+            startup_fatal_error_val = "Failed to list YubiKeys or VSCs. Close the app, make sure at least one YubiKey is available then try again.".to_string();
             String::new()
         }
         // "15995762".to_string()
     });
 
+    let str_serial = s_serial.read().clone();
+
     // s_init is used to avoid re-interrogating the YubiKey to see what certs are present everytime
-    // the UI is redrawn.
+    // the UI is redrawn. It is only used in this function.
     let mut s_init = use_signal(|| false);
     let mut phase = Phase::PreEnroll;
     #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
@@ -178,16 +181,15 @@ pub(crate) fn GuiMain() -> Element {
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
     let do_reset = false;
     let mut s_is_yubikey = use_signal(|| false);
-    if !*s_init.read() && !s_serial.read().is_empty() {
+    if !*s_init.read() && !str_serial.is_empty() {
         debug!("Getting default device serial number inside main");
-        let serial = s_serial.read();
-        if let Ok(yubikey_serial) = serial.parse::<u32>() {
+        if let Ok(yubikey_serial) = str_serial.parse::<u32>() {
             let s = yubikey::Serial(yubikey_serial);
             let yubikey = match get_yubikey(Some(s)) {
                 Ok(yk) => Some(yk),
                 Err(e) => {
-                    error!("Failed to connect to YubiKey with serial {serial} with: {e}");
-                    fatal_error_val = format!("Failed to connect to YubiKey with serial {serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e);
+                    error!("Failed to connect to YubiKey with serial {str_serial} with: {e}");
+                    startup_fatal_error_val = format!("Failed to connect to YubiKey with serial {str_serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e);
                     None
                 }
             };
@@ -201,13 +203,13 @@ pub(crate) fn GuiMain() -> Element {
                         phase = determine_phase(&mut yubikey);
                     }
                     Err(e) => {
-                        let err = format!("The YubiKey with serial number {serial} is not using the expected management key. Please reset the device then try again.");
+                        let err = format!("The YubiKey with serial number {str_serial} is not using the expected management key. Please reset the device then try again.");
                         error!("{err}: {e:?}");
 
                         #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
                         {
                             use native_dialog::{MessageDialog, MessageType};
-                            let msg = format!("The YubiKey with serial number {serial} is not using the expected management key. Would you like to reset the device now?");
+                            let msg = format!("The YubiKey with serial number {str_serial} is not using the expected management key. Would you like to reset the device now?");
                             match MessageDialog::new()
                                 .set_type(MessageType::Info)
                                 .set_title("Reset?")
@@ -218,18 +220,18 @@ pub(crate) fn GuiMain() -> Element {
                                     if answer {
                                         do_reset = true;
                                     } else {
-                                        fatal_error_val = err.to_string();
+                                        startup_fatal_error_val = err.to_string();
                                     }
                                 }
                                 Err(e) => {
                                     error!("Failed to solicit reset answer from user: {e}");
-                                    fatal_error_val = err.to_string();
+                                    startup_fatal_error_val = err.to_string();
                                 }
                             }
                         }
                         #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
                         {
-                            fatal_error_val = err.to_string();
+                            startup_fatal_error_val = err.to_string();
                         }
                     }
                 }
@@ -241,41 +243,50 @@ pub(crate) fn GuiMain() -> Element {
                     Ok(p) => phase = p,
                     Err(e) => {
                         error!("Failed to connect to YubiKey with serial {serial} with: {e:?}");
-                        fatal_error_val = format!("Failed to connect to YubiKey with serial {serial} with: {:?}. Close the app, make sure one YubiKey is available then try again.", e);
+                        startup_fatal_error_val = format!("Failed to connect to YubiKey with serial {serial} with: {:?}. Close the app, make sure one YubiKey is available then try again.", e);
                     }
                 }
             }
         }
     }
-    let s_serials = use_signal(|| serials);
-    let s_phase = use_signal(|| {
-        info!("Setting initial phase to {phase:?}");
-        phase
-    });
+    // let s_serials = use_signal(|| serials);
+    // let s_phase = use_signal(|| {
+    //     info!("Setting initial phase to {phase:?}");
+    //     phase
+    // });
 
-    let s_reset_req = use_signal(|| {
-        debug!("Setting initial reset to {do_reset:?}");
-        do_reset
-    });
+    // let s_reset_req = use_signal(|| {
+    //     debug!("Setting initial reset to {do_reset:?}");
+    //     do_reset
+    // });
 
-    let s_fatal_error_val = use_signal(|| fatal_error_val);
+    let s_startup_fatal_error_val = use_signal(|| startup_fatal_error_val);
 
     use_effect(move || {
         s_init.set(true);
     });
 
-    if !s_fatal_error_val.read().is_empty() {
+    if !s_startup_fatal_error_val.read().is_empty() {
         debug!("Showing fatal_error view");
-        fatal_error(&s_fatal_error_val.read())
+        fatal_error(&s_startup_fatal_error_val.read())
     } else {
         debug!("Showing app view");
-        app(
-            s_phase,
-            s_serial,
-            s_reset_req,
-            s_serials,
-            s_fatal_error_val,
-            *s_is_yubikey.read(),
-        )
+        let app_signals = AppSignals {
+            as_phase: use_signal(|| {
+                info!("Setting initial phase to {phase:?}");
+                phase
+            }),
+            as_serial: use_signal(|| str_serial),
+            as_reset_req: use_signal(|| {
+                debug!("Setting initial reset to {do_reset:?}");
+                do_reset
+            }),
+            as_serials: use_signal(|| serials),
+            as_fatal_error_val: use_signal(String::new),
+        };
+        let ui_signals = UiSignals::init(&app_signals, *s_is_yubikey.read());
+        debug!("app_signals: {app_signals}");
+        debug!("ui_signals: {ui_signals}");
+        app(app_signals, *s_is_yubikey.read(), ui_signals)
     }
 }
