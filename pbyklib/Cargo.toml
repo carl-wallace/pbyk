@@ -10,13 +10,12 @@ rust-version = "1.80.1"
 base64ct = { version="1.6.0", features = ["alloc"] }
 # EnvelopedDataBuilder is not yet released, hence use of private branch
 cms = {version = "0.2.1", git = "https://github.com/carl-wallace/formats.git", features = ["builder"], branch = "pbyk"}
-pkcs12 = {version = "0.0.0", git = "https://github.com/carl-wallace/formats.git", branch = "pbyk"}
+# todo - replace openssl P12 usage with pkcs12 crate
+# pkcs12 = {version = "0.0.0", git = "https://github.com/carl-wallace/formats.git", branch = "pbyk"}
 const-oid = { version = "0.9.5", features = ["db"] }
 der = { version = "0.7.8", features = ["alloc", "derive", "oid", "pem"] }
 spki = "0.7.3"
 x509-cert = "0.2.5"
-pkcs8 = { version = "0.10.2", features = ["pkcs5", "getrandom"] }
-pkcs5 = {version = "0.7.1", features = ["pbes2", "3des"]}
 
 # certval has not yet been released, hence use of private branch
 certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"]}

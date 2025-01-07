@@ -261,29 +261,6 @@ cfg_if! {
     }
 }
 
-// poached from <https://github.com/DioxusLabs/dioxus/blob/544ca5559654c8490ce444c3cbd85c1bfb8479da/packages/desktop/src/cfg.rs#L177>
-// dirty trick, avoid introducing `image` at runtime
-// #[test]
-// #[ignore]
-// fn prepare_default_icon() {
-//     use image::io::Reader as ImageReader;
-//     use image::ImageFormat;
-//     use std::fs::File;
-//     use std::io::Cursor;
-//     use std::io::Write;
-//     use std::path::PathBuf;
-//     let png: &[u8] = include_bytes!("../assets/keys-arrow-256.png");
-//     let mut reader = ImageReader::new(Cursor::new(png));
-//     reader.set_format(ImageFormat::Png);
-//     let icon = reader.decode().unwrap();
-//     let y = std::env::current_dir().unwrap();
-//     let bin = PathBuf::from(y).join("assets").join("keys-arrow-256.ico");
-//     println!("{:?}", bin);
-//     let mut file = File::create(bin).unwrap();
-//     file.write_all(icon.as_bytes()).unwrap();
-//     println!("({}, {})", icon.width(), icon.height())
-// }
-
 /// `interactive_main` provides the command line interface for the application when built as a
 /// command line-only utility or when built as a GUI application but run using the \-\-interactive
 /// option.
