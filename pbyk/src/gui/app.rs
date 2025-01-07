@@ -38,10 +38,7 @@ use crate::gui::{
 };
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
-use pbyklib::utils::{
-    get_pre_enroll_hash,
-    list_vscs::{get_vsc, get_vsc_id_from_serial},
-};
+use pbyklib::utils::list_vscs::{get_vsc, get_vsc_id_from_serial};
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::determine_vsc_phase;
@@ -247,8 +244,8 @@ pub(crate) fn app(
                         #[cfg(all(target_os = "windows", feature = "vsc"))]
                         match determine_vsc_phase(&serial) {
                             Ok(phase) => {
-                                if phase != *ui_signals.s_phase.read() {
-                                    ui_signals.s_phase.set(phase.clone());
+                                if phase != *app_signals.as_phase.read() {
+                                    app_signals.as_phase.set(phase.clone());
                                     update_phase(
                                         &phase,
                                         ui_signals.s_edipi_style,
@@ -420,7 +417,7 @@ pub(crate) fn app(
                         }
 
                         #[cfg(all(target_os = "windows", feature = "vsc"))]
-                        let mut serial_str_ota = s_serial.read().to_string();
+                        let mut serial_str_ota = app_signals.as_serial.read().to_string();
                         #[cfg(not(all(target_os = "windows", feature = "vsc")))]
                         let serial_str_ota = app_signals.as_serial.read().to_string();
 

@@ -239,11 +239,11 @@ pub(crate) fn GuiMain() -> Element {
         } else {
             #[cfg(all(target_os = "windows", feature = "vsc"))]
             {
-                match determine_vsc_phase(&serial) {
+                match determine_vsc_phase(&str_serial) {
                     Ok(p) => phase = p,
                     Err(e) => {
-                        error!("Failed to connect to YubiKey with serial {serial} with: {e:?}");
-                        startup_fatal_error_val = format!("Failed to connect to YubiKey with serial {serial} with: {:?}. Close the app, make sure one YubiKey is available then try again.", e);
+                        error!("Failed to connect to YubiKey with serial {str_serial} with: {e:?}");
+                        startup_fatal_error_val = format!("Failed to connect to YubiKey with serial {str_serial} with: {:?}. Close the app, make sure one YubiKey is available then try again.", e);
                     }
                 }
             }

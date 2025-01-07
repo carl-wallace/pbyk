@@ -11,6 +11,11 @@ use log::error;
 use pbyklib::utils::get_pre_enroll_hash_yubikey;
 use std::fmt::Display;
 
+#[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+use crate::gui::utils::parse_reader_from_vsc_display;
+
+#[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+use pbyklib::utils::get_pre_enroll_hash;
 pub struct UiSignals {
     pub toast: Signal<ToastManager>,
     pub s_disa_icon: Signal<String>,
@@ -215,7 +220,7 @@ impl UiSignals {
             } else {
                 #[cfg(all(target_os = "windows", feature = "vsc"))]
                 {
-                    let vsc_serial = parse_reader_from_vsc_display(&s_serial.read());
+                    let vsc_serial = parse_reader_from_vsc_display(&app_signals.as_serial.read());
                     match get_pre_enroll_hash(&vsc_serial) {
                         Ok(hash) => s_hash.set(hash),
                         Err(_e) => {

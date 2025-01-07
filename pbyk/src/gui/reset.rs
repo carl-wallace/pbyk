@@ -185,7 +185,7 @@ pub(crate) fn reset(
                                     }
                                     else {
                                         ui_signals.s_reset_complete.set(true);
-                                        s_reset_req.set(false);
+                                        app_signals.as_reset_req.set(false);
                                         reset_complete!();
                                     }
                                 }
