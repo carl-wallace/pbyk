@@ -607,6 +607,8 @@ pub(crate) fn app(
                         };
 
                         async move {
+                            show_message!();
+
                             if reset_abandoned {
                                 // if we arrive here due to an aborted reset, just bail out
                                 return;
@@ -1064,7 +1066,7 @@ pub(crate) fn app(
                                     s_disabled.set(false);
                                 }
                              }// end match phase
-                            show_message!();
+                             show_message!();
                         } // end async move
                     }, // end onsubmit
                     table {
@@ -1182,7 +1184,6 @@ pub(crate) fn app(
                                     if !reset_supported {
                                         s_reset_abandoned.set(true);
                                         s_error_msg.set("VSC reset support is not provided".to_string());
-                                        show_message!();
                                         return;
                                     }
 

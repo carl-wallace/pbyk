@@ -32,16 +32,19 @@ pub(crate) fn reset(
     is_yubikey: bool,
 ) -> Element {
     // Non-fatal error handling
-    let error_msg = s_error_msg.read().clone();
-    if !error_msg.is_empty() {
-        s_error_msg.set("".to_string());
-        MessageDialog::new()
-            .set_type(MessageType::Error)
-            .set_title("Reset Error")
-            .set_text(&error_msg.to_string())
-            .show_alert()
-            .unwrap_or_default();
-    }
+    macro_rules! show_error_dialog {
+        () => {
+            if !s_error_msg.read().is_empty() {
+                MessageDialog::new()
+                    .set_type(MessageType::Error)
+                    .set_title("Reset Error")
+                    .set_text(&s_error_msg.to_string())
+                    .show_alert()
+                    .unwrap_or_default();
+                    s_error_msg.set(String::new());
+                }
+            };
+        }
 
     let css = include_str!("../../assets/pbyk.css");
     rsx! {
@@ -78,6 +81,7 @@ pub(crate) fn reset(
                                     "You must enter a new PUK value and confirm that value"
                                 };
                                 s_error_msg.set(sm.to_string());
+                                show_error_dialog!();
                                 return;
                             }
 
@@ -85,6 +89,7 @@ pub(crate) fn reset(
                                 let sm = "PIN values MUST be between 6 and 8 characters long and only contain ASCII values.";
                                 error!("{}", sm);
                                 s_error_msg.set(sm.to_string());
+                                show_error_dialog!();
                                 return;
                             }
 
@@ -92,6 +97,7 @@ pub(crate) fn reset(
                                 let sm = "PUK values MUST be between 6 and 8 characters long.";
                                 error!("{}", sm);
                                 s_error_msg.set(sm.to_string());
+                                show_error_dialog!();
                                 return;
                             }
 
@@ -107,6 +113,7 @@ pub(crate) fn reset(
                                 };
 
                                 s_error_msg.set(sm.to_string());
+                                show_error_dialog!();
                                 return;
                             }
                         }
@@ -171,6 +178,7 @@ pub(crate) fn reset(
                                     let sm = format!("ERROR: failed to process YubiKey serial number {serial}");
                                     error!("{}", sm);
                                     s_error_msg.set(sm.to_string());
+                                    show_error_dialog!();
                                 }
                             }
                         };

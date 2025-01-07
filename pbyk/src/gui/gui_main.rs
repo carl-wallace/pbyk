@@ -177,7 +177,7 @@ pub(crate) fn GuiMain() -> Element {
     let mut do_reset = false;
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
     let do_reset = false;
-    let mut is_yubikey = false;
+    let mut s_is_yubikey = use_signal(|| false);
     if !*s_init.read() && !s_serial.read().is_empty() {
         debug!("Getting default device serial number inside main");
         let serial = s_serial.read();
@@ -192,7 +192,7 @@ pub(crate) fn GuiMain() -> Element {
                 }
             };
 
-            is_yubikey = true;
+            s_is_yubikey.set(true);
 
             if let Some(mut yubikey) = yubikey {
                 debug!("Determining YubiKey phase inside main");
@@ -275,7 +275,7 @@ pub(crate) fn GuiMain() -> Element {
             s_reset_req,
             s_serials,
             s_fatal_error_val,
-            is_yubikey,
+            *s_is_yubikey.read(),
         )
     }
 }

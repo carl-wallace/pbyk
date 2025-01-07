@@ -172,8 +172,6 @@ pub static ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE: LazyLock<ObjectIdentifier>
 pub static ID_PUREBRED_MICROSOFT_ATTESTATION_ATTRIBUTE: LazyLock<ObjectIdentifier> =
     LazyLock::new(|| ObjectIdentifier::new_unwrap("1.3.6.1.4.1.37623.26.3"));
 
-// lazy_static seems to dislike compound cfg statements so moved CERT_SYSTEM_STORE_CURRENT_USER here
-
 #[cfg(target_os = "windows")]
 use windows::Win32::Security::Cryptography::{
     CERT_OPEN_STORE_FLAGS, CERT_SYSTEM_STORE_CURRENT_USER_ID, CERT_SYSTEM_STORE_LOCATION_SHIFT,
