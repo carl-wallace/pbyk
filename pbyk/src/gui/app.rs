@@ -996,6 +996,8 @@ pub(crate) fn app(
                                             if secs - last_start > 5 {
                                                 ui_signals.s_click_count.set(1);
                                                 ui_signals.s_click_start.set(secs);
+                                            } else if last_count >= 4 {
+                                                ui_signals.s_hide_reset.set("inline-block".to_string());
                                             } else {
                                                 ui_signals.s_click_count.set(last_count+1);
                                             }
