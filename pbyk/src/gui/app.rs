@@ -138,6 +138,33 @@ pub(crate) fn app(
     is_yubikey: bool,
     mut ui_signals: UiSignals,
 ) -> Element {
+    macro_rules! show_message {
+        () => {
+            if !ui_signals.s_error_msg.read().is_empty() {
+                let _id = ui_signals.toast.write().popup(ToastInfo {
+                    heading: Some("ERROR".to_string()),
+                    context: ui_signals.s_error_msg.to_string(),
+                    allow_toast_close: true,
+                    position: dioxus_toast::Position::TopLeft,
+                    icon: Some(Icon::Error),
+                    hide_after: None,
+                });
+                ui_signals.s_error_msg.set(String::new());
+            }
+            if !ui_signals.s_success_msg.read().is_empty() {
+                let _id = ui_signals.toast.write().popup(ToastInfo {
+                    heading: Some("SUCCESS".to_string()),
+                    context: ui_signals.s_success_msg.to_string(),
+                    allow_toast_close: true,
+                    position: dioxus_toast::Position::TopLeft,
+                    icon: Some(Icon::Success),
+                    hide_after: None,
+                });
+                ui_signals.s_success_msg.set(String::new());
+            }
+        };
+    }
+
     macro_rules! check_phase {
         () => {
             if *ui_signals.s_check_phase.read() {
@@ -179,62 +206,11 @@ pub(crate) fn app(
                                 Err(e) => {
                                     let err = format!("The YubiKey with serial number {serial} is not using the expected management key. Please reset the device then try again.");
                                     error!("{err}: {e:?}");
-
-                                    #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                                    {
-                                        let (tx, rx) = std::sync::mpsc::channel();
-                                        use native_dialog::{MessageDialog, MessageType};
-                                        let msg = format!("The YubiKey with serial number {serial} is not using the expected management key. Would you like to reset the device now?");
-                                        match MessageDialog::new()
-                                            .set_type(MessageType::Info)
-                                            .set_title("Reset?")
-                                            .set_text(&msg)
-                                            .show_confirm()
-                                        {
-                                            Ok(answer) => {
-                                                if answer {
-                                                    let _ = tx.send(None);
-                                                } else {
-                                                    let _ = tx.send(Some(err.to_string()));
-                                                }
-                                            }
-                                            Err(e) => {
-                                                error!("Failed to solicit reset answer from user: {e}");
-                                            }
-                                        }
-                                        match rx.recv() {
-                                            Ok(result) => match result {
-                                                Some(err) => {
-                                                    if 1 == app_signals.as_serials.len() {
-                                                        app_signals.as_fatal_error_val.set(err);
-                                                    } else {
-                                                        let serial_str =
-                                                            app_signals.as_serial.read().clone();
-                                                        for cur in app_signals.as_serials.read().iter() {
-                                                            if *cur != *serial_str {
-                                                                info!("Resetting serial from {serial_str} to {cur}");
-                                                                app_signals.as_serial.set(cur.to_string());
-                                                                break;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                None => {
-                                                    app_signals.as_reset_req.set(true);
-                                                    clear_pin_and_puk!();
-                                                },
-                                            },
-                                            Err(e) => {
-                                                let sm = format!("Failed to spawn thread for reset: {e}")
-                                                    .to_string();
-                                                error!("{}", sm);
-                                                app_signals.as_fatal_error_val.set(sm);
-                                            }
-                                        }
-                                    }
-
-                                    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-                                    app_signals.s_fatal_error_val.write()(err.to_string());
+                                    ui_signals.s_error_msg.set(err.to_string());
+                                    app_signals.as_reset_req.set(true);
+                                    ui_signals.s_reset_abandoned.set(false);
+                                    clear_pin_and_puk!();
+                                    show_message!();
                                 }
                             }
                         }
@@ -296,33 +272,6 @@ pub(crate) fn app(
                 }
             }
         });
-
-        macro_rules! show_message {
-            () => {
-                if !ui_signals.s_error_msg.read().is_empty() {
-                    let _id = ui_signals.toast.write().popup(ToastInfo {
-                        heading: Some("ERROR".to_string()),
-                        context: ui_signals.s_error_msg.to_string(),
-                        allow_toast_close: true,
-                        position: dioxus_toast::Position::TopLeft,
-                        icon: Some(Icon::Error),
-                        hide_after: None,
-                    });
-                    ui_signals.s_error_msg.set(String::new());
-                }
-                if !ui_signals.s_success_msg.read().is_empty() {
-                    let _id = ui_signals.toast.write().popup(ToastInfo {
-                        heading: Some("SUCCESS".to_string()),
-                        context: ui_signals.s_success_msg.to_string(),
-                        allow_toast_close: true,
-                        position: dioxus_toast::Position::TopLeft,
-                        icon: Some(Icon::Success),
-                        hide_after: None,
-                    });
-                    ui_signals.s_success_msg.set(String::new());
-                }
-            };
-        }
 
         rsx! {
             style { "{css}" }
@@ -473,6 +422,10 @@ pub(crate) fn app(
                                         ui_signals.s_error_msg.set(sm.to_string());
                                         ui_signals.s_cursor.set("default".to_string());
                                         ui_signals.s_disabled.set(false);
+                                        ui_signals.s_reset_abandoned.set(false);
+                                        app_signals.as_reset_req.set(true);
+                                        clear_pin_and_puk!();
+                                        show_message!();
                                         return;
                                     }
 
@@ -1013,28 +966,9 @@ pub(crate) fn app(
                                         return;
                                     }
 
-                                    use native_dialog::{MessageDialog, MessageType};
-                                    let msg = format!("Are you sure you want to reset the device with serial number {} now?", app_signals.as_serial);
-                                    match MessageDialog::new()
-                                        .set_type(MessageType::Info)
-                                        .set_title("Reset?")
-                                        .set_text(&msg)
-                                        .show_confirm()
-                                    {
-                                        Ok(answer) => {
-                                            if answer {
-                                                ui_signals.s_reset_abandoned.set(false);
-                                                app_signals.as_reset_req.set(true);
-                                                clear_pin_and_puk!();
-                                            }
-                                            else {
-                                                ui_signals.s_reset_abandoned.set(true);
-                                            }
-                                        },
-                                        Err(e) => {
-                                            error!("Failed to solicit reset answer from user: {e}");
-                                        }
-                                    }
+                                    ui_signals.s_reset_abandoned.set(false);
+                                    app_signals.as_reset_req.set(true);
+                                    clear_pin_and_puk!();
                                 },
                                 "Reset"
                             }

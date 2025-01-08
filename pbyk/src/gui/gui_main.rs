@@ -181,6 +181,7 @@ pub(crate) fn GuiMain() -> Element {
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
     let do_reset = false;
     let mut s_is_yubikey = use_signal(|| false);
+    let mut error_msg = None;
     if !*s_init.read() && !str_serial.is_empty() {
         debug!("Getting default device serial number inside main");
         if let Ok(yubikey_serial) = str_serial.parse::<u32>() {
@@ -205,34 +206,8 @@ pub(crate) fn GuiMain() -> Element {
                     Err(e) => {
                         let err = format!("The YubiKey with serial number {str_serial} is not using the expected management key. Please reset the device then try again.");
                         error!("{err}: {e:?}");
-
-                        #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                        {
-                            use native_dialog::{MessageDialog, MessageType};
-                            let msg = format!("The YubiKey with serial number {str_serial} is not using the expected management key. Would you like to reset the device now?");
-                            match MessageDialog::new()
-                                .set_type(MessageType::Info)
-                                .set_title("Reset?")
-                                .set_text(&msg)
-                                .show_confirm()
-                            {
-                                Ok(answer) => {
-                                    if answer {
-                                        do_reset = true;
-                                    } else {
-                                        startup_fatal_error_val = err.to_string();
-                                    }
-                                }
-                                Err(e) => {
-                                    error!("Failed to solicit reset answer from user: {e}");
-                                    startup_fatal_error_val = err.to_string();
-                                }
-                            }
-                        }
-                        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-                        {
-                            startup_fatal_error_val = err.to_string();
-                        }
+                        do_reset = true;
+                        error_msg = Some(err);
                     }
                 }
             }
@@ -284,7 +259,7 @@ pub(crate) fn GuiMain() -> Element {
             as_serials: use_signal(|| serials),
             as_fatal_error_val: use_signal(String::new),
         };
-        let ui_signals = UiSignals::init(&app_signals, *s_is_yubikey.read());
+        let ui_signals = UiSignals::init(&app_signals, *s_is_yubikey.read(), error_msg);
         debug!("app_signals: {app_signals}");
         debug!("ui_signals: {ui_signals}");
         app(app_signals, *s_is_yubikey.read(), ui_signals)

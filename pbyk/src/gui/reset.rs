@@ -4,8 +4,8 @@
 #![allow(unused_qualifications)]
 
 use dioxus::prelude::*;
+use dioxus_toast::{Icon, ToastInfo};
 use log::error;
-use native_dialog::{MessageDialog, MessageType};
 
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 use pbyklib::utils::{list_vscs::get_vsc, reset_vsc::reset_vsc};
@@ -30,12 +30,14 @@ pub(crate) fn reset(
     macro_rules! show_error_dialog {
         () => {
             if !ui_signals.s_error_msg.read().is_empty() {
-                MessageDialog::new()
-                    .set_type(MessageType::Error)
-                    .set_title("Reset Error")
-                    .set_text(&ui_signals.s_error_msg.to_string())
-                    .show_alert()
-                    .unwrap_or_default();
+                let _id = ui_signals.toast.write().popup(ToastInfo {
+                    heading: Some("Reset Error".to_string()),
+                    context: ui_signals.s_error_msg.to_string(),
+                    allow_toast_close: true,
+                    position: dioxus_toast::Position::TopLeft,
+                    icon: Some(Icon::Error),
+                    hide_after: None,
+                });
                 ui_signals.s_error_msg.set(String::new());
             }
         };
@@ -61,9 +63,15 @@ pub(crate) fn reset(
         };
     }
 
+    // this is sub-ideal but the error display should only occur for the corner case where the
+    // YubiKey does not have the expected management key.
+    show_error_dialog!();
     let css = include_str!("../../assets/pbyk.css");
     rsx! {
         style { "{css}" }
+        dioxus_toast::ToastFrame {
+            manager: ui_signals.toast
+        }
         div {
             form {
                 onsubmit: move |ev| {
@@ -157,6 +165,14 @@ pub(crate) fn reset(
                                 else {
                                     ui_signals.s_reset_complete.set(true);
                                     app_signals.as_reset_req.set(false);
+                                    ui_signals.s_edipi_style.set("display:table-row;".to_string());
+                                    ui_signals.s_pre_enroll_otp_style.set("display:table-row;".to_string());
+                                    ui_signals.s_ukm_otp_style.set("display:none;".to_string());
+                                    ui_signals.s_hide_recovery.set("none".to_string());
+                                    ui_signals.s_button_label.set("Pre-enroll".to_string());
+                                    ui_signals.s_enroll_otp_style.set("display:none;".to_string());
+                                    app_signals.as_phase.set(PreEnroll);
+
                                     reset_complete!();
                                 }
                             },

@@ -107,7 +107,7 @@ impl Display for UiSignals {
 }
 
 impl UiSignals {
-    pub fn init(app_signals: &AppSignals, is_yubikey: bool) -> Self {
+    pub fn init(app_signals: &AppSignals, is_yubikey: bool, error_msg: Option<String>) -> Self {
         let toast = use_signal(ToastManager::default);
 
         let s_disa_icon = use_signal(|| DISA_ICON_BASE64.clone());
@@ -265,7 +265,7 @@ impl UiSignals {
         let s_sipr_style = use_signal(|| "display:none;".to_string());
 
         // Non-fatal error handling
-        let s_error_msg = use_signal(String::new);
+        let s_error_msg = use_signal(|| error_msg.unwrap_or_default());
         let s_success_msg = use_signal(String::new);
 
         let s_reset_msg = use_signal(String::new);
