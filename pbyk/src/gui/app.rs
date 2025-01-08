@@ -981,11 +981,6 @@ pub(crate) fn app(
                             max_height: "25%",
                             max_width: "25%",
                             onclick: move |_| {
-                                // let click_count_setter = s_click_count.write();
-                                // let click_start_setter = s_click_start.write();
-                                // #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                                // let hide_reset_setter = s_hide_reset.write();
-
                                 let last_count =  *ui_signals.s_click_count.read();
                                 let last_start =  *ui_signals.s_click_start.read();
                                 let disabled =  *ui_signals.s_disabled.read();
@@ -1001,13 +996,7 @@ pub(crate) fn app(
                                             if secs - last_start > 5 {
                                                 ui_signals.s_click_count.set(1);
                                                 ui_signals.s_click_start.set(secs);
-                                            } else if last_count >= 4 {
-                                                #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                                                {
-                                                    ui_signals.s_hide_reset.set("inline-block".to_string());
-                                                }
-                                            }
-                                            else {
+                                            } else {
                                                 ui_signals.s_click_count.set(last_count+1);
                                             }
                                         }
