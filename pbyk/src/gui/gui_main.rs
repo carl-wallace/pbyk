@@ -176,10 +176,7 @@ pub(crate) fn GuiMain() -> Element {
     // the UI is redrawn. It is only used in this function.
     let mut s_init = use_signal(|| false);
     let mut phase = Phase::PreEnroll;
-    #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
     let mut do_reset = false;
-    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    let do_reset = false;
     let mut s_is_yubikey = use_signal(|| false);
     let mut error_msg = None;
     if !*s_init.read() && !str_serial.is_empty() {
@@ -224,16 +221,6 @@ pub(crate) fn GuiMain() -> Element {
             }
         }
     }
-    // let s_serials = use_signal(|| serials);
-    // let s_phase = use_signal(|| {
-    //     info!("Setting initial phase to {phase:?}");
-    //     phase
-    // });
-
-    // let s_reset_req = use_signal(|| {
-    //     debug!("Setting initial reset to {do_reset:?}");
-    //     do_reset
-    // });
 
     let s_startup_fatal_error_val = use_signal(|| startup_fatal_error_val);
 
