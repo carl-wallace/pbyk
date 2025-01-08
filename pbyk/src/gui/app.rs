@@ -817,7 +817,7 @@ pub(crate) fn app(
                                                 Err(e) => {
                                                     let sm = format!("UKM failed: {:?}", e);
                                                     error!("{}", sm);
-                                                    if let Err(e) = tx.send(Some(format!("{sm}. Make sure the UKM OTP are correct and try again."))) {
+                                                    if let Err(e) = tx.send(Some(format!("{sm}. Make sure the UKM OTP is correct and try again."))) {
                                                         error!("Failed to send UKM results to main thread: {e}");
                                                     }
                                                 }
