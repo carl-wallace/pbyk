@@ -3858,6 +3858,7 @@ dependencies = [
  "dioxus-desktop",
  "dioxus-toast",
  "futures",
+ "hex-literal",
  "home",
  "log",
  "log4rs",

@@ -178,7 +178,13 @@ cfg_if! {
                 }
 
                 let icon_bytes = include_bytes!("../assets/keys-arrow-256.ico");
-                let icon = Icon::from_rgba(icon_bytes.to_vec(), 256, 256).unwrap();
+                let icon = match Icon::from_rgba(icon_bytes.to_vec(), 256, 256) {
+                    Ok(icon) => Some(icon),
+                    Err(e) => {
+                        error!("Failed to parse icon with: {e}. Continuing...");
+                        None
+                    }
+                };
 
                 let sws = read_saved_window_size();
 
@@ -192,7 +198,7 @@ cfg_if! {
                 // TODO: add means of determining what max height ought be (i.e., based on number of
                 // available environments).
                 let window = WindowBuilder::new().with_resizable(true)
-                                .with_title(title).with_window_icon(Some(icon))
+                                .with_title(title).with_window_icon(icon)
                                 .with_inner_size(LogicalSize::new(sws.width, sws.height));
                 let menu = Menu::new();
                 let app_menu = Submenu::new("&pbyk", true);
@@ -436,13 +442,13 @@ async fn interactive_main() {
                                 )
                                 .to_string(),
                             )
-                            .unwrap(),
+                            .unwrap(), // allow panic for IO errors here
                         );
                         let pin2 = Zeroizing::new(
                             rpassword::prompt_password(
                                 format!("{}: ", "Re-enter new PIN".bold()).to_string(),
                             )
-                            .unwrap(),
+                            .unwrap(), // allow panic for IO errors here
                         );
                         if pin != pin2 {
                             println!("{}: PINs do not match", "ERROR".bold());
@@ -458,19 +464,15 @@ async fn interactive_main() {
                     };
                     let puk = loop {
                         let puk = Zeroizing::new(rpassword::prompt_password(
-                            format!(
-                                "{}: ",
-                                "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length".bold()
-                            )
-                                .to_string(),
-                        )
-                            .unwrap());
+                                format!("{}: ", "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length".bold()).to_string())
+                                                     .unwrap() // allow panic for IO errors here
+                        );
                         let puk2 = Zeroizing::new(
                             rpassword::prompt_password(
                                 format!("{}: ", "Re-enter new PIN Unlock Key (PUK)".bold())
                                     .to_string(),
                             )
-                            .unwrap(),
+                            .unwrap(), // allow panic for IO errors here
                         );
                         if puk != puk2 {
                             println!("{}: PUKs do not match", "ERROR".bold());
@@ -700,7 +702,7 @@ async fn interactive_main() {
                     )
                     .bold(),
                 )
-                .unwrap(),
+                .unwrap(), // allow panic for IO errors here
             );
 
             #[allow(irrefutable_let_patterns)]
@@ -723,11 +725,11 @@ async fn interactive_main() {
 
     let mgmt_key = PB_MGMT_KEY.clone();
 
-    if args.pre_enroll_otp.is_some() {
+    if let Some(pre_enroll_otp) = args.pre_enroll_otp {
         match pre_enroll(
             &mut cm,
-            &args.agent_edipi.unwrap(),
-            &args.pre_enroll_otp.unwrap(),
+            &args.agent_edipi.unwrap(), // allow unwrap where clap enforces presence
+            &pre_enroll_otp,
             &pb_base_url,
             pin,
             Some(&mgmt_key),
@@ -753,16 +755,16 @@ async fn interactive_main() {
                 println!("{}: pre-enroll failed: {e:?}", "ERROR".bold());
             }
         }
-    } else if args.enroll_otp.is_some() {
+    } else if let Some(enroll_otp) = args.enroll_otp {
         let oai = OtaActionInputs::new(
-            &args.serial.as_ref().unwrap().to_string(),
-            &args.enroll_otp.unwrap(),
+            &args.serial.as_ref().unwrap().to_string(), // allow unwrap where clap enforces presence
+            &enroll_otp,
             &pb_base_url,
             &app,
         );
         match enroll(
             &mut cm,
-            &args.agent_edipi.unwrap().to_string(),
+            &args.agent_edipi.unwrap().to_string(), // allow unwrap where clap enforces presence
             &oai,
             pin,
             Some(&mgmt_key),
@@ -789,10 +791,10 @@ async fn interactive_main() {
                 println!("{}: enroll failed: {e:?}", "ERROR".bold());
             }
         }
-    } else if args.ukm_otp.is_some() {
+    } else if let Some(ukm_otp) = args.ukm_otp {
         let oai = OtaActionInputs::new(
-            &args.serial.as_ref().unwrap().to_string(),
-            &args.ukm_otp.unwrap(),
+            &args.serial.as_ref().unwrap().to_string(), // allow unwrap where clap enforces presence
+            &ukm_otp,
             &pb_base_url,
             &app,
         );
@@ -816,10 +818,10 @@ async fn interactive_main() {
                 println!("{}: user key management failed: {e:?}", "ERROR".bold());
             }
         }
-    } else if args.recover_otp.is_some() {
+    } else if let Some(recover_otp) = args.recover_otp {
         let oai = OtaActionInputs::new(
-            &args.serial.as_ref().unwrap().to_string(),
-            &args.recover_otp.unwrap(),
+            &args.serial.as_ref().unwrap().to_string(), // allow unwrap where clap enforces presence
+            &recover_otp,
             &pb_base_url,
             &app,
         );

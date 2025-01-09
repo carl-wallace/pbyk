@@ -249,9 +249,27 @@ pub async fn enroll(
         return Err(Error::Plist);
     }
 
-    let ccc = PDVCertificate::try_from(new_cert.clone()).unwrap();
-    let cc = get_credential_list(Some(ccc)).unwrap();
+    let ccc = match PDVCertificate::try_from(new_cert.clone()) {
+        Ok(ccc) => ccc,
+        Err(e) => {
+            error!("Failed to parse certificate obtained following Phase 2 with: {e:?}");
+            return Err(Error::Asn1(e));
+        }
+    };
+    let cc = match get_credential_list(Some(ccc)) {
+        Ok(cc) => cc,
+        Err(e) => {
+            error!("Failed to get credential corresponding to certificate obtained following Phase 2 with: {e:?}");
+            return Err(e);
+        }
+    };
 
-    let wcc = cc.first().unwrap();
+    let wcc = match cc.first() {
+        Some(wcc) => wcc,
+        None => {
+            error!("Failed to select credential corresponding to certificate obtained following Phase 2 with: {e:?}");
+            return Err(e);
+        }
+    };
     phase3(wcc, &p3_xml, &new_cert, &p1_resp_url).await
 }

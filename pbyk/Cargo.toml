@@ -39,6 +39,9 @@ base64ct = { version="1.6.0", features = ["alloc"] }
 certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"]}
 futures = { version = "0.3.31", optional = true }
 
+[dev-dependencies]
+hex-literal = "0.4.1"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = {version = "0.3.9", features = ["wincon", "winuser"]}
 

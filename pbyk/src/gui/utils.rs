@@ -6,16 +6,17 @@
 use std::{fs, fs::File};
 
 use dioxus::prelude::*;
+use dioxus_desktop::DesktopContext;
+
 use home::home_dir;
 use log::{debug, error};
+use serde::{Deserialize, Serialize};
 use yubikey::{piv::SlotId, YubiKey};
 
 use certval::{is_self_signed, PDVCertificate, PkiEnvironment};
-use dioxus_desktop::DesktopContext;
-
-use crate::args::PbYkArgs;
-use crate::gui::gui_main::Phase;
 use pbyklib::{utils::get_cert_from_slot, utils::state::create_app_home, Error, Result};
+
+use crate::{args::PbYkArgs, gui::gui_main::Phase};
 
 /// Read saved arguments from (home dir)/.pbyk/pbyk.cfg, which is a JSON-formatted representation of
 /// a PbYkArgs structure.
@@ -49,8 +50,6 @@ pub(crate) fn save_args(args: &PbYkArgs) -> Result<()> {
     }
     Err(Error::Unrecognized)
 }
-
-use serde::{Deserialize, Serialize};
 
 /// Default window width
 static PBYK_DEFAULT_WIDTH: u32 = 625;
@@ -159,7 +158,15 @@ pub(crate) fn determine_phase(yubikey: &mut YubiKey) -> Phase {
         Ok(c) => {
             let mut pe = PkiEnvironment::default();
             pe.populate_5280_pki_environment();
-            let pdv = PDVCertificate::try_from(c).unwrap();
+            let pdv = match PDVCertificate::try_from(c) {
+                Ok(pdv) => pdv,
+                Err(e) => {
+                    error!(
+                        "Failed to parse certificate read from CardAuthentication slot with: {e:?}. Continuing with phase set to PreEnroll."
+                    );
+                    return Phase::PreEnroll;
+                }
+            };
             if !is_self_signed(&pe, &pdv) {
                 let r1 = get_cert_from_slot(yubikey, SlotId::Authentication);
                 let r2 = get_cert_from_slot(yubikey, SlotId::Signature);

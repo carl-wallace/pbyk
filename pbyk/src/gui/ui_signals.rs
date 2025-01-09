@@ -4,14 +4,11 @@
 use dioxus::{
     hooks::use_signal,
     prelude::Signal,
-    signals::{Readable, Writable}
+    signals::{Readable, Writable},
 };
 use dioxus_toast::ToastManager;
 
-use std::{
-    fmt::Display,
-    sync::LazyLock
-};
+use std::{fmt::Display, sync::LazyLock};
 
 use base64ct::{Base64, Encoding};
 use log::error;
@@ -26,8 +23,8 @@ use crate::{
     gui::{
         app_signals::AppSignals,
         gui_main::Phase::{Enroll, PreEnroll, Ukm, UkmOrRecovery},
-        utils::{get_default_env_radio_selections, read_saved_args_or_default}
-    }
+        utils::{get_default_env_radio_selections, read_saved_args_or_default},
+    },
 };
 
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
