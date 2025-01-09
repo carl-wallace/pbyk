@@ -1,15 +1,17 @@
+//! Structure and functions to managed burned OTP values
+
 use std::{
     collections::BTreeMap,
     sync::{LazyLock, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-//use dioxus::prelude::WritableVecExt;
 use log::error;
 
 /// BTreeMap that maps OTP values to UNIX epoch values that correspond to observance of the value
 static BURNED_OTPS: LazyLock<Mutex<BTreeMap<String, Duration>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
+/// Add an OTP to the burned OTPs map with the current time as the time of observation
 pub fn add_otp(otp: &str) {
     clean_otps();
     match SystemTime::now().duration_since(UNIX_EPOCH) {
@@ -44,6 +46,7 @@ pub fn check_otp(otp: &str) -> bool {
     }
 }
 
+/// Removes stale OTP values from the burned OTP map, i.e., values that are more than 3 minutes old.
 pub fn clean_otps() {
     let cur = SystemTime::now()
         .duration_since(UNIX_EPOCH)
