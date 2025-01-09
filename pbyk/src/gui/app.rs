@@ -307,6 +307,9 @@ pub(crate) fn app(
         });
 
         rsx! {
+            dioxus_toast::ToastFrame {
+                manager: ui_signals.toast
+            }
             style { "{css}" }
             div {
                 form {
@@ -399,6 +402,7 @@ pub(crate) fn app(
                                 // is unrecognized and PB_BASE_URL is set to empty
                                 ui_signals.s_cursor.set("default".to_string());
                                 ui_signals.s_disabled.set(false);
+                                show_message!();
                                 return;
                             }
 
@@ -413,6 +417,7 @@ pub(crate) fn app(
                                         Err(e) => {
                                             let sm = format!("Could not get the YubiKey with serial number {yks}. Please make sure the device is available then try again. Error: {e}");
                                             set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
@@ -434,6 +439,7 @@ pub(crate) fn app(
                                         None => {
                                             let sm = format!("No PIN was provided. Please enter the PIN for the YubiKey with serial number {} and try again", yks);
                                             set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
@@ -449,6 +455,7 @@ pub(crate) fn app(
                                             Err(e) => {
                                                 let sm = format!("Could not get the VSC with serial number {serial_str_ota}. Please make sure the device is available then try again. Error: {e:?}");
                                                 set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
                                                 return;
                                             }
                                         };
@@ -457,6 +464,7 @@ pub(crate) fn app(
                                             Err(e) => {
                                                 let sm = format!("Could not get the VSC ID for VSC with serial number {serial_str_ota}. Error: {e:?}");
                                                 set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
                                                 return;
                                             }
                                         };
@@ -467,6 +475,7 @@ pub(crate) fn app(
                                     {
                                         let sm = "Failed to process serial number as YubiKey serial number.";
                                         set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                        show_message!();
                                         return;
                                     }
                                 }
@@ -480,6 +489,7 @@ pub(crate) fn app(
                                         None => {
                                             let sm = "No Agent EDIPI was provided. Please enter the EDIPI of the cooperating Purebred Agent and try again";
                                             set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
@@ -488,6 +498,7 @@ pub(crate) fn app(
                                             if !pre_enroll_otp.chars().all(|c| c.is_numeric()) || 8 != pre_enroll_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
                                                 set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
                                                 return;
                                             }
                                             pre_enroll_otp
@@ -495,12 +506,14 @@ pub(crate) fn app(
                                         None => {
                                             let sm = "No pre-enroll OTP was provided. Please enter a pre-enroll OTP and try again";
                                             set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
                                     if check_otp(&pre_enroll_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
                                         set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                        show_message!();
                                         return;
                                     }
                                     else {
@@ -571,6 +584,7 @@ pub(crate) fn app(
                                         None => {
                                             let sm = "No Agent EDIPI was provided. Please enter the EDIPI of the cooperating Purebred Agent and try again";
                                             set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
@@ -579,6 +593,7 @@ pub(crate) fn app(
                                             if !enroll_otp.chars().all(|c| c.is_numeric()) || 8 != enroll_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
                                                 set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
                                                 return;
                                             }
                                             enroll_otp
@@ -586,12 +601,14 @@ pub(crate) fn app(
                                         None => {
                                             let sm = "No enroll OTP was provided. Please enter an enroll OTP and try again";
                                             set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
                                     if check_otp(&enroll_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
                                         set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                        show_message!();
                                         return;
                                     }
                                     else {
@@ -666,6 +683,7 @@ pub(crate) fn app(
                                             if !ukm_otp.chars().all(|c| c.is_numeric()) || 8 != ukm_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
                                                 set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
                                                 return;
                                             }
                                             ukm_otp
@@ -673,12 +691,14 @@ pub(crate) fn app(
                                         None => {
                                             let sm = "No UKM OTP was provided. Please enter a UKM OTP and try again";
                                             set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
                                     if check_otp(&ukm_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
                                         set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                        show_message!();
                                         return;
                                     }
                                     else {
@@ -875,10 +895,7 @@ pub(crate) fn app(
                                 }
                             }
                         }
-                    }
-                    dioxus_toast::ToastFrame {
-                        manager: ui_signals.toast
-                    }
+                    } // end table
                     div {
                         style: "text-align:center;",
                         div {
@@ -916,7 +933,7 @@ pub(crate) fn app(
                                 "Reset"
                             }
                         }
-                    }
+                    } // end div (with buttons)
                     div {
                         style: "text-align:center",
                         img {
@@ -952,9 +969,9 @@ pub(crate) fn app(
                                 }
                             }
                         }
-                    }
-                }
-            }
-        }
-    }
+                    } // end div (with icon)
+                } // end form
+            } // end div (with form)
+        } // end rsx!
+    } // end else
 }
