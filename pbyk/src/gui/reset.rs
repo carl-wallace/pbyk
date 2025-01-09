@@ -1,5 +1,4 @@
 //! Solicits PIN and PUK information in support of resetting the available YubiKey device
-// todo: revisit
 // onsubmit, onclick, etc. are causing these warnings
 #![allow(unused_qualifications)]
 

@@ -2,24 +2,18 @@
 
 #![cfg(feature = "gui")]
 #![allow(non_snake_case)]
-// todo: revisit
 // onsubmit, onclick, etc. are causing these warnings
 #![allow(unused_qualifications)]
 
 use dioxus::prelude::*;
+use dioxus_desktop::use_window;
 use dioxus_toast::{Icon, ToastInfo};
-use gui::app_signals::AppSignals;
+
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use log::{debug, error, info};
-use std::sync::LazyLock;
-use std::{
-    collections::BTreeMap,
-    sync::Mutex,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
 use zeroize::Zeroizing;
 
-use base64ct::{Base64, Encoding};
-use dioxus_desktop::use_window;
 use pbyklib::{
     ota::{
         data::OtaActionInputs, enroll::enroll, pre_enroll::pre_enroll, recover::recover, ukm::ukm,
@@ -30,10 +24,12 @@ use pbyklib::{
 };
 
 use crate::args::PbYkArgs;
-use crate::gui::ui_signals::UiSignals;
 use crate::gui::{
+    app_signals::AppSignals,
+    burned_otps::*,
     gui_main::{Phase, Phase::*},
     reset::reset,
+    ui_signals::UiSignals,
     utils::*,
 };
 
@@ -42,43 +38,8 @@ use pbyklib::utils::list_vscs::{get_vsc, get_vsc_id_from_serial};
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::determine_vsc_phase;
-use crate::gui;
 
-pub static DISA_ICON_BASE64: LazyLock<String> =
-    LazyLock::new(|| Base64::encode_string(include_bytes!("../../assets/disa.png")));
-pub static BURNED_OTPS: LazyLock<Mutex<BTreeMap<String, Duration>>> =
-    LazyLock::new(|| Mutex::new(BTreeMap::new()));
-
-fn add_otp(otp: &str) {
-    clean_otps();
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration) => {
-            BURNED_OTPS
-                .lock()
-                .unwrap()
-                .insert(otp.to_string(), duration);
-        }
-        Err(e) => {
-            error!(
-                "Failed to read duration in add_otp: {e}. Continuing without OTP reuse detection."
-            )
-        }
-    }
-}
-
-fn check_otp(otp: &str) -> bool {
-    BURNED_OTPS.lock().unwrap().contains_key(otp)
-}
-
-fn clean_otps() {
-    let cur = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let limit = Duration::new(180, 0);
-    BURNED_OTPS.lock().unwrap().retain(|_, v| cur - *v < limit);
-}
-
-/// Update various UseState variables based on the phase value
+/// Update various Signal variables based on the phase value
 #[allow(clippy::too_many_arguments)]
 fn update_phase(
     phase: &Phase,
@@ -131,6 +92,18 @@ fn update_phase(
     }
 }
 
+fn set_error(
+    msg: &str,
+    mut s_error_msg: Signal<String>,
+    mut s_cursor: Signal<String>,
+    mut s_disabled: Signal<bool>,
+) {
+    error!("{}", msg);
+    s_error_msg.set(msg.to_string());
+    s_cursor.set("default".to_string());
+    s_disabled.set(false);
+}
+
 /// app is the primary component of GUI mode. It draws the forms that comprise the Purebred workflow
 /// and drives execution through the workflow.
 pub(crate) fn app(
@@ -138,6 +111,8 @@ pub(crate) fn app(
     is_yubikey: bool,
     mut ui_signals: UiSignals,
 ) -> Element {
+    // Macro to display toast with success or error message if ui_signals.s_error_msg or
+    // ui_signals.s_success_msg is not empty. Clears the value after display.
     macro_rules! show_message {
         () => {
             if !ui_signals.s_error_msg.read().is_empty() {
@@ -165,6 +140,8 @@ pub(crate) fn app(
         };
     }
 
+    // Macro used to check the phase of the currently selected target and to update various UI state
+    // variables based on the result. Currently, this is only called when a drop list value is changed.
     macro_rules! check_phase {
         () => {
             if *ui_signals.s_check_phase.read() {
@@ -248,6 +225,7 @@ pub(crate) fn app(
         }
     }
 
+    // Macro to clean PIN and PUK values prior to redirecting to the reset form.
     macro_rules! clear_pin_and_puk {
         () => {
             if !ui_signals.s_pin.read().is_empty() || !ui_signals.s_puk.read().is_empty() {
@@ -257,14 +235,69 @@ pub(crate) fn app(
         };
     }
 
+    // Macro to prepare UI for enroll phase
+    macro_rules! enter_enroll_phase {
+        () => {
+            app_signals.as_phase.set(Enroll);
+            ui_signals
+                .s_pre_enroll_otp_style
+                .set("display:none;".to_string());
+            ui_signals
+                .s_enroll_otp_style
+                .set("display:table-row;".to_string());
+            ui_signals.s_button_label.set("Enroll".to_string());
+        };
+    }
+
+    // Macro to prepare UI for UKM phase
+    macro_rules! enter_ukm_phase {
+        () => {
+            app_signals.as_phase.set(Ukm);
+            ui_signals
+                .s_pre_enroll_otp_style
+                .set("display:none;".to_string());
+            ui_signals
+                .s_enroll_otp_style
+                .set("display:none;".to_string());
+            ui_signals.s_edipi_style.set("display:none;".to_string());
+            ui_signals
+                .s_ukm_otp_style
+                .set("display:table-row;".to_string());
+            ui_signals
+                .s_button_label
+                .set("User Key Management".to_string());
+        };
+    }
+    // Macro to prepare UI for UKM or Recovery phase
+    macro_rules! enter_ukm_or_recovery_phase {
+        () => {
+            app_signals.as_phase.set(UkmOrRecovery);
+            ui_signals.s_hide_recovery.set("inline-block".to_string());
+            ui_signals
+                .s_pre_enroll_otp_style
+                .set("display:none;".to_string());
+            ui_signals
+                .s_enroll_otp_style
+                .set("display:none;".to_string());
+            ui_signals.s_edipi_style.set("display:none;".to_string());
+            ui_signals
+                .s_ukm_otp_style
+                .set("display:table-row;".to_string());
+            ui_signals
+                .s_button_label
+                .set("User Key Management".to_string());
+        };
+    }
+
     if *app_signals.as_reset_req.read() {
         debug!("Showing reset view");
         reset(is_yubikey, app_signals, ui_signals)
     } else {
         let css = include_str!("../../assets/pbyk.css");
 
-        let copy = app_signals.as_serials.read().clone();
-        let serialRsx = copy.iter().map(|s| {
+        // prepare rsx block for drop list display
+        let serials = app_signals.as_serials.read().clone();
+        let serialRsx = serials.iter().map(|s| {
             rsx! { option {
                     value : "{s}",
                     label : "{s}",
@@ -299,6 +332,7 @@ pub(crate) fn app(
                             scep_check: false,
                             interactive: false
                         };
+
                         let _ = save_args(&args);
                         let window = use_window();
                         let _ = save_window_size(&window);
@@ -322,41 +356,13 @@ pub(crate) fn app(
                             }
                         };
 
-                        let p = app_signals.as_phase.read().clone();
+                        let cur_phase = app_signals.as_phase.read().clone();
 
-                        macro_rules! enter_enroll_phase {
-                                () => {
-                                    ui_signals.s_pre_enroll_otp_style.set("display:none;".to_string());
-                                    ui_signals.s_enroll_otp_style.set("display:table-row;".to_string());
-                                    app_signals.as_phase.set(Enroll);
-                                    ui_signals.s_button_label.set("Enroll".to_string());
-                                };
-                            }
-                        macro_rules! enter_ukm_phase {
-                                () => {
-                                    ui_signals.s_pre_enroll_otp_style.set("display:none;".to_string());
-                                    ui_signals.s_enroll_otp_style.set("display:none;".to_string());
-                                    ui_signals.s_edipi_style.set("display:none;".to_string());
-                                    ui_signals.s_ukm_otp_style.set("display:table-row;".to_string());
-                                    app_signals.as_phase.set(Ukm);
-                                    ui_signals.s_button_label.set("User Key Management".to_string());
-                                };
-                            }
-                        macro_rules! enter_ukm_or_recovery_phase {
-                                () => {
-                                    ui_signals.s_hide_recovery.set("inline-block".to_string());
-                                    ui_signals.s_pre_enroll_otp_style.set("display:none;".to_string());
-                                    ui_signals.s_enroll_otp_style.set("display:none;".to_string());
-                                    ui_signals.s_edipi_style.set("display:none;".to_string());
-                                    ui_signals.s_ukm_otp_style.set("display:table-row;".to_string());
-                                    app_signals.as_phase.set(UkmOrRecovery);
-                                    ui_signals.s_button_label.set("User Key Management".to_string());
-                                };
-                            }
-
+                        // When in UkmOrRecovery phase, determine if we got here as a consequence of
+                        // the user clicking the reset button
                         let recovery_active =  *ui_signals.s_recover.read();
-                        let reset_abandoned =  *ui_signals.s_reset_abandoned.read();
 
+                        let reset_abandoned =  *ui_signals.s_reset_abandoned.read();
                         if !reset_abandoned {
                             ui_signals.s_cursor.set("wait".to_string());
                             ui_signals.s_disabled.set(true);
@@ -391,9 +397,7 @@ pub(crate) fn app(
                             if PB_BASE_URL.is_empty() {
                                 // error message is set up in match statement above if environment
                                 // is unrecognized and PB_BASE_URL is set to empty
-                                // todo revisit
                                 ui_signals.s_cursor.set("default".to_string());
-                                ui_signals.s_cursor.set("wait".to_string());
                                 ui_signals.s_disabled.set(false);
                                 return;
                             }
@@ -408,20 +412,16 @@ pub(crate) fn app(
                                         Ok(yk) => yk,
                                         Err(e) => {
                                             let sm = format!("Could not get the YubiKey with serial number {yks}. Please make sure the device is available then try again. Error: {e}");
-                                            error!("{}", sm);
-                                            ui_signals.s_error_msg.set(sm.to_string());
-                                            ui_signals.s_cursor.set("default".to_string());
-                                            ui_signals.s_disabled.set(false);
+                                            set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                             return;
                                         }
                                     };
 
                                     if yubikey.authenticate(PB_MGMT_KEY.clone()).is_err() {
                                         let sm = format!("The YubiKey with serial number {} is not using the expected management key. Please reset the device then try again.", yubikey.serial());
-                                        error!("{}", sm);
-                                        ui_signals.s_error_msg.set(sm.to_string());
-                                        ui_signals.s_cursor.set("default".to_string());
-                                        ui_signals.s_disabled.set(false);
+                                        set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+
+                                        // choice dialog is no longer used, show a toast then send the user to the reset form
                                         ui_signals.s_reset_abandoned.set(false);
                                         app_signals.as_reset_req.set(true);
                                         clear_pin_and_puk!();
@@ -433,10 +433,7 @@ pub(crate) fn app(
                                         Some(str) => str,
                                         None => {
                                             let sm = format!("No PIN was provided. Please enter the PIN for the YubiKey with serial number {} and try again", yks);
-                                            error!("{}", sm);
-                                            ui_signals.s_error_msg.set(sm.to_string());
-                                            ui_signals.s_cursor.set("default".to_string());
-                                            ui_signals.s_disabled.set(false);
+                                            set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                             return;
                                         }
                                     };
@@ -451,10 +448,7 @@ pub(crate) fn app(
                                             Ok(vsc) => vsc,
                                             Err(e) => {
                                                 let sm = format!("Could not get the VSC with serial number {serial_str_ota}. Please make sure the device is available then try again. Error: {e:?}");
-                                                error!("{}", sm);
-                                                ui_signals.s_error_msg.set(sm.to_string());
-                                                ui_signals.s_cursor.set("default".to_string());
-                                                ui_signals.s_disabled.set(false);
+                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                                 return;
                                             }
                                         };
@@ -462,10 +456,7 @@ pub(crate) fn app(
                                             Ok(s) => s,
                                             Err(e) => {
                                                 let sm = format!("Could not get the VSC ID for VSC with serial number {serial_str_ota}. Error: {e:?}");
-                                                error!("{}", sm);
-                                                ui_signals.s_error_msg.set(sm.to_string());
-                                                ui_signals.s_cursor.set("default".to_string());
-                                                ui_signals.s_disabled.set(false);
+                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                                 return;
                                             }
                                         };
@@ -475,38 +466,20 @@ pub(crate) fn app(
                                     #[cfg(not(all(target_os = "windows", feature = "vsc")))]
                                     {
                                         let sm = "Failed to process serial number as YubiKey serial number.";
-                                        error!("{}", sm);
-                                        error!("{}", sm);
-                                        ui_signals.s_error_msg.set(sm.to_string());
-                                        ui_signals.s_cursor.set("default".to_string());
-                                        ui_signals.s_disabled.set(false);
+                                        set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                         return;
                                     }
                                 }
                             };
 
-                            // let yks = match serial_u32 {
-                            //     Some(serial_u32) => yubikey::Serial(serial_u32),
-                            //     None => {
-                            //         // error message is set up in match statement above if serial number
-                            //         // conversion fails
-                            //          *ui_signals.s_cursor.set("default".to_string());
-                            //          *ui_signals.s_disabled.set(false);
-                            //         return;
-                            //     }
-                            // };
-
-                            match p {
+                            match cur_phase {
                                 PreEnroll => {
                                     info!("Starting Pre-enroll operation...");
                                     let agent_edipi = match string_or_none(&ev, "edipi") {
                                         Some(agent_edipi) => agent_edipi,
                                         None => {
                                             let sm = "No Agent EDIPI was provided. Please enter the EDIPI of the cooperating Purebred Agent and try again";
-                                            error!("{}", sm);
-                                            ui_signals.s_error_msg.set(sm.to_string());
-                                            ui_signals.s_cursor.set("default".to_string());
-                                            ui_signals.s_disabled.set(false);
+                                            set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                             return;
                                         }
                                     };
@@ -514,29 +487,20 @@ pub(crate) fn app(
                                         Some(pre_enroll_otp) => {
                                             if !pre_enroll_otp.chars().all(|c| c.is_numeric()) || 8 != pre_enroll_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
-                                                error!("{}", sm);
-                                                ui_signals.s_error_msg.set(sm.to_string());
-                                                ui_signals.s_cursor.set("default".to_string());
-                                                ui_signals.s_disabled.set(false);
+                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                                 return;
                                             }
                                             pre_enroll_otp
                                         },
                                         None => {
                                             let sm = "No pre-enroll OTP was provided. Please enter a pre-enroll OTP and try again";
-                                            error!("{}", sm);
-                                            ui_signals.s_error_msg.set(sm.to_string());
-                                            ui_signals.s_cursor.set("default".to_string());
-                                            ui_signals.s_disabled.set(false);
+                                            set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                             return;
                                         }
                                     };
                                     if check_otp(&pre_enroll_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
-                                        error!("{}", sm);
-                                        ui_signals.s_error_msg.set(sm.to_string());
-                                        ui_signals.s_cursor.set("default".to_string());
-                                        ui_signals.s_disabled.set(false);
+                                        set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                         return;
                                     }
                                     else {
@@ -606,10 +570,7 @@ pub(crate) fn app(
                                         Some(agent_edipi) => agent_edipi,
                                         None => {
                                             let sm = "No Agent EDIPI was provided. Please enter the EDIPI of the cooperating Purebred Agent and try again";
-                                            error!("{}", sm);
-                                            ui_signals.s_error_msg.set(sm.to_string());
-                                            ui_signals.s_cursor.set("default".to_string());
-                                            ui_signals.s_disabled.set(false);
+                                            set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                             return;
                                         }
                                     };
@@ -617,29 +578,20 @@ pub(crate) fn app(
                                         Some(enroll_otp) => {
                                             if !enroll_otp.chars().all(|c| c.is_numeric()) || 8 != enroll_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
-                                                error!("{}", sm);
-                                                ui_signals.s_error_msg.set(sm.to_string());
-                                                ui_signals.s_cursor.set("default".to_string());
-                                                ui_signals.s_disabled.set(false);
+                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                                 return;
                                             }
                                             enroll_otp
                                         },
                                         None => {
                                             let sm = "No enroll OTP was provided. Please enter an enroll OTP and try again";
-                                            error!("{}", sm);
-                                            ui_signals.s_error_msg.set(sm.to_string());
-                                            ui_signals.s_cursor.set("default".to_string());
-                                            ui_signals.s_disabled.set(false);
+                                            set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                             return;
                                         }
                                     };
                                     if check_otp(&enroll_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
-                                        error!("{}", sm);
-                                        ui_signals.s_error_msg.set(sm.to_string());
-                                        ui_signals.s_cursor.set("default".to_string());
-                                        ui_signals.s_disabled.set(false);
+                                        set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                         return;
                                     }
                                     else {
@@ -713,29 +665,20 @@ pub(crate) fn app(
                                         Some(ukm_otp) => {
                                             if !ukm_otp.chars().all(|c| c.is_numeric()) || 8 != ukm_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
-                                                error!("{}", sm);
-                                                ui_signals.s_error_msg.set(sm.to_string());
-                                                ui_signals.s_cursor.set("default".to_string());
-                                                ui_signals.s_disabled.set(false);
+                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                                 return;
                                             }
                                             ukm_otp
                                         },
                                         None => {
                                             let sm = "No UKM OTP was provided. Please enter a UKM OTP and try again";
-                                            error!("{}", sm);
-                                            ui_signals.s_error_msg.set(sm.to_string());
-                                            ui_signals.s_cursor.set("default".to_string());
-                                            ui_signals.s_disabled.set(false);
+                                            set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                             return;
                                         }
                                     };
                                     if check_otp(&ukm_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
-                                        error!("{}", sm);
-                                        ui_signals.s_error_msg.set(sm.to_string());
-                                        ui_signals.s_cursor.set("default".to_string());
-                                        ui_signals.s_disabled.set(false);
+                                        set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                         return;
                                     }
                                     else {

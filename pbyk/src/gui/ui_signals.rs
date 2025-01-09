@@ -1,8 +1,10 @@
 use crate::args::num_environments;
-use crate::gui::app::DISA_ICON_BASE64;
 use crate::gui::app_signals::AppSignals;
 use crate::gui::gui_main::Phase::{Enroll, PreEnroll, Ukm, UkmOrRecovery};
+#[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+use crate::gui::utils::parse_reader_from_vsc_display;
 use crate::gui::utils::{get_default_env_radio_selections, read_saved_args_or_default};
+use base64ct::{Base64, Encoding};
 use dioxus::hooks::use_signal;
 use dioxus::prelude::Signal;
 use dioxus::signals::{Readable, Writable};
@@ -10,12 +12,14 @@ use dioxus_toast::ToastManager;
 use log::error;
 use pbyklib::utils::get_pre_enroll_hash_yubikey;
 use std::fmt::Display;
-
-#[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
-use crate::gui::utils::parse_reader_from_vsc_display;
+use std::sync::LazyLock;
 
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 use pbyklib::utils::get_pre_enroll_hash;
+
+static DISA_ICON_BASE64: LazyLock<String> =
+    LazyLock::new(|| Base64::encode_string(include_bytes!("../../assets/disa.png")));
+
 pub struct UiSignals {
     pub toast: Signal<ToastManager>,
     pub s_disa_icon: Signal<String>,
