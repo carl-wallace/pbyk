@@ -1,3 +1,5 @@
+//! Structure to contain signals primarily associated with UI rendering
+//!
 use crate::args::num_environments;
 use crate::gui::app_signals::AppSignals;
 use crate::gui::gui_main::Phase::{Enroll, PreEnroll, Ukm, UkmOrRecovery};
@@ -169,7 +171,7 @@ impl UiSignals {
             str_hide_recovery,
             str_button_label,
             str_enroll_otp_style,
-        ) = match *app_signals.as_phase.read() {
+        ) = match *app_signals.s_phase.read() {
             Ukm => (
                 "display:none;".to_string(),       // edipi
                 "display:none;".to_string(),       // pre-enroll otp
@@ -211,9 +213,9 @@ impl UiSignals {
         let s_button_label = use_signal(|| str_button_label);
         let s_enroll_otp_style = use_signal(|| str_enroll_otp_style);
 
-        if *app_signals.as_phase.read() == Enroll && s_hash.read().is_empty() {
+        if *app_signals.s_phase.read() == Enroll && s_hash.read().is_empty() {
             if is_yubikey {
-                match get_pre_enroll_hash_yubikey(&app_signals.as_serial.read()) {
+                match get_pre_enroll_hash_yubikey(&app_signals.s_serial.read()) {
                     Ok(hash) => {
                         s_hash.set(hash);
                     }
@@ -224,7 +226,7 @@ impl UiSignals {
             } else {
                 #[cfg(all(target_os = "windows", feature = "vsc"))]
                 {
-                    let vsc_serial = parse_reader_from_vsc_display(&app_signals.as_serial.read());
+                    let vsc_serial = parse_reader_from_vsc_display(&app_signals.s_serial.read());
                     match get_pre_enroll_hash(&vsc_serial) {
                         Ok(hash) => s_hash.set(hash),
                         Err(_e) => {

@@ -57,7 +57,7 @@ pub(crate) fn reset(
                 ui_signals.s_hide_recovery.set("none".to_string());
                 ui_signals.s_button_label.set("Pre-enroll".to_string());
                 ui_signals.s_hide_reset.set("none".to_string());
-                app_signals.as_phase.set(PreEnroll);
+                app_signals.s_phase.set(PreEnroll);
             }
         };
     }
@@ -80,7 +80,7 @@ pub(crate) fn reset(
                     let puk2 = string_or_default(&ev, "puk2", "");
 
                     let serial = string_or_default(&ev, "serial", "");
-                    let serial_u32 = match app_signals.as_serial.read().parse::<u32>() {
+                    let serial_u32 = match app_signals.s_serial.read().parse::<u32>() {
                         Ok(serial_u32) => Some(serial_u32),
                         Err(_e) => {
                             // let sm = format!("ERROR: failed to process YubiKey serial number: {e}.");
@@ -163,14 +163,14 @@ pub(crate) fn reset(
                                 }
                                 else {
                                     ui_signals.s_reset_complete.set(true);
-                                    app_signals.as_reset_req.set(false);
+                                    app_signals.s_reset_req.set(false);
                                     ui_signals.s_edipi_style.set("display:table-row;".to_string());
                                     ui_signals.s_pre_enroll_otp_style.set("display:table-row;".to_string());
                                     ui_signals.s_ukm_otp_style.set("display:none;".to_string());
                                     ui_signals.s_hide_recovery.set("none".to_string());
                                     ui_signals.s_button_label.set("Pre-enroll".to_string());
                                     ui_signals.s_enroll_otp_style.set("display:none;".to_string());
-                                    app_signals.as_phase.set(PreEnroll);
+                                    app_signals.s_phase.set(PreEnroll);
 
                                     reset_complete!();
                                 }
@@ -200,7 +200,7 @@ pub(crate) fn reset(
                                     }
                                     else {
                                         ui_signals.s_reset_complete.set(true);
-                                        app_signals.as_reset_req.set(false);
+                                        app_signals.s_reset_req.set(false);
                                         reset_complete!();
                                     }
                                 }
@@ -221,7 +221,7 @@ pub(crate) fn reset(
                         tr{
                             style: "display:table-row;",
                             td{div{label {r#for: "serial", "Serial Number"}}}
-                            td{input { r#type: "text", name: "serial", readonly: true, value: "{app_signals.as_serial}"}}
+                            td{input { r#type: "text", name: "serial", readonly: true, value: "{app_signals.s_serial}"}}
                         }
                         tr{
                             style: "{ui_signals.s_pin_style}",

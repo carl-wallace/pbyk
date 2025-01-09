@@ -234,17 +234,17 @@ pub(crate) fn GuiMain() -> Element {
     } else {
         debug!("Showing app view");
         let app_signals = AppSignals {
-            as_phase: use_signal(|| {
+            s_phase: use_signal(|| {
                 info!("Setting initial phase to {phase:?}");
                 phase
             }),
-            as_serial: use_signal(|| str_serial),
-            as_reset_req: use_signal(|| {
+            s_serial: use_signal(|| str_serial),
+            s_reset_req: use_signal(|| {
                 debug!("Setting initial reset to {do_reset:?}");
                 do_reset
             }),
-            as_serials: use_signal(|| serials),
-            as_fatal_error_val: use_signal(String::new),
+            s_serials: use_signal(|| serials),
+            s_fatal_error_val: use_signal(String::new),
         };
         let ui_signals = UiSignals::init(&app_signals, *s_is_yubikey.read(), error_msg);
         debug!("app_signals: {app_signals}");

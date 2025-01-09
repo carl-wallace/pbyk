@@ -146,7 +146,7 @@ pub(crate) fn app(
         () => {
             if *ui_signals.s_check_phase.read() {
                 ui_signals.s_pin.set(String::new());
-                let serial = app_signals.as_serial.read().clone();
+                let serial = app_signals.s_serial.read().clone();
                 match serial.parse::<u32>() {
                     Ok(yks) => {
                         ui_signals.s_pin_style.set("display:table-row;".to_string());
@@ -156,7 +156,7 @@ pub(crate) fn app(
                             Ok(yk) => Some(yk),
                             Err(e) => {
                                 error!("Failed to connect to YubiKey with serial {serial} with: {e}");
-                                app_signals.as_fatal_error_val.set(format!("Failed to connect to YubiKey with serial {serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e).to_string());
+                                app_signals.s_fatal_error_val.set(format!("Failed to connect to YubiKey with serial {serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e).to_string());
                                 None
                             }
                         };
@@ -166,8 +166,8 @@ pub(crate) fn app(
                             match yubikey.authenticate(PB_MGMT_KEY.clone()) {
                                 Ok(_) => {
                                     let phase = determine_phase(&mut yubikey);
-                                    if phase != *app_signals.as_phase.read() {
-                                        app_signals.as_phase.set(phase.clone());
+                                    if phase != *app_signals.s_phase.read() {
+                                        app_signals.s_phase.set(phase.clone());
                                         update_phase(
                                             &phase,
                                             ui_signals.s_edipi_style,
@@ -184,7 +184,7 @@ pub(crate) fn app(
                                     let err = format!("The YubiKey with serial number {serial} is not using the expected management key. Please reset the device then try again.");
                                     error!("{err}: {e:?}");
                                     ui_signals.s_error_msg.set(err.to_string());
-                                    app_signals.as_reset_req.set(true);
+                                    app_signals.s_reset_req.set(true);
                                     ui_signals.s_reset_abandoned.set(false);
                                     clear_pin_and_puk!();
                                     show_message!();
@@ -197,8 +197,8 @@ pub(crate) fn app(
                         #[cfg(all(target_os = "windows", feature = "vsc"))]
                         match determine_vsc_phase(&serial) {
                             Ok(phase) => {
-                                if phase != *app_signals.as_phase.read() {
-                                    app_signals.as_phase.set(phase.clone());
+                                if phase != *app_signals.s_phase.read() {
+                                    app_signals.s_phase.set(phase.clone());
                                     update_phase(
                                         &phase,
                                         ui_signals.s_edipi_style,
@@ -212,7 +212,7 @@ pub(crate) fn app(
                                 }
                             }
                             Err(_e) => {
-                                app_signals.as_fatal_error_val.set(
+                                app_signals.s_fatal_error_val.set(
                                     "Could not determine the state of the VSC named {serial}".to_string(),
                                 );
                             }
@@ -238,7 +238,7 @@ pub(crate) fn app(
     // Macro to prepare UI for enroll phase
     macro_rules! enter_enroll_phase {
         () => {
-            app_signals.as_phase.set(Enroll);
+            app_signals.s_phase.set(Enroll);
             ui_signals
                 .s_pre_enroll_otp_style
                 .set("display:none;".to_string());
@@ -252,7 +252,7 @@ pub(crate) fn app(
     // Macro to prepare UI for UKM phase
     macro_rules! enter_ukm_phase {
         () => {
-            app_signals.as_phase.set(Ukm);
+            app_signals.s_phase.set(Ukm);
             ui_signals
                 .s_pre_enroll_otp_style
                 .set("display:none;".to_string());
@@ -271,7 +271,7 @@ pub(crate) fn app(
     // Macro to prepare UI for UKM or Recovery phase
     macro_rules! enter_ukm_or_recovery_phase {
         () => {
-            app_signals.as_phase.set(UkmOrRecovery);
+            app_signals.s_phase.set(UkmOrRecovery);
             ui_signals.s_hide_recovery.set("inline-block".to_string());
             ui_signals
                 .s_pre_enroll_otp_style
@@ -289,19 +289,19 @@ pub(crate) fn app(
         };
     }
 
-    if *app_signals.as_reset_req.read() {
+    if *app_signals.s_reset_req.read() {
         debug!("Showing reset view");
         reset(is_yubikey, app_signals, ui_signals)
     } else {
         let css = include_str!("../../assets/pbyk.css");
 
         // prepare rsx block for drop list display
-        let serials = app_signals.as_serials.read().clone();
+        let serials = app_signals.s_serials.read().clone();
         let serialRsx = serials.iter().map(|s| {
             rsx! { option {
                     value : "{s}",
                     label : "{s}",
-                    selected: if *app_signals.as_serial.read().clone() == *s {"true"} else {"false"}
+                    selected: if *app_signals.s_serial.read().clone() == *s {"true"} else {"false"}
                 }
             }
         });
@@ -359,7 +359,7 @@ pub(crate) fn app(
                             }
                         };
 
-                        let cur_phase = app_signals.as_phase.read().clone();
+                        let cur_phase = app_signals.s_phase.read().clone();
 
                         // When in UkmOrRecovery phase, determine if we got here as a consequence of
                         // the user clicking the reset button
@@ -375,11 +375,11 @@ pub(crate) fn app(
                         }
 
                         #[cfg(all(target_os = "windows", feature = "vsc"))]
-                        let mut serial_str_ota = app_signals.as_serial.read().to_string();
+                        let mut serial_str_ota = app_signals.s_serial.read().to_string();
                         #[cfg(not(all(target_os = "windows", feature = "vsc")))]
-                        let serial_str_ota = app_signals.as_serial.read().to_string();
+                        let serial_str_ota = app_signals.s_serial.read().to_string();
 
-                        let serial_u32 = match app_signals.as_serial.read().parse::<u32>() {
+                        let serial_u32 = match app_signals.s_serial.read().parse::<u32>() {
                             Ok(serial_u32) => Some(serial_u32),
                             Err(e) => {
                                 let sm = format!("Failed to process serial number as YubiKey serial number: {e}.");
@@ -428,7 +428,7 @@ pub(crate) fn app(
 
                                         // choice dialog is no longer used, show a toast then send the user to the reset form
                                         ui_signals.s_reset_abandoned.set(false);
-                                        app_signals.as_reset_req.set(true);
+                                        app_signals.s_reset_req.set(true);
                                         clear_pin_and_puk!();
                                         show_message!();
                                         return;
@@ -814,23 +814,23 @@ pub(crate) fn app(
                         class: "{ui_signals.s_cursor}",
                         tbody {
                             tr{
-                                style: if *app_signals.as_phase.read() != Enroll { "display:table-row;" } else {"display:none;"},
+                                style: if *app_signals.s_phase.read() != Enroll { "display:table-row;" } else {"display:none;"},
                                 td{div{label {r#for: "multi_serial", "Serial Number"}}}
                                 td{select {
                                    disabled: "{ui_signals.s_disabled}",
                                    oninput: move |evt| {
-                                       app_signals.as_serial.set(evt.value().to_string());
+                                       app_signals.s_serial.set(evt.value().to_string());
                                        ui_signals.s_check_phase.set(true);
                                        check_phase!();
                                    },
-                                   name: "serials", value: "{app_signals.as_serial}",
+                                   name: "serials", value: "{app_signals.s_serial}",
                                    {serialRsx}
                                 }}
                             }
                             tr{
-                                style: if *app_signals.as_phase.read() == Enroll { "display:table-row;" } else {"display:none;"},
+                                style: if *app_signals.s_phase.read() == Enroll { "display:table-row;" } else {"display:none;"},
                                 td{div{label {r#for: "serial", "Serial Number"}}}
-                                td{input { r#type: "text", disabled: "{ui_signals.s_disabled}", name: "serial", readonly: true, value: "{app_signals.as_serial}"}}
+                                td{input { r#type: "text", disabled: "{ui_signals.s_disabled}", name: "serial", readonly: true, value: "{app_signals.s_serial}"}}
                             }
                             tr{
                                 style: "{ui_signals.s_edipi_style}",
@@ -927,7 +927,7 @@ pub(crate) fn app(
                                     }
 
                                     ui_signals.s_reset_abandoned.set(false);
-                                    app_signals.as_reset_req.set(true);
+                                    app_signals.s_reset_req.set(true);
                                     clear_pin_and_puk!();
                                 },
                                 "Reset"
