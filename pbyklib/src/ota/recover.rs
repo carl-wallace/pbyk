@@ -1,16 +1,20 @@
 //! Interacts with Purebred portal to recover escrowed keys
 
 use log::error;
-use windows::Devices::SmartCards::SmartCard;
 use yubikey::MgmKey;
 use zeroize::Zeroizing;
 
+#[cfg(all(target_os = "windows", feature = "vsc"))]
+use windows::Devices::SmartCards::SmartCard;
+
 use crate::ota::CryptoModule;
-use crate::utils::get_device_cred;
 use crate::{ota::OtaActionInputs, Error, Result, PB_MGMT_KEY};
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::misc_win::vsc_signer::CertContext;
+
+#[cfg(all(target_os = "windows", feature = "vsc"))]
+use crate::utils::get_device_cred;
 
 /// Recovers keys for storage on the indicted YubiKey device using the URL obtained from `recover_inputs`
 ///
