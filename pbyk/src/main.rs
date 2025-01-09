@@ -55,7 +55,7 @@ use pbyklib::utils::list_vscs::{get_vsc, get_vsc_id_from_serial, list_vscs, num_
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use log::info;
 
-#[cfg(feature = "gui")]
+#[cfg(feature = "vsc")]
 use log::error;
 
 use log::debug;
