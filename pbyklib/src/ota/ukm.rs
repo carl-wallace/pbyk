@@ -4,7 +4,7 @@ use log::error;
 use yubikey::MgmKey;
 use zeroize::Zeroizing;
 
-use crate::ota::CryptoModule;
+use crate::ota::{get_device_cred_from_smartcard, CryptoModule};
 use crate::{ota::OtaActionInputs, Error, Result, PB_MGMT_KEY};
 
 /// Obtains fresh PIV and signature credentials and current encryption credential using the indicted
@@ -44,12 +44,9 @@ pub async fn ukm(
         }
         #[cfg(all(target_os = "windows", feature = "vsc"))]
         CryptoModule::SmartCard(sc) => {
-            use crate::misc_win::vsc_state::get_vsc_id;
             use crate::ota_vsc::ukm::ukm;
-            use crate::utils::list_vscs::get_device_cred;
 
-            let vsc_id = get_vsc_id(&sc.Reader().unwrap().Name().unwrap()).unwrap();
-            let cred = get_device_cred(&vsc_id, false).unwrap();
+            let cred = get_device_cred_from_smartcard(sc)?;
             ukm(sc, &cred, ukm_inputs, env).await
         }
     }

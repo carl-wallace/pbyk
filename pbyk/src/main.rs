@@ -316,11 +316,22 @@ async fn interactive_main() {
         match list_vscs().await {
             Ok(vscs) => {
                 for vsc in vscs {
-                    println!(
-                        "{}: {}",
-                        "Name".bold(),
-                        vsc.Reader().unwrap().Name().unwrap()
-                    );
+                    let reader = match vsc.Reader() {
+                        Ok(reader) => reader,
+                        Err(e) => {
+                            error!("Failed to get reader instance: {e}. Continuing...");
+                            continue;
+                        }
+                    };
+                    match reader.Name() {
+                        Ok(name) => {
+                            println!("{}: {}", "Name".bold(), name);
+                        }
+                        Err(e) => {
+                            error!("Failed to read name of reader instance: {e}. Continuing...");
+                            continue;
+                        }
+                    }
                 }
             }
             Err(e) => {
@@ -668,7 +679,13 @@ async fn interactive_main() {
                     info!("Ignoring error and searching for VSC: {err}");
                     let sc = match get_vsc(&serial.to_string()).await {
                         Ok(sc) => {
-                            args.serial = Some(get_vsc_id_from_serial(serial).unwrap());
+                            args.serial = match get_vsc_id_from_serial(serial) {
+                                Ok(serial) => Some(serial),
+                                Err(e) => {
+                                    println!("{}: {e:?}", "ERROR".bold());
+                                    return;
+                                }
+                            };
                             sc
                         }
                         Err(e) => {

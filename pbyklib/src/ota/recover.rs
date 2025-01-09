@@ -1,11 +1,16 @@
 //! Interacts with Purebred portal to recover escrowed keys
 
 use log::error;
+use windows::Devices::SmartCards::SmartCard;
 use yubikey::MgmKey;
 use zeroize::Zeroizing;
 
 use crate::ota::CryptoModule;
+use crate::utils::get_device_cred;
 use crate::{ota::OtaActionInputs, Error, Result, PB_MGMT_KEY};
+
+#[cfg(all(target_os = "windows", feature = "vsc"))]
+use crate::misc_win::vsc_signer::CertContext;
 
 /// Recovers keys for storage on the indicted YubiKey device using the URL obtained from `recover_inputs`
 ///
@@ -43,13 +48,46 @@ pub async fn recover(
         }
         #[cfg(all(target_os = "windows", feature = "vsc"))]
         CryptoModule::SmartCard(sc) => {
-            use crate::misc_win::vsc_state::get_vsc_id;
             use crate::ota_vsc::recover::recover;
-            use crate::utils::list_vscs::get_device_cred;
-
-            let vsc_id = get_vsc_id(&sc.Reader().unwrap().Name().unwrap()).unwrap();
-            let cred = get_device_cred(&vsc_id, false).unwrap();
+            let cred = get_device_cred_from_smartcard(sc)?;
             recover(sc, &cred, recover_inputs, env).await
+        }
+    }
+}
+
+/// Retrieve the device credential from the provided SmartCard
+#[cfg(all(target_os = "windows", feature = "vsc"))]
+pub(crate) fn get_device_cred_from_smartcard(sc: &SmartCard) -> Result<CertContext> {
+    use crate::misc_win::vsc_state::get_vsc_id;
+
+    let reader = match sc.Reader() {
+        Ok(reader) => reader,
+        Err(e) => {
+            error!("Failed to get reader instance from SmartCard object: {e}");
+            return Err(Error::Vsc);
+        }
+    };
+
+    let name = match reader.Name() {
+        Ok(name) => name,
+        Err(e) => {
+            error!("Failed to get name of reader instance from SmartCard object: {e}");
+            return Err(Error::Vsc);
+        }
+    };
+
+    let vsc_id = match get_vsc_id(&name) {
+        Ok(vsc_id) => vsc_id,
+        Err(e) => {
+            error!("Failed to get vsc_id from SmartCard object: {e:?}");
+            return Err(Error::Vsc);
+        }
+    };
+    match get_device_cred(&vsc_id, false) {
+        Ok(cred) => Ok(cred),
+        Err(e) => {
+            error!("Failed to get device cred from SmartCard object: {e:?}");
+            Err(e)
         }
     }
 }

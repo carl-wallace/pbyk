@@ -191,7 +191,14 @@ pub(crate) async fn consume_attested_csr(b64_csr: &str) -> Result<(String, Certi
     let der_pki_data = get_encap_content(&sd.encap_content_info)?;
 
     let pki_data = PkiData::from_der(&der_pki_data)?;
-    let der_tr = pki_data.req_sequence.first().unwrap().to_der()?;
+    let req_sequence = match pki_data.req_sequence.first() {
+        Some(req_sequence) => req_sequence.clone(),
+        None => {
+            error!("Failed to obtain req sequence from PkiData");
+            return Err(Error::BadInput);
+        }
+    };
+    let der_tr = req_sequence.to_der()?;
     let tr = TaggedRequest::from_der(&der_tr)?;
     match tr {
         Tcr(tcr) => consume_parsed_csr(&tcr.certification_request).await,
@@ -555,5 +562,5 @@ D9ZUli5x2VstVik2u7IcKi79vip64oxeHrBB/AmwD8FyeoPGoJomw9F1cW0XhLVqQSnFBX6OnhYpca49
 DjGCAYswggGHAgEDgBTSf9iC1Vxk+ruRWDcGJkuLBUJLmDANBglghkgBZQMEAgEFAKBKMBcGCSqGSIb3DQEJAzEKBggrBgEFBQcMAjAvBgkqhkiG9w0BCQQxIgQglhqfDRmwQZXCdwGLQrdcLUhfFdXTeVeUKinuguVB32cwDQYJKoZIhvcNAQEBBQAEggEAXohHv2UXU2wIwIF3Ed1LzxcFMg1u25FUSXEq
 5sXXiWG1QkiSTbTsabWg1TSwobpe1tR7hXK+QZpDs3g14R2eHtoRDF8WyNUzTLX+ZY/M8ZUGqvR7i1QGfWy4EusWgGqoi6gzANM0jC82ZBBmNjK0LfSlS601fF7Xy4D+YucKsAv3avzus863ADee7T2SC6dVMZH8JWuz9VP80NfSSE7TCXhU1rUc3q5qfMoFZ0ClJvK8KfK2HqQxgyUa7czrLYMK6/nS4zdGIAvZvV4NIo1G9tza3KICLJLcWYaApClXYOxg/wBVsEfI+PlOK10T1WaTuq+lOz+yfpIjIh6GBYCwYQ==";
 
-    let _ = consume_attested_csr(b64_csr).await.unwrap();
+    let _ = consume_attested_csr(b64_csr).await.unwrap(); // allow unwrap in test
 }

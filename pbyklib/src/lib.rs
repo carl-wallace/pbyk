@@ -138,6 +138,7 @@ use yubikey::MgmKey;
 /// by the device.
 pub static PB_MGMT_KEY: LazyLock<MgmKey> = LazyLock::new(|| {
     MgmKey::new(hex!("020203040506070801020304050607080102030405060708")).unwrap()
+    // allow unwrap for static
 });
 
 /// `pkcs-9-at-challengePassword` from [RFC 2985 Section 5.4.1]
