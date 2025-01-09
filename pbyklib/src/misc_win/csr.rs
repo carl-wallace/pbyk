@@ -142,7 +142,6 @@ pub struct PkiData {
 /// ```
 /// [RFC 5272 Section 3.2.1.2]: https://datatracker.ietf.org/doc/html/rfc5272#section-3.2.1.2
 #[derive(Clone, Debug, Eq, PartialEq, Choice)]
-#[allow(clippy::large_enum_variant)]
 pub enum TaggedRequest {
     ///         tcr               [0] TaggedCertificationRequest,
     #[asn1(context_specific = "0", tag_mode = "IMPLICIT", constructed = "true")]

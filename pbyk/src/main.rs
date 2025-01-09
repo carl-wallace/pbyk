@@ -1,5 +1,5 @@
 #![doc = include_str!("../README.md")]
-#![warn(missing_docs, rust_2018_idioms, unused_qualifications)]
+#![warn(missing_docs, rust_2018_idioms)]
 // unsafe is permitted on windows to allow hiding the terminal window in GUI mode
 #![cfg_attr(not(target_os = "windows"), allow(unsafe_code))]
 

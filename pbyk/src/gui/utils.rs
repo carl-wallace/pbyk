@@ -223,7 +223,6 @@ pub(crate) fn get_default_env() -> &'static str {
 ///     - s_om_sipr_checked,
 ///     - s_nipr_checked,
 ///     - s_sipr_checked
-#[allow(clippy::type_complexity)]
 pub(crate) fn get_default_env_radio_selections() -> (bool, bool, bool, bool, bool) {
     match get_default_env() {
         "DEV" => (true, false, false, false, false),
