@@ -5,7 +5,7 @@ use yubikey::MgmKey;
 use zeroize::Zeroizing;
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
-use crate::ota::{get_device_cred_from_smartcard, CryptoModule};
+use crate::ota::get_device_cred_from_smartcard;
 
 use crate::ota::CryptoModule;
 use crate::{ota::OtaActionInputs, Error, Result, PB_MGMT_KEY};
