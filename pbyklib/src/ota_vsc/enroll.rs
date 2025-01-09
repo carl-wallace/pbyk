@@ -267,8 +267,8 @@ pub async fn enroll(
     let wcc = match cc.first() {
         Some(wcc) => wcc,
         None => {
-            error!("Failed to select credential corresponding to certificate obtained following Phase 2 with: {e:?}");
-            return Err(e);
+            error!("Failed to select credential corresponding to certificate obtained following Phase 2.");
+            return Err(Error::Vsc);
         }
     };
     phase3(wcc, &p3_xml, &new_cert, &p1_resp_url).await

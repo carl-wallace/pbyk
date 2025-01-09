@@ -454,7 +454,7 @@ pub(crate) fn app(
                                             Ok(vsc) => vsc,
                                             Err(e) => {
                                                 let sm = format!("Could not get the VSC with serial number {serial_str_ota}. Please make sure the device is available then try again. Error: {e:?}");
-                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                                 show_message!();
                                                 return;
                                             }
@@ -463,7 +463,7 @@ pub(crate) fn app(
                                             Ok(s) => s,
                                             Err(e) => {
                                                 let sm = format!("Could not get the VSC ID for VSC with serial number {serial_str_ota}. Error: {e:?}");
-                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
                                                 show_message!();
                                                 return;
                                             }
