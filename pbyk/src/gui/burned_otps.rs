@@ -1,11 +1,11 @@
 //! Structure and functions to managed burned OTP values
 
+use log::error;
 use std::{
     collections::BTreeMap,
     sync::{LazyLock, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use log::error;
 
 /// BTreeMap that maps OTP values to UNIX epoch values that correspond to observance of the value
 static BURNED_OTPS: LazyLock<Mutex<BTreeMap<String, Duration>>> =

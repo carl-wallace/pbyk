@@ -1,23 +1,37 @@
 //! Structure to contain signals primarily associated with UI rendering
 //!
-use crate::args::num_environments;
-use crate::gui::app_signals::AppSignals;
-use crate::gui::gui_main::Phase::{Enroll, PreEnroll, Ukm, UkmOrRecovery};
-#[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
-use crate::gui::utils::parse_reader_from_vsc_display;
-use crate::gui::utils::{get_default_env_radio_selections, read_saved_args_or_default};
-use base64ct::{Base64, Encoding};
-use dioxus::hooks::use_signal;
-use dioxus::prelude::Signal;
-use dioxus::signals::{Readable, Writable};
+
+use dioxus::{
+    hooks::use_signal,
+    prelude::Signal,
+    signals::{Readable, Writable}
+};
 use dioxus_toast::ToastManager;
+
+use std::{
+    fmt::Display,
+    sync::LazyLock
+};
+
+use base64ct::{Base64, Encoding};
 use log::error;
+
 use pbyklib::utils::get_pre_enroll_hash_yubikey;
-use std::fmt::Display;
-use std::sync::LazyLock;
 
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 use pbyklib::utils::get_pre_enroll_hash;
+
+use crate::{
+    args::num_environments,
+    gui::{
+        app_signals::AppSignals,
+        gui_main::Phase::{Enroll, PreEnroll, Ukm, UkmOrRecovery},
+        utils::{get_default_env_radio_selections, read_saved_args_or_default}
+    }
+};
+
+#[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+use crate::gui::utils::parse_reader_from_vsc_display;
 
 static DISA_ICON_BASE64: LazyLock<String> =
     LazyLock::new(|| Base64::encode_string(include_bytes!("../../assets/disa.png")));
@@ -68,8 +82,8 @@ impl Display for UiSignals {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // write!(f, "s_disa_icon: {:?}; ", self.s_disa_icon)?;
         write!(f, "s_edipi: {:?}; ", self.s_edipi)?;
-        write!(f, "s_pin: {:?}; ", self.s_pin)?;
-        write!(f, "s_puk: {:?}; ", self.s_puk)?;
+        // write!(f, "s_pin: {:?}; ", self.s_pin)?;
+        // write!(f, "s_puk: {:?}; ", self.s_puk)?;
         write!(f, "s_pre_enroll_otp: {:?}; ", self.s_pre_enroll_otp)?;
         write!(f, "s_enroll_otp: {:?}; ", self.s_enroll_otp)?;
         write!(f, "s_hash: {:?}; ", self.s_hash)?;

@@ -16,11 +16,13 @@ use pbyklib::{
     Error, Result, PB_MGMT_KEY,
 };
 
-use crate::gui::app_signals::AppSignals;
-use crate::gui::ui_signals::UiSignals;
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::gui::utils::parse_reader_from_vsc_display;
-use crate::gui::{app::app, fatal_error::fatal_error, utils::determine_phase};
+
+use crate::gui::{
+    app::app, app_signals::AppSignals, fatal_error::fatal_error, ui_signals::UiSignals,
+    utils::determine_phase,
+};
 
 /// Used to establish what UI elements should be displayed during each protocol phase
 ///
@@ -167,7 +169,6 @@ pub(crate) fn GuiMain() -> Element {
             startup_fatal_error_val = "Failed to list YubiKeys or VSCs. Close the app, make sure at least one YubiKey is available then try again.".to_string();
             String::new()
         }
-        // "15995762".to_string()
     });
 
     let str_serial = s_serial.read().clone();
@@ -247,8 +248,6 @@ pub(crate) fn GuiMain() -> Element {
             s_fatal_error_val: use_signal(String::new),
         };
         let ui_signals = UiSignals::init(&app_signals, *s_is_yubikey.read(), error_msg);
-        debug!("app_signals: {app_signals}");
-        debug!("ui_signals: {ui_signals}");
         app(app_signals, *s_is_yubikey.read(), ui_signals)
     }
 }
