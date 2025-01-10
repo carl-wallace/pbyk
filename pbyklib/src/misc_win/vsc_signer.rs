@@ -146,7 +146,8 @@ impl Drop for CertContext {
     fn drop(&mut self) {
         if self.free {
             unsafe {
-                CertFreeCertificateContext(Some(self.cert_ctx.as_ptr() as *const CERT_CONTEXT));
+                let _ =
+                    CertFreeCertificateContext(Some(self.cert_ctx.as_ptr() as *const CERT_CONTEXT));
             }
         }
     }

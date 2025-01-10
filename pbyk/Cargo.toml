@@ -1,8 +1,8 @@
 [package]
 name = "pbyk"
-version = "0.3.0"
+version = "0.4.0-pre.0"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.80.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,13 +20,11 @@ tokio = { version = "1.42.0", features = ["full", "time", "rt-multi-thread"]}
 yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "pbyk", features = ["untested"]}
 zeroize = "1.8.1"
 
-dioxus = {version = "0.4.3", optional = true}
-dioxus-desktop = {version = "0.4.3", optional = true}
-fermi = { version = "0.4.3", optional = true }
-native-dialog = { version = "0.7.0", optional = true }
+dioxus = {version = "0.6.1", optional = true}
+dioxus-desktop = {version = "0.6.1", optional = true}
 
 # Use fork until upstream is updated. This bumps the project to dioxus 0.4.0. See https://github.com/mrxiaozhuox/dioxus-toast/pull/3.
-dioxus-toast = { git = "https://github.com/carl-wallace/dioxus-toast", optional = true, branch = "update" }
+dioxus-toast = { git = "https://github.com/carl-wallace/dioxus-toast", optional = true, branch = "main" }
 
 cfg-if = "1.0.0"
 home = {version = "0.5.11", optional = true}
@@ -35,19 +33,17 @@ anyhow = {version = "1.0.95", optional = true}
 serde = { version = "1.0.217", default-features = false, features = ["derive"] }
 serde_json = "1.0.134"
 
-lazy_static = "1.4.0"
 base64ct = { version="1.6.0", features = ["alloc"] }
 
 # certval has not yet been released, hence use of private branch
 certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"]}
+futures = { version = "0.3.31", optional = true }
+
+[dev-dependencies]
+hex-literal = "0.4.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = {version = "0.3.9", features = ["wincon", "winuser"]}
-
-[dev-dependencies]
-ignore = "0.4.22"
-image = { version = "0.25.5", features = [] }
-png = "0.17.16"
 
 [features]
 default = ["dev"]
@@ -56,6 +52,6 @@ om_nipr = ["pbyklib/om_nipr"]
 om_sipr = ["pbyklib/om_sipr"]
 nipr = ["pbyklib/nipr"]
 sipr = ["pbyklib/sipr"]
-gui = ["home", "anyhow", "dioxus-desktop", "dioxus", "dioxus-toast", "fermi", "native-dialog"]
+gui = ["home", "anyhow", "dioxus-desktop", "dioxus", "dioxus-toast", "futures"]
 vsc = ["pbyklib/vsc", "reset_vsc"]
 reset_vsc = ["pbyklib/reset_vsc"] # this feature exists to quarantine non-functional VSC reset code. do not use.

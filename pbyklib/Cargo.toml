@@ -1,6 +1,6 @@
 [package]
 name = "pbyklib"
-version = "0.3.0"
+version = "0.4.0-pre.0"
 edition = "2021"
 rust-version = "1.80.1"
 
@@ -12,13 +12,12 @@ pbykcorelib = {path = "../pbykcorelib"}
 base64ct = { version="1.6.0", features = ["alloc"] }
 # EnvelopedDataBuilder is not yet released, hence use of private branch
 cms = {version = "0.2.1", git = "https://github.com/carl-wallace/formats.git", features = ["builder"], branch = "pbyk"}
-pkcs12 = {version = "0.0.0", git = "https://github.com/carl-wallace/formats.git", branch = "pbyk"}
+# todo - replace openssl P12 usage with pkcs12 crate
+# pkcs12 = {version = "0.0.0", git = "https://github.com/carl-wallace/formats.git", branch = "pbyk"}
 const-oid = { version = "0.9.5", features = ["db"] }
 der = { version = "0.7.8", features = ["alloc", "derive", "oid", "pem"] }
 spki = "0.7.3"
 x509-cert = "0.2.5"
-pkcs8 = { version = "0.10.2", features = ["pkcs5", "getrandom"] }
-pkcs5 = {version = "0.7.1", features = ["pbes2", "3des"]}
 
 # certval has not yet been released, hence use of private branch
 certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"]}
@@ -60,8 +59,8 @@ pb_pki = {git="https://github.com/carl-wallace/pb_pki.git"}
 log4rs = "1.3.0"
 
 [target.'cfg(windows)'.dependencies]
-windows = {version = "0.52", features = [
-    "Devices_Enumeration", "Devices_SmartCards", "Foundation_Collections",
+windows = {version = "0.58.0", features = [
+    "Devices_Enumeration", "Devices_SmartCards", "Foundation_Collections", 
     "Security_Cryptography", "Security_Cryptography_Certificates", "Security_Cryptography_Core", "Security_ExchangeActiveSyncProvisioning",
     "Storage_Streams", "System_Profile",
     "Win32_Foundation", "Win32_Security", "Win32_Security_Cryptography"] }

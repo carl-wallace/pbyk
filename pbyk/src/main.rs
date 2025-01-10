@@ -1,5 +1,5 @@
 #![doc = include_str!("../README.md")]
-#![warn(missing_docs, rust_2018_idioms, unused_qualifications)]
+#![warn(missing_docs, rust_2018_idioms)]
 // unsafe is permitted on windows to allow hiding the terminal window in GUI mode
 #![cfg_attr(not(target_os = "windows"), allow(unsafe_code))]
 
@@ -9,7 +9,12 @@
 #[macro_use]
 extern crate cfg_if;
 
+#[cfg(feature = "gui")]
+use dioxus::desktop::muda::{Menu, PredefinedMenuItem, Submenu};
+
 use clap::{CommandFactory, Parser};
+#[cfg(feature = "gui")]
+use dioxus::LaunchBuilder;
 #[cfg(feature = "gui")]
 use home::home_dir;
 use zeroize::Zeroizing;
@@ -18,8 +23,6 @@ use zeroize::Zeroizing;
 use crate::no_bold::NoBold;
 #[cfg(not(target_os = "windows"))]
 use colored::Colorize;
-#[cfg(feature = "gui")]
-use dioxus_desktop::tao::menu::{MenuBar, MenuItem};
 
 #[cfg(feature = "gui")]
 use dioxus_desktop::tao::window::Icon;
@@ -51,6 +54,9 @@ use pbyklib::utils::list_vscs::{get_vsc, get_vsc_id_from_serial, list_vscs, num_
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use log::info;
+
+#[cfg(any(feature = "vsc", feature = "gui"))]
+use log::error;
 
 use log::debug;
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
@@ -113,8 +119,8 @@ fn gui_sanity_check(args: &PbYkArgs) -> bool {
 cfg_if! {
     if #[cfg(feature = "gui")] {
         use crate::gui::gui_main::*;
-        use dioxus_desktop::Config;
-        use dioxus_desktop::WindowBuilder;
+        use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
+
         /// Point of entry for `pbyk` application.
         ///
         /// See [PbYkArgs] for usage details.
@@ -172,7 +178,13 @@ cfg_if! {
                 }
 
                 let icon_bytes = include_bytes!("../assets/keys-arrow-256.ico");
-                let icon = Icon::from_rgba(icon_bytes.to_vec(), 256, 256).unwrap();
+                let icon = match Icon::from_rgba(icon_bytes.to_vec(), 256, 256) {
+                    Ok(icon) => Some(icon),
+                    Err(e) => {
+                        error!("Failed to parse icon with: {e}. Continuing...");
+                        None
+                    }
+                };
 
                 let sws = read_saved_window_size();
 
@@ -186,24 +198,50 @@ cfg_if! {
                 // TODO: add means of determining what max height ought be (i.e., based on number of
                 // available environments).
                 let window = WindowBuilder::new().with_resizable(true)
-                                .with_title(title).with_window_icon(Some(icon))
-                                .with_inner_size(dioxus_desktop::LogicalSize::new(sws.width, sws.height),).with_menu({
-                                let mut menu = MenuBar::new();
+                                .with_title(title).with_window_icon(icon)
+                                .with_inner_size(LogicalSize::new(sws.width, sws.height));
+                let menu = Menu::new();
+                let app_menu = Submenu::new("&pbyk", true);
+                if let Err(e) = app_menu.append(&PredefinedMenuItem::minimize(None)) {
+                    error!("Failed to add minimize menu item with: {e}");
+                }
+                if let Err(e) = app_menu.append(&PredefinedMenuItem::quit(None)) {
+                    error!("Failed to add quit menu item with: {e}");
+                }
+                if let Err(e) = menu.append(&app_menu) {
+                    error!("Failed to add pbyk sub-menu item with: {e}");
+                }
+                let edit_menu = Submenu::new("&Edit", true);
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::undo(None)) {
+                    error!("Failed to add undo menu item with: {e}");
+                }
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::redo(None)) {
+                    error!("Failed to add redo menu item with: {e}");
+                }
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::separator()) {
+                    error!("Failed to add separator menu item with: {e}");
+                }
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::cut(None)) {
+                    error!("Failed to add cut menu item with: {e}");
+                }
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::copy(None)) {
+                    error!("Failed to add copy menu item with: {e}");
+                }
+                if let Err(e) = edit_menu.append(&PredefinedMenuItem::paste(None)) {
+                    error!("Failed to add paste menu item with: {e}");
+                }
+                if let Err(e) = menu.append(&edit_menu) {
+                    error!("Failed to add edit sub-menu item with: {e}");
+                }
 
-                                let mut app_menu = MenuBar::new();
-                                app_menu.add_native_item(MenuItem::Minimize);
-                                app_menu.add_native_item(MenuItem::Quit);
-
-                                menu.add_submenu("&pbyk", true, app_menu);
-                                menu
-                            });
                 let config = match home_dir() {
                     Some(home_dir) => {
                         Config::new().with_window(window).with_data_directory(home_dir.join(".pbyk"))
                     }
                     None => Config::new().with_window(window)
-                };
-                dioxus_desktop::launch_cfg(GuiMain, config,);
+                }.with_menu(menu);
+
+                LaunchBuilder::desktop().with_cfg(config).launch(GuiMain);
             }
             else {
                 match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
@@ -228,29 +266,6 @@ cfg_if! {
         }
     }
 }
-
-// poached from <https://github.com/DioxusLabs/dioxus/blob/544ca5559654c8490ce444c3cbd85c1bfb8479da/packages/desktop/src/cfg.rs#L177>
-// dirty trick, avoid introducing `image` at runtime
-// #[test]
-// #[ignore]
-// fn prepare_default_icon() {
-//     use image::io::Reader as ImageReader;
-//     use image::ImageFormat;
-//     use std::fs::File;
-//     use std::io::Cursor;
-//     use std::io::Write;
-//     use std::path::PathBuf;
-//     let png: &[u8] = include_bytes!("../assets/keys-arrow-256.png");
-//     let mut reader = ImageReader::new(Cursor::new(png));
-//     reader.set_format(ImageFormat::Png);
-//     let icon = reader.decode().unwrap();
-//     let y = std::env::current_dir().unwrap();
-//     let bin = PathBuf::from(y).join("assets").join("keys-arrow-256.ico");
-//     println!("{:?}", bin);
-//     let mut file = File::create(bin).unwrap();
-//     file.write_all(icon.as_bytes()).unwrap();
-//     println!("({}, {})", icon.width(), icon.height())
-// }
 
 /// `interactive_main` provides the command line interface for the application when built as a
 /// command line-only utility or when built as a GUI application but run using the \-\-interactive
@@ -301,11 +316,22 @@ async fn interactive_main() {
         match list_vscs().await {
             Ok(vscs) => {
                 for vsc in vscs {
-                    println!(
-                        "{}: {}",
-                        "Name".bold(),
-                        vsc.Reader().unwrap().Name().unwrap()
-                    );
+                    let reader = match vsc.Reader() {
+                        Ok(reader) => reader,
+                        Err(e) => {
+                            error!("Failed to get reader instance: {e}. Continuing...");
+                            continue;
+                        }
+                    };
+                    match reader.Name() {
+                        Ok(name) => {
+                            println!("{}: {}", "Name".bold(), name);
+                        }
+                        Err(e) => {
+                            error!("Failed to read name of reader instance: {e}. Continuing...");
+                            continue;
+                        }
+                    }
                 }
             }
             Err(e) => {
@@ -427,13 +453,13 @@ async fn interactive_main() {
                                 )
                                 .to_string(),
                             )
-                            .unwrap(),
+                            .unwrap(), // allow panic for IO errors here
                         );
                         let pin2 = Zeroizing::new(
                             rpassword::prompt_password(
                                 format!("{}: ", "Re-enter new PIN".bold()).to_string(),
                             )
-                            .unwrap(),
+                            .unwrap(), // allow panic for IO errors here
                         );
                         if pin != pin2 {
                             println!("{}: PINs do not match", "ERROR".bold());
@@ -449,19 +475,15 @@ async fn interactive_main() {
                     };
                     let puk = loop {
                         let puk = Zeroizing::new(rpassword::prompt_password(
-                            format!(
-                                "{}: ",
-                                "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length".bold()
-                            )
-                                .to_string(),
-                        )
-                            .unwrap());
+                                format!("{}: ", "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length".bold()).to_string())
+                                                     .unwrap() // allow panic for IO errors here
+                        );
                         let puk2 = Zeroizing::new(
                             rpassword::prompt_password(
                                 format!("{}: ", "Re-enter new PIN Unlock Key (PUK)".bold())
                                     .to_string(),
                             )
-                            .unwrap(),
+                            .unwrap(), // allow panic for IO errors here
                         );
                         if puk != puk2 {
                             println!("{}: PUKs do not match", "ERROR".bold());
@@ -657,7 +679,13 @@ async fn interactive_main() {
                     info!("Ignoring error and searching for VSC: {err}");
                     let sc = match get_vsc(&serial.to_string()).await {
                         Ok(sc) => {
-                            args.serial = Some(get_vsc_id_from_serial(serial).unwrap());
+                            args.serial = match get_vsc_id_from_serial(serial) {
+                                Ok(serial) => Some(serial),
+                                Err(e) => {
+                                    println!("{}: {e:?}", "ERROR".bold());
+                                    return;
+                                }
+                            };
                             sc
                         }
                         Err(e) => {
@@ -691,7 +719,7 @@ async fn interactive_main() {
                     )
                     .bold(),
                 )
-                .unwrap(),
+                .unwrap(), // allow panic for IO errors here
             );
 
             #[allow(irrefutable_let_patterns)]
@@ -714,11 +742,11 @@ async fn interactive_main() {
 
     let mgmt_key = PB_MGMT_KEY.clone();
 
-    if args.pre_enroll_otp.is_some() {
+    if let Some(pre_enroll_otp) = args.pre_enroll_otp {
         match pre_enroll(
             &mut cm,
-            &args.agent_edipi.unwrap(),
-            &args.pre_enroll_otp.unwrap(),
+            &args.agent_edipi.unwrap(), // allow unwrap where clap enforces presence
+            &pre_enroll_otp,
             &pb_base_url,
             pin,
             Some(&mgmt_key),
@@ -744,16 +772,16 @@ async fn interactive_main() {
                 println!("{}: pre-enroll failed: {e:?}", "ERROR".bold());
             }
         }
-    } else if args.enroll_otp.is_some() {
+    } else if let Some(enroll_otp) = args.enroll_otp {
         let oai = OtaActionInputs::new(
-            &args.serial.as_ref().unwrap().to_string(),
-            &args.enroll_otp.unwrap(),
+            &args.serial.as_ref().unwrap().to_string(), // allow unwrap where clap enforces presence
+            &enroll_otp,
             &pb_base_url,
             &app,
         );
         match enroll(
             &mut cm,
-            &args.agent_edipi.unwrap().to_string(),
+            &args.agent_edipi.unwrap().to_string(), // allow unwrap where clap enforces presence
             &oai,
             pin,
             Some(&mgmt_key),
@@ -780,10 +808,10 @@ async fn interactive_main() {
                 println!("{}: enroll failed: {e:?}", "ERROR".bold());
             }
         }
-    } else if args.ukm_otp.is_some() {
+    } else if let Some(ukm_otp) = args.ukm_otp {
         let oai = OtaActionInputs::new(
-            &args.serial.as_ref().unwrap().to_string(),
-            &args.ukm_otp.unwrap(),
+            &args.serial.as_ref().unwrap().to_string(), // allow unwrap where clap enforces presence
+            &ukm_otp,
             &pb_base_url,
             &app,
         );
@@ -807,10 +835,10 @@ async fn interactive_main() {
                 println!("{}: user key management failed: {e:?}", "ERROR".bold());
             }
         }
-    } else if args.recover_otp.is_some() {
+    } else if let Some(recover_otp) = args.recover_otp {
         let oai = OtaActionInputs::new(
-            &args.serial.as_ref().unwrap().to_string(),
-            &args.recover_otp.unwrap(),
+            &args.serial.as_ref().unwrap().to_string(), // allow unwrap where clap enforces presence
+            &recover_otp,
             &pb_base_url,
             &app,
         );

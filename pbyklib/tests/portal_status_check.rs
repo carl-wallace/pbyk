@@ -65,7 +65,7 @@ async fn test_nipr_fail() {
         .is_err());
 }
 
-// Call this from unit tests when debugging.
+// Call this from unit tests when actively debugging (hence allow(dead_code)).
 #[allow(dead_code)]
 #[cfg(test)]
 fn init_console_logging() {

@@ -112,7 +112,6 @@ impl WindowsState {
     // }
     /// Add cert hash for the reader
     #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-
     pub fn add_cert_hash_for_reader(&mut self, reader: &str, hash: &String) {
         let mut cur = match self.reader_cert_hash_map.get(reader) {
             Some(cur) => cur.clone(),

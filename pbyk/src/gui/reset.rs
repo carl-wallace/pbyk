@@ -1,65 +1,86 @@
 //! Solicits PIN and PUK information in support of resetting the available YubiKey device
+// onsubmit, onclick, etc. are causing these warnings
+#![allow(unused_qualifications)]
 
 use dioxus::prelude::*;
+use dioxus_toast::{Icon, ToastInfo};
 use log::error;
-use native_dialog::{MessageDialog, MessageType};
 
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 use pbyklib::utils::{list_vscs::get_vsc, reset_vsc::reset_vsc};
 
+use crate::gui::app_signals::AppSignals;
+use crate::gui::ui_signals::UiSignals;
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 use crate::gui::utils::parse_reader_from_vsc_display;
-
+use crate::gui::utils::string_or_default;
+use crate::Phase::PreEnroll;
 use pbyklib::{
     utils::{get_yubikey, reset_yubikey},
     PB_MGMT_KEY,
 };
-
-use crate::gui::utils::string_or_default;
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn reset<'a>(
-    cx: Scope<'a>,
-    s_serial: &'a UseState<String>,
-    s_reset_req: &'a UseState<bool>,
-    s_pin: &'a UseState<String>,
-    s_puk: &'a UseState<String>,
-    s_error_msg: &'a UseState<String>,
-    s_reset_complete: &'a UseState<bool>,
-    s_disa_icon: &'a UseState<String>,
-    s_pin_style: &'a UseState<&str>,
+pub(crate) fn reset(
     is_yubikey: bool,
-) -> Element<'a> {
+    mut app_signals: AppSignals,
+    mut ui_signals: UiSignals,
+) -> Element {
     // Non-fatal error handling
-    let error_msg_setter = s_error_msg.setter();
-    if !s_error_msg.is_empty() {
-        let error_msg = s_error_msg.get().clone();
-        error_msg_setter(String::new());
-        MessageDialog::new()
-            .set_type(MessageType::Error)
-            .set_title("Reset Error")
-            .set_text(&error_msg.to_string())
-            .show_alert()
-            .unwrap_or_default();
+    macro_rules! show_error_dialog {
+        () => {
+            if !ui_signals.s_error_msg.read().is_empty() {
+                let _id = ui_signals.toast.write().popup(ToastInfo {
+                    heading: Some("Reset Error".to_string()),
+                    context: ui_signals.s_error_msg.to_string(),
+                    allow_toast_close: true,
+                    position: dioxus_toast::Position::TopLeft,
+                    icon: Some(Icon::Error),
+                    hide_after: None,
+                });
+                ui_signals.s_error_msg.set(String::new());
+            }
+        };
     }
 
-    cx.render(rsx! {
-        style { include_str!("../../assets/pbyk.css") }
+    macro_rules! reset_complete {
+        () => {
+            if *ui_signals.s_reset_complete.read() {
+                ui_signals.s_pin.set(String::new());
+                ui_signals.s_reset_complete.set(false);
+                ui_signals
+                    .s_edipi_style
+                    .set("display:table-row;".to_string());
+                ui_signals
+                    .s_pre_enroll_otp_style
+                    .set("display:table-row;".to_string());
+                ui_signals.s_ukm_otp_style.set("display:none;".to_string());
+                ui_signals.s_hide_recovery.set("none".to_string());
+                ui_signals.s_button_label.set("Pre-enroll".to_string());
+                ui_signals.s_hide_reset.set("none".to_string());
+                app_signals.s_phase.set(PreEnroll);
+            }
+        };
+    }
+
+    // this is sub-ideal but the error display should only occur for the corner case where the
+    // YubiKey does not have the expected management key.
+    show_error_dialog!();
+    let css = include_str!("../../assets/pbyk.css");
+    rsx! {
+        style { "{css}" }
+        dioxus_toast::ToastFrame {
+            manager: ui_signals.toast
+        }
         div {
             form {
                 onsubmit: move |ev| {
-                    let error_msg_setter = s_error_msg.setter();
-                    let reset_setter = s_reset_req.setter();
-                    let pin_setter = s_pin.setter();
-                    let puk_setter = s_puk.setter();
-                    let reset_complete_setter = s_reset_complete.setter();
-
                     let pin1 = string_or_default(&ev, "pin", "");
                     let pin2 = string_or_default(&ev, "pin2", "");
                     let puk1 = string_or_default(&ev, "puk", "");
                     let puk2 = string_or_default(&ev, "puk2", "");
 
                     let serial = string_or_default(&ev, "serial", "");
-                    let serial_u32 = match s_serial.get().parse::<u32>() {
+                    let serial_u32 = match app_signals.s_serial.read().parse::<u32>() {
                         Ok(serial_u32) => Some(serial_u32),
                         Err(_e) => {
                             // let sm = format!("ERROR: failed to process YubiKey serial number: {e}.");
@@ -72,8 +93,8 @@ pub(crate) fn reset<'a>(
                     async move {
                         if is_yubikey{
                             if pin1.is_empty() || pin2.is_empty() || puk1.is_empty() || puk2.is_empty() {
-                                pin_setter("".to_string());
-                                puk_setter("".to_string());
+                                ui_signals.s_pin.set( String::new());
+                                ui_signals.s_puk.set( String::new());
 
                                 let sm = if pin1.is_empty() || pin2.is_empty() {
                                     "You must enter a new PIN value and confirm that value"
@@ -81,27 +102,30 @@ pub(crate) fn reset<'a>(
                                 else {
                                     "You must enter a new PUK value and confirm that value"
                                 };
-                                error_msg_setter(sm.to_string());
+                                ui_signals.s_error_msg.set(sm.to_string());
+                                show_error_dialog!();
                                 return;
                             }
 
-                            if !pin1.chars().all(|c| c.is_ascii()) || 6 > pin1.len() || 8 < pin1.len() {
+                            if !pin1.is_ascii() || 6 > pin1.len() || 8 < pin1.len() {
                                 let sm = "PIN values MUST be between 6 and 8 characters long and only contain ASCII values.";
                                 error!("{}", sm);
-                                error_msg_setter(sm.to_string());
+                                ui_signals.s_error_msg.set(sm.to_string());
+                                show_error_dialog!();
                                 return;
                             }
 
                             if 6 > puk1.len() || 8 < puk1.len()  {
                                 let sm = "PUK values MUST be between 6 and 8 characters long.";
                                 error!("{}", sm);
-                                error_msg_setter(sm.to_string());
+                                ui_signals.s_error_msg.set(sm.to_string());
+                                show_error_dialog!();
                                 return;
                             }
 
                             if pin1 != pin2 || puk1 != puk2 {
-                                pin_setter("".to_string());
-                                puk_setter("".to_string());
+                                ui_signals.s_pin.set( String::new());
+                                ui_signals.s_puk.set( String::new());
 
                                 let sm = if pin1 != pin2 {
                                     "PIN values do not match"
@@ -110,7 +134,8 @@ pub(crate) fn reset<'a>(
                                     "PUK values do not match"
                                 };
 
-                                error_msg_setter(sm.to_string());
+                                ui_signals.s_error_msg.set(sm.to_string());
+                                show_error_dialog!();
                                 return;
                             }
                         }
@@ -124,7 +149,7 @@ pub(crate) fn reset<'a>(
                                     Err(e) => {
                                         let sm = format!("Could not get the YubiKey with serial number {yks}. Please make sure the device is available then try again. Error: {e}");
                                         error!("{}", sm);
-                                        error_msg_setter(sm.to_string());
+                                        ui_signals.s_error_msg.set(sm.to_string());
                                         return;
                                     }
                                 };
@@ -132,13 +157,22 @@ pub(crate) fn reset<'a>(
                                 if let Err(e) = reset_yubikey(&mut yubikey, &pin1, &puk1, &PB_MGMT_KEY.clone()) {
                                     let sm = format!("Failed to reset YubiKey with serial number {yks}: {e}.");
                                     error!("{}", sm);
-                                    pin_setter("".to_string());
-                                    puk_setter("".to_string());
-                                    error_msg_setter(sm.to_string());
+                                    ui_signals.s_pin.set( String::new());
+                                    ui_signals.s_puk.set( String::new());
+                                    ui_signals.s_error_msg.set(sm.to_string());
                                 }
                                 else {
-                                    reset_complete_setter(true);
-                                    reset_setter(false);
+                                    ui_signals.s_reset_complete.set(true);
+                                    app_signals.s_reset_req.set(false);
+                                    ui_signals.s_edipi_style.set("display:table-row;".to_string());
+                                    ui_signals.s_pre_enroll_otp_style.set("display:table-row;".to_string());
+                                    ui_signals.s_ukm_otp_style.set("display:none;".to_string());
+                                    ui_signals.s_hide_recovery.set("none".to_string());
+                                    ui_signals.s_button_label.set("Pre-enroll".to_string());
+                                    ui_signals.s_enroll_otp_style.set("display:none;".to_string());
+                                    app_signals.s_phase.set(PreEnroll);
+
+                                    reset_complete!();
                                 }
                             },
                             None => {
@@ -152,7 +186,7 @@ pub(crate) fn reset<'a>(
                                         Err(e) => {
                                             let sm = format!("Could not get the VSC with serial number {r}. Please make sure the device is available then try again. Error: {e:?}");
                                             error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
+                                            ui_signals.s_error_msg.set(sm.to_string());
                                             return;
                                         }
                                     };
@@ -160,13 +194,14 @@ pub(crate) fn reset<'a>(
                                     if let Err(e) = reset_vsc(&smartcard).await {
                                         let sm = format!("Failed to reset VSC with serial number {r}: {e:?}.");
                                         error!("{}", sm);
-                                        pin_setter("".to_string());
-                                        puk_setter("".to_string());
-                                        error_msg_setter(sm.to_string());
+                                        ui_signals.s_pin.set(String::new());
+                                        ui_signals.s_puk.set(String::new());
+                                        ui_signals.s_error_msg.set(sm.to_string());
                                     }
                                     else {
-                                        reset_complete_setter(true);
-                                        reset_setter(false);
+                                        ui_signals.s_reset_complete.set(true);
+                                        app_signals.s_reset_req.set(false);
+                                        reset_complete!();
                                     }
                                 }
 
@@ -174,7 +209,8 @@ pub(crate) fn reset<'a>(
                                 {
                                     let sm = format!("ERROR: failed to process YubiKey serial number {serial}");
                                     error!("{}", sm);
-                                    error_msg_setter(sm.to_string());
+                                    ui_signals.s_error_msg.set(sm.to_string());
+                                    show_error_dialog!();
                                 }
                             }
                         };
@@ -185,25 +221,25 @@ pub(crate) fn reset<'a>(
                         tr{
                             style: "display:table-row;",
                             td{div{label {r#for: "serial", "Serial Number"}}}
-                            td{input { r#type: "text", name: "serial", readonly: true, value: "{s_serial}"}}
+                            td{input { r#type: "text", name: "serial", readonly: true, value: "{app_signals.s_serial}"}}
                         }
                         tr{
-                            style: "{s_pin_style}",
+                            style: "{ui_signals.s_pin_style}",
                             th{rowspan: "2", div{label {r#for: "pin", "YubiKey PIN"}}}
-                            td{input { r#type: "password", placeholder: "Enter YubiKey PIN (6 to 8 ASCII characters)", name: "pin", value: "{s_pin}", maxlength: "8"}}
+                            td{input { r#type: "password", placeholder: "Enter YubiKey PIN (6 to 8 ASCII characters)", name: "pin", value: "{ui_signals.s_pin}", maxlength: "8"}}
                         }
                         tr{
-                            style: "{s_pin_style}",
-                            td{input { r#type: "password", placeholder: "Re-enter YubiKey PIN", name: "pin2", value: "{s_pin}", maxlength: "8"}}
+                            style: "{ui_signals.s_pin_style}",
+                            td{input { r#type: "password", placeholder: "Re-enter YubiKey PIN", name: "pin2", value: "{ui_signals.s_pin}", maxlength: "8"}}
                         }
                         tr{
-                            style: "{s_pin_style}",
+                            style: "{ui_signals.s_pin_style}",
                             th{rowspan: "2", div{label {r#for: "puk", "YubiKey PUK"}}}
-                            td{input { r#type: "password", placeholder: "Enter YubiKey PUK (6 to 8 ASCII characters)", name: "puk", value: "{s_pin}", maxlength: "8"}}
+                            td{input { r#type: "password", placeholder: "Enter YubiKey PUK (6 to 8 ASCII characters)", name: "puk", value: "{ui_signals.s_pin}", maxlength: "8"}}
                         }
                         tr{
-                            style: "{s_pin_style}",
-                            td{input { r#type: "password", placeholder: "Re-enter YubiKey PUK", name: "puk2", value: "{s_pin}", maxlength: "8"}}
+                            style: "{ui_signals.s_pin_style}",
+                            td{input { r#type: "password", placeholder: "Re-enter YubiKey PUK", name: "puk2", value: "{ui_signals.s_pin}", maxlength: "8"}}
                         }
                     }
                 }
@@ -214,12 +250,12 @@ pub(crate) fn reset<'a>(
                 div {
                     style: "text-align:center",
                     img {
-                        src: "data:image/png;base64, {s_disa_icon}",
+                        src: "data:image/png;base64, {ui_signals.s_disa_icon}",
                         max_height: "25%",
                         max_width: "25%",
                     }
                 }
             }
         }
-    }) //end cx.render
+    }
 }

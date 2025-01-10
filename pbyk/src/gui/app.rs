@@ -2,488 +2,318 @@
 
 #![cfg(feature = "gui")]
 #![allow(non_snake_case)]
-
-use std::{
-    collections::BTreeMap,
-    sync::Mutex,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+// onsubmit, onclick, etc. are causing these warnings
+#![allow(unused_qualifications)]
 
 use dioxus::prelude::*;
-use dioxus_toast::{Icon, ToastInfo, ToastManager};
-use fermi::{use_atom_ref, use_init_atom_root, AtomRef};
-use log::{debug, error, info};
-use std::sync::LazyLock;
-use zeroize::Zeroizing;
+use dioxus_desktop::use_window;
+use dioxus_toast::{Icon, ToastInfo};
 
-use base64ct::{Base64, Encoding};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use log::{debug, error, info};
+use zeroize::Zeroizing;
 
 use pbyklib::{
     ota::{
         data::OtaActionInputs, enroll::enroll, pre_enroll::pre_enroll, recover::recover, ukm::ukm,
         CryptoModule,
     },
-    utils::list_yubikeys::{get_pre_enroll_hash_yubikey, get_yubikey},
+    utils::list_yubikeys::get_yubikey,
     PB_MGMT_KEY,
 };
 
-use crate::args::{num_environments, PbYkArgs};
+use crate::args::PbYkArgs;
 use crate::gui::{
+    app_signals::AppSignals,
+    burned_otps::*,
     gui_main::{Phase, Phase::*},
     reset::reset,
+    ui_signals::UiSignals,
     utils::*,
 };
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
-use pbyklib::utils::{
-    get_pre_enroll_hash,
-    list_vscs::{get_vsc, get_vsc_id_from_serial},
-};
+use pbyklib::utils::list_vscs::{get_vsc, get_vsc_id_from_serial};
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::determine_vsc_phase;
 
-pub static DISA_ICON_BASE64: LazyLock<String> =
-    LazyLock::new(|| Base64::encode_string(include_bytes!("../../assets/disa.png")));
-pub static BURNED_OTPS: LazyLock<Mutex<BTreeMap<String, Duration>>> =
-    LazyLock::new(|| Mutex::new(BTreeMap::new()));
-
-static TOAST_MANAGER: AtomRef<ToastManager> = AtomRef(|_| ToastManager::default());
-
-fn add_otp(otp: &str) {
-    clean_otps();
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration) => {
-            BURNED_OTPS
-                .lock()
-                .unwrap()
-                .insert(otp.to_string(), duration);
-        }
-        Err(e) => {
-            error!(
-                "Failed to read duration in add_otp: {e}. Continuing without OTP reuse detection."
-            )
-        }
-    }
-}
-
-fn check_otp(otp: &str) -> bool {
-    BURNED_OTPS.lock().unwrap().contains_key(otp)
-}
-
-fn clean_otps() {
-    let cur = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let limit = Duration::new(180, 0);
-    BURNED_OTPS.lock().unwrap().retain(|_, v| cur - *v < limit);
-}
-
-/// Update various UseState variables based on the phase value
+/// Update various Signal variables based on the phase value
 #[allow(clippy::too_many_arguments)]
-fn update_phase<'a>(
+fn update_phase(
     phase: &Phase,
-    s_edipi_style: &'a UseState<&str>,
-    s_pre_enroll_otp_style: &'a UseState<&str>,
-    s_ukm_otp_style: &'a UseState<&str>,
-    s_hide_recovery: &'a UseState<&str>,
-    s_button_label: &'a UseState<String>,
-    s_hide_reset: &'a UseState<String>,
-    s_enroll_otp_style: &'a UseState<&str>,
+    mut s_edipi_style: Signal<String>,
+    mut s_pre_enroll_otp_style: Signal<String>,
+    mut s_ukm_otp_style: Signal<String>,
+    mut s_hide_recovery: Signal<String>,
+    mut s_button_label: Signal<String>,
+    mut s_hide_reset: Signal<String>,
+    mut s_enroll_otp_style: Signal<String>,
 ) {
     match phase {
         PreEnroll => {
-            s_edipi_style.setter()("display:table-row;");
-            s_pre_enroll_otp_style.setter()("display:table-row;");
-            s_ukm_otp_style.setter()("display:none;");
-            s_hide_recovery.setter()("none");
-            s_button_label.setter()("Pre-enroll".to_string());
-            s_hide_reset.setter()("none".to_string());
+            s_edipi_style.set("display:table-row;".to_string());
+            s_pre_enroll_otp_style
+                .write()
+                .push_str("display:table-row;");
+            s_ukm_otp_style.set("display:none;".to_string());
+            s_hide_recovery.set("none".to_string());
+            s_button_label.set("Pre-enroll".to_string());
+            s_hide_reset.set("none".to_string());
         }
         Enroll => {
-            s_edipi_style.setter()("display:table-row;");
-            s_pre_enroll_otp_style.setter()("display:none;");
-            s_ukm_otp_style.setter()("display:none;");
-            s_enroll_otp_style.setter()("display:table-row;");
-            s_hide_recovery.setter()("none");
-            s_button_label.setter()("Enroll".to_string());
-            s_hide_reset.setter()("none".to_string());
+            s_edipi_style.set("display:table-row;".to_string());
+            s_pre_enroll_otp_style.set("display:none;".to_string());
+            s_enroll_otp_style.set("display:table-row;".to_string());
+            s_ukm_otp_style.set("display:none;".to_string());
+            s_hide_recovery.set("none".to_string());
+            s_button_label.set("Enroll".to_string());
+            s_hide_reset.set("none".to_string());
         }
         Ukm => {
-            s_edipi_style.setter()("display:none;");
-            s_pre_enroll_otp_style.setter()("display:none;");
-            s_enroll_otp_style.setter()("display:none;");
-            s_ukm_otp_style.setter()("display:table-row;");
-            s_hide_recovery.setter()("none");
-            s_button_label.setter()("User Key Management".to_string());
-            s_hide_reset.setter()("none".to_string());
+            s_edipi_style.set("display:none;".to_string());
+            s_pre_enroll_otp_style.set("display:none;".to_string());
+            s_enroll_otp_style.set("display:none;".to_string());
+            s_ukm_otp_style.set("display:table-row;".to_string());
+            s_hide_recovery.set("none".to_string());
+            s_button_label.set("User Key Management".to_string());
+            s_hide_reset.set("none".to_string());
         }
         UkmOrRecovery => {
-            s_edipi_style.setter()("display:none;");
-            s_pre_enroll_otp_style.setter()("display:none;");
-            s_enroll_otp_style.setter()("display:none;");
-            s_ukm_otp_style.setter()("display:table-row;");
-            s_button_label.setter()("User Key Management".to_string());
-            s_hide_recovery.setter()("inline-block");
-            s_hide_reset.setter()("none".to_string());
+            s_edipi_style.set("display:none;".to_string());
+            s_pre_enroll_otp_style.set("display:none;".to_string());
+            s_enroll_otp_style.set("display:none;".to_string());
+            s_ukm_otp_style.set("display:table-row;".to_string());
+            s_hide_recovery.set("inline-block".to_string());
+            s_button_label.set("User Key Management".to_string());
+            s_hide_reset.set("none".to_string());
         }
     }
+}
+
+fn set_error(
+    msg: &str,
+    mut s_error_msg: Signal<String>,
+    mut s_cursor: Signal<String>,
+    mut s_disabled: Signal<bool>,
+) {
+    error!("{}", msg);
+    s_error_msg.set(msg.to_string());
+    s_cursor.set("default".to_string());
+    s_disabled.set(false);
 }
 
 /// app is the primary component of GUI mode. It draws the forms that comprise the Purebred workflow
 /// and drives execution through the workflow.
-pub(crate) fn app<'a>(
-    cx: Scope<'a>,
-    s_phase: &'a UseState<Phase>,
-    s_serial: &'a UseState<String>,
-    s_reset_req: &'a UseState<bool>,
-    s_serials: &'a UseState<Vec<String>>,
-    s_fatal_error_val: &'a UseState<String>,
+pub(crate) fn app(
+    mut app_signals: AppSignals,
     is_yubikey: bool,
-) -> Element<'a> {
-    // initialize plumbing for status dialogs
-    use_init_atom_root(cx);
-    let toast = use_atom_ref(cx, &TOAST_MANAGER);
-
-    let s_disa_icon = use_state(cx, || DISA_ICON_BASE64.clone());
-
-    // State variables for input fields
-    let s_edipi = use_state(cx, || {
-        // Only saved element at present is agent edipi
-        let sa = read_saved_args_or_default();
-        sa.agent_edipi.unwrap_or_default()
-    });
-    let s_pin = use_state(cx, String::new);
-    let s_puk = use_state(cx, String::new);
-    let s_pre_enroll_otp = use_state(cx, String::new);
-    let s_enroll_otp = use_state(cx, String::new);
-    let s_hash = use_state(cx, String::new);
-    let s_ukm_otp = use_state(cx, String::new);
-    let s_recover = use_state(cx, || false);
-    let (s_dev_checked, s_om_nipr_checked, s_om_sipr_checked, s_nipr_checked, s_sipr_checked) =
-        get_default_env_radio_selections(cx);
-
-    let serials = s_serials.get();
-    let serial_setter = s_serial.setter();
-    let s_check_phase = use_state(cx, || false);
-    let check_phase_setter = s_check_phase.setter();
-
-    // Style variables for enabling/disabling UI elements. One governs the cursor. The other governs
-    // elements that benefit from disabling, i.e., clickable elements and editable elements. Read-only
-    // elements are not changed based on app state.
-    let s_cursor = use_state(cx, || "default".to_string());
-    let s_disabled = use_state(cx, || false);
-
-    let s_reset_abandoned = use_state(cx, || false);
-    let reset_setter = s_reset_req.setter();
-    let reset_abandoned_setter = s_reset_abandoned.setter();
-    let pin_setter = s_pin.setter();
-    let puk_setter = s_puk.setter();
-    let s_reset_complete = use_state(cx, || false);
-
-    // icon click variables
-    let s_click_count = use_state(cx, || 0);
-    let s_click_start = use_state(cx, || 0);
-    let s_hide_reset = use_state(cx, || "none".to_string());
-
-    // Style variables for impermanent UI elements
-    let s_pin_style = use_state(cx, || {
-        if is_yubikey {
-            "display:table-row;"
-        } else {
-            "display:none;"
-        }
-    });
-    let (
-        s_edipi_style,
-        s_pre_enroll_otp_style,
-        s_ukm_otp_style,
-        s_hide_recovery,
-        s_button_label,
-        s_enroll_otp_style,
-    ) = match s_phase.get() {
-        Ukm => (
-            use_state(cx, || "display:none;"),                   // edipi
-            use_state(cx, || "display:none;"),                   // pre-enroll otp
-            use_state(cx, || "display:table-row;"),              // UKM otp
-            use_state(cx, || "none"),                            // hide recovery
-            use_state(cx, || "User Key Management".to_string()), //label
-            use_state(cx, || "display:none;"),
-        ),
-        UkmOrRecovery => (
-            use_state(cx, || "display:none;"),
-            use_state(cx, || "display:none;"),
-            use_state(cx, || "display:table-row;"),
-            use_state(cx, || "inline-block"),
-            use_state(cx, || "User Key Management".to_string()),
-            use_state(cx, || "display:none;"),
-        ),
-        Enroll => (
-            use_state(cx, || "display:table-row;"),
-            use_state(cx, || "display:none;"),
-            use_state(cx, || "display:none;"),
-            use_state(cx, || "none"),
-            use_state(cx, || "Enroll".to_string()),
-            use_state(cx, || "display:table-row;"),
-        ),
-        PreEnroll => (
-            use_state(cx, || "display:table-row;"),
-            use_state(cx, || "display:table-row;"),
-            use_state(cx, || "display:none;"),
-            use_state(cx, || "none"),
-            use_state(cx, || "Pre-enroll".to_string()),
-            use_state(cx, || "display:none;"),
-        ),
-    };
-
-    if *s_phase.get() == Enroll && s_hash.get().is_empty() {
-        if is_yubikey {
-            match get_pre_enroll_hash_yubikey(s_serial.get()) {
-                Ok(hash) => s_hash.setter()(hash),
-                Err(_e) => {
-                    error!("Failed to calculate pre-enroll. Consider resetting the device and restarting enrollment.");
-                }
+    mut ui_signals: UiSignals,
+) -> Element {
+    // Macro to display toast with success or error message if ui_signals.s_error_msg or
+    // ui_signals.s_success_msg is not empty. Clears the value after display.
+    macro_rules! show_message {
+        () => {
+            if !ui_signals.s_error_msg.read().is_empty() {
+                let _id = ui_signals.toast.write().popup(ToastInfo {
+                    heading: Some("ERROR".to_string()),
+                    context: ui_signals.s_error_msg.to_string(),
+                    allow_toast_close: true,
+                    position: dioxus_toast::Position::TopLeft,
+                    icon: Some(Icon::Error),
+                    hide_after: None,
+                });
+                ui_signals.s_error_msg.set(String::new());
             }
-        } else {
-            #[cfg(all(target_os = "windows", feature = "vsc"))]
-            {
-                let vsc_serial = parse_reader_from_vsc_display(s_serial.get());
-                match get_pre_enroll_hash(&vsc_serial) {
-                    Ok(hash) => s_hash.setter()(hash),
-                    Err(_e) => {
-                        error!("Failed to calculate pre-enroll. Consider resetting the device and restarting enrollment.");
-                    }
-                }
-            }
-        }
-    }
-
-    // Only show the environment row/table when there is more than one environment option available
-    let s_multi_env_style = if 1 == num_environments() {
-        use_state(cx, || "display:none;")
-    } else {
-        use_state(cx, || "display:table-row;")
-    };
-
-    #[cfg(feature = "dev")]
-    let s_dev_style = use_state(cx, || "display:table-row;");
-    #[cfg(not(feature = "dev"))]
-    let s_dev_style = use_state(cx, || "display:none;");
-
-    #[cfg(feature = "om_nipr")]
-    let s_om_nipr_style = use_state(cx, || "display:table-row;");
-    #[cfg(not(feature = "om_nipr"))]
-    let s_om_nipr_style = use_state(cx, || "display:none;");
-
-    #[cfg(feature = "om_sipr")]
-    let s_om_sipr_style = use_state(cx, || "display:table-row;");
-    #[cfg(not(feature = "om_sipr"))]
-    let s_om_sipr_style = use_state(cx, || "display:none;");
-
-    #[cfg(feature = "nipr")]
-    let s_nipr_style = use_state(cx, || "display:table-row;");
-    #[cfg(not(feature = "nipr"))]
-    let s_nipr_style = use_state(cx, || "display:none;");
-
-    #[cfg(feature = "sipr")]
-    let s_sipr_style = use_state(cx, || "display:table-row;");
-    #[cfg(not(feature = "sipr"))]
-    let s_sipr_style = use_state(cx, || "display:none;");
-
-    if *s_reset_complete.get() {
-        s_pin.setter()(String::new());
-        s_reset_complete.setter()(false);
-        s_edipi_style.setter()("display:table-row;");
-        s_pre_enroll_otp_style.setter()("display:table-row;");
-        s_ukm_otp_style.setter()("display:none;");
-        s_hide_recovery.setter()("none");
-        s_button_label.setter()("Pre-enroll".to_string());
-        s_hide_reset.setter()("none".to_string());
-        s_phase.setter()(PreEnroll);
-    }
-
-    if *s_check_phase.get() {
-        s_pin.setter()(String::new());
-        let serial = s_serial.get().clone();
-        match serial.parse::<u32>() {
-            Ok(yks) => {
-                s_pin_style.setter()("display:table-row;");
-                debug!("Connecting to newly selected YubiKey: {serial}");
-                let s = yubikey::Serial(yks);
-                let yubikey = match get_yubikey(Some(s)) {
-                    Ok(yk) => Some(yk),
-                    Err(e) => {
-                        error!("Failed to connect to YubiKey with serial {serial} with: {e}");
-                        s_fatal_error_val.setter()(format!("Failed to connect to YubiKey with serial {serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e));
-                        None
-                    }
-                };
-
-                if let Some(mut yubikey) = yubikey {
-                    debug!("Determining phase of newly selected YubiKey: {serial}");
-                    match yubikey.authenticate(PB_MGMT_KEY.clone()) {
-                        Ok(_) => {
-                            let phase = determine_phase(&mut yubikey);
-                            if phase != *s_phase.get() {
-                                s_phase.setter()(phase.clone());
-                                update_phase(
-                                    &phase,
-                                    s_edipi_style,
-                                    s_pre_enroll_otp_style,
-                                    s_ukm_otp_style,
-                                    s_hide_recovery,
-                                    s_button_label,
-                                    s_hide_reset,
-                                    s_enroll_otp_style,
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            let err = format!("The YubiKey with serial number {serial} is not using the expected management key. Please reset the device then try again.");
-                            error!("{err}: {e:?}");
-
-                            #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                            {
-                                let (tx, rx) = std::sync::mpsc::channel();
-                                use native_dialog::{MessageDialog, MessageType};
-                                let msg = format!("The YubiKey with serial number {serial} is not using the expected management key. Would you like to reset the device now?");
-                                match MessageDialog::new()
-                                    .set_type(MessageType::Info)
-                                    .set_title("Reset?")
-                                    .set_text(&msg)
-                                    .show_confirm()
-                                {
-                                    Ok(answer) => {
-                                        if answer {
-                                            let _ = tx.send(None);
-                                        } else {
-                                            let _ = tx.send(Some(err.to_string()));
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to solicit reset answer from user: {e}");
-                                    }
-                                }
-                                match rx.recv() {
-                                    Ok(result) => match result {
-                                        Some(err) => {
-                                            if 1 == s_serials.len() {
-                                                s_fatal_error_val.setter()(err);
-                                            } else {
-                                                let serial_str = s_serial.get();
-                                                for cur in s_serials.get().iter() {
-                                                    if cur != serial_str {
-                                                        info!("Resetting serial from {serial_str} to {cur}");
-                                                        s_serial.setter()(cur.to_string());
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        None => reset_setter(true),
-                                    },
-                                    Err(e) => {
-                                        let sm = format!("Failed to spawn thread for reset: {e}")
-                                            .to_string();
-                                        error!("{}", sm);
-                                        s_fatal_error_val.setter()(sm);
-                                    }
-                                }
-                            }
-
-                            #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-                            s_fatal_error_val.setter()(err.to_string());
-                        }
-                    }
-                }
-            }
-            Err(_e) => {
-                s_pin_style.setter()("display:none;");
-                #[cfg(all(target_os = "windows", feature = "vsc"))]
-                match determine_vsc_phase(&serial) {
-                    Ok(phase) => {
-                        if phase != *s_phase.get() {
-                            s_phase.setter()(phase.clone());
-                            update_phase(
-                                &phase,
-                                s_edipi_style,
-                                s_pre_enroll_otp_style,
-                                s_ukm_otp_style,
-                                s_hide_recovery,
-                                s_button_label,
-                                s_hide_reset,
-                                s_enroll_otp_style,
-                            );
-                        }
-                    }
-                    Err(_e) => {
-                        s_fatal_error_val.setter()(
-                            "Could not determine the state of the VSC named {serial}".to_string(),
-                        );
-                    }
-                };
+            if !ui_signals.s_success_msg.read().is_empty() {
+                let _id = ui_signals.toast.write().popup(ToastInfo {
+                    heading: Some("SUCCESS".to_string()),
+                    context: ui_signals.s_success_msg.to_string(),
+                    allow_toast_close: true,
+                    position: dioxus_toast::Position::TopLeft,
+                    icon: Some(Icon::Success),
+                    hide_after: None,
+                });
+                ui_signals.s_success_msg.set(String::new());
             }
         };
-
-        check_phase_setter(false);
     }
 
-    // Non-fatal error handling
-    let s_error_msg = use_state(cx, String::new);
-    let s_reset_msg = use_state(cx, String::new);
-    let error_msg_setter = s_error_msg.setter();
-    if !s_error_msg.is_empty() {
-        let _id = toast.write().popup(ToastInfo {
-            heading: Some("ERROR".to_string()),
-            context: s_error_msg.to_string(),
-            allow_toast_close: true,
-            position: dioxus_toast::Position::TopLeft,
-            icon: Some(Icon::Error),
-            hide_after: None,
-        });
-        error_msg_setter(String::new());
-    }
-    let s_success_msg = use_state(cx, String::new);
-    let success_msg_setter = s_success_msg.setter();
-    if !s_success_msg.is_empty() {
-        let _id = toast.write().popup(ToastInfo {
-            heading: Some("SUCCESS".to_string()),
-            context: s_success_msg.to_string(),
-            allow_toast_close: true,
-            position: dioxus_toast::Position::TopLeft,
-            icon: Some(Icon::Success),
-            hide_after: None,
-        });
-        success_msg_setter(String::new());
-    }
+    // Macro used to check the phase of the currently selected target and to update various UI state
+    // variables based on the result. Currently, this is only called when a drop list value is changed.
+    macro_rules! check_phase {
+        () => {
+            if *ui_signals.s_check_phase.read() {
+                ui_signals.s_pin.set(String::new());
+                let serial = app_signals.s_serial.read().clone();
+                match serial.parse::<u32>() {
+                    Ok(yks) => {
+                        ui_signals.s_pin_style.set("display:table-row;".to_string());
+                        debug!("Connecting to newly selected YubiKey: {serial}");
+                        let s = yubikey::Serial(yks);
+                        let yubikey = match get_yubikey(Some(s)) {
+                            Ok(yk) => Some(yk),
+                            Err(e) => {
+                                error!("Failed to connect to YubiKey with serial {serial} with: {e}");
+                                app_signals.s_fatal_error_val.set(format!("Failed to connect to YubiKey with serial {serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e).to_string());
+                                None
+                            }
+                        };
 
-    if *s_reset_req.get() {
-        debug!("Showing reset view");
-        if !s_pin.get().is_empty() || !s_puk.get().is_empty() {
-            pin_setter(String::new());
-            puk_setter(String::new());
+                        if let Some(mut yubikey) = yubikey {
+                            debug!("Determining phase of newly selected YubiKey: {serial}");
+                            match yubikey.authenticate(PB_MGMT_KEY.clone()) {
+                                Ok(_) => {
+                                    let phase = determine_phase(&mut yubikey);
+                                    if phase != *app_signals.s_phase.read() {
+                                        app_signals.s_phase.set(phase.clone());
+                                        update_phase(
+                                            &phase,
+                                            ui_signals.s_edipi_style,
+                                            ui_signals.s_pre_enroll_otp_style,
+                                            ui_signals.s_ukm_otp_style,
+                                            ui_signals.s_hide_recovery,
+                                            ui_signals.s_button_label,
+                                            ui_signals.s_hide_reset,
+                                            ui_signals.s_enroll_otp_style,
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    let err = format!("The YubiKey with serial number {serial} is not using the expected management key. Please reset the device then try again.");
+                                    error!("{err}: {e:?}");
+                                    ui_signals.s_error_msg.set(err.to_string());
+                                    app_signals.s_reset_req.set(true);
+                                    ui_signals.s_reset_abandoned.set(false);
+                                    clear_pin_and_puk!();
+                                    show_message!();
+                                }
+                            }
+                        }
+                    }
+                    Err(_e) => {
+                        ui_signals.s_pin_style.set("display:none;".to_string());
+                        #[cfg(all(target_os = "windows", feature = "vsc"))]
+                        match determine_vsc_phase(&serial) {
+                            Ok(phase) => {
+                                if phase != *app_signals.s_phase.read() {
+                                    app_signals.s_phase.set(phase.clone());
+                                    update_phase(
+                                        &phase,
+                                        ui_signals.s_edipi_style,
+                                        ui_signals.s_pre_enroll_otp_style,
+                                        ui_signals.s_ukm_otp_style,
+                                        ui_signals.s_hide_recovery,
+                                        ui_signals.s_button_label,
+                                        ui_signals.s_hide_reset,
+                                        ui_signals.s_enroll_otp_style,
+                                    );
+                                }
+                            }
+                            Err(_e) => {
+                                app_signals.s_fatal_error_val.set(
+                                    "Could not determine the state of the VSC named {serial}".to_string(),
+                                );
+                            }
+                        };
+                    }
+                };
+
+                ui_signals.s_check_phase.set(false);
+            };
         }
-        reset(
-            cx,
-            s_serial,
-            s_reset_req,
-            s_pin,
-            s_puk,
-            s_reset_msg,
-            s_reset_complete,
-            s_disa_icon,
-            s_pin_style,
-            is_yubikey,
-        )
+    }
+
+    // Macro to clean PIN and PUK values prior to redirecting to the reset form.
+    macro_rules! clear_pin_and_puk {
+        () => {
+            if !ui_signals.s_pin.read().is_empty() || !ui_signals.s_puk.read().is_empty() {
+                ui_signals.s_pin.set(String::new());
+                ui_signals.s_puk.set(String::new());
+            }
+        };
+    }
+
+    // Macro to prepare UI for enroll phase
+    macro_rules! enter_enroll_phase {
+        () => {
+            app_signals.s_phase.set(Enroll);
+            ui_signals
+                .s_pre_enroll_otp_style
+                .set("display:none;".to_string());
+            ui_signals
+                .s_enroll_otp_style
+                .set("display:table-row;".to_string());
+            ui_signals.s_button_label.set("Enroll".to_string());
+        };
+    }
+
+    // Macro to prepare UI for UKM phase
+    macro_rules! enter_ukm_phase {
+        () => {
+            app_signals.s_phase.set(Ukm);
+            ui_signals
+                .s_pre_enroll_otp_style
+                .set("display:none;".to_string());
+            ui_signals
+                .s_enroll_otp_style
+                .set("display:none;".to_string());
+            ui_signals.s_edipi_style.set("display:none;".to_string());
+            ui_signals
+                .s_ukm_otp_style
+                .set("display:table-row;".to_string());
+            ui_signals
+                .s_button_label
+                .set("User Key Management".to_string());
+        };
+    }
+    // Macro to prepare UI for UKM or Recovery phase
+    macro_rules! enter_ukm_or_recovery_phase {
+        () => {
+            app_signals.s_phase.set(UkmOrRecovery);
+            ui_signals.s_hide_recovery.set("inline-block".to_string());
+            ui_signals
+                .s_pre_enroll_otp_style
+                .set("display:none;".to_string());
+            ui_signals
+                .s_enroll_otp_style
+                .set("display:none;".to_string());
+            ui_signals.s_edipi_style.set("display:none;".to_string());
+            ui_signals
+                .s_ukm_otp_style
+                .set("display:table-row;".to_string());
+            ui_signals
+                .s_button_label
+                .set("User Key Management".to_string());
+        };
+    }
+
+    if *app_signals.s_reset_req.read() {
+        debug!("Showing reset view");
+        reset(is_yubikey, app_signals, ui_signals)
     } else {
-        cx.render(rsx! {
-            style { include_str!("../../assets/pbyk.css") }
+        let css = include_str!("../../assets/pbyk.css");
+
+        // prepare rsx block for drop list display
+        let serials = app_signals.s_serials.read().clone();
+        let serialRsx = serials.iter().map(|s| {
+            rsx! { option {
+                    value : "{s}",
+                    label : "{s}",
+                    selected: if *app_signals.s_serial.read().clone() == *s {"true"} else {"false"}
+                }
+            }
+        });
+
+        rsx! {
+            dioxus_toast::ToastFrame {
+                manager: ui_signals.toast
+            }
+            style { "{css}" }
             div {
                 form {
                     onsubmit: move |ev| {
-                        let error_msg_setter = s_error_msg.setter();
-                        let success_msg_setter = s_success_msg.setter();
-
                         let environment = string_or_default(&ev, "environment", "DEV");
                         info!("Targeting {environment} environment");
 
@@ -505,8 +335,10 @@ pub(crate) fn app<'a>(
                             scep_check: false,
                             interactive: false
                         };
+
                         let _ = save_args(&args);
-                        let _ = save_window_size(cx);
+                        let window = use_window();
+                        let _ = save_window_size(&window);
 
                         let PB_BASE_URL = match environment.as_str() {
                             #[cfg(feature = "dev")]
@@ -522,74 +354,32 @@ pub(crate) fn app<'a>(
                             _ => {
                                 let sm = format!("Unrecognized environment: {}.", environment);
                                 error!("{}", sm);
-                                error_msg_setter(sm.to_string());
+                                ui_signals.s_error_msg.set(sm.to_string());
                                 String::new()
                             }
                         };
 
-                        let p = s_phase.get().clone();
-                        let hash_setter = s_hash.setter();
-                        let preenroll_style_setter = s_pre_enroll_otp_style.setter();
-                        let edipi_setter = s_edipi.setter();
-                        let enroll_style_setter = s_enroll_otp_style.setter();
-                        let edipi_style_setter = s_edipi_style.setter();
-                        let ukm_setter = s_ukm_otp_style.setter();
-                        let pin_setter = s_pin.setter();
-                        let phase_setter = s_phase.setter();
-                        let button_setter = s_button_label.setter();
-                        let hide_recovery_setter = s_hide_recovery.setter();
-                        let cursor_setter = s_cursor.setter();
-                        let disabled_setter = s_disabled.setter();
-                        let recover_setter = s_recover.setter();
-                        let pin_style_setter = s_pin_style.setter();
+                        let cur_phase = app_signals.s_phase.read().clone();
 
-                        macro_rules! enter_enroll_phase {
-                                () => {
-                                    preenroll_style_setter("display:none;");
-                                    enroll_style_setter("display:table-row;");
-                                    phase_setter(Enroll);
-                                    button_setter("Enroll".to_string());
-                                };
-                            }
-                        macro_rules! enter_ukm_phase {
-                                () => {
-                                    preenroll_style_setter("display:none;");
-                                    enroll_style_setter("display:none;");
-                                    edipi_style_setter("display:none;");
-                                    ukm_setter("display:table-row;");
-                                    phase_setter(Ukm);
-                                    button_setter("User Key Management".to_string());
-                                };
-                            }
-                        macro_rules! enter_ukm_or_recovery_phase {
-                                () => {
-                                    hide_recovery_setter("inline-block");
-                                    preenroll_style_setter("display:none;");
-                                    enroll_style_setter("display:none;");
-                                    edipi_style_setter("display:none;");
-                                    ukm_setter("display:table-row;");
-                                    phase_setter(UkmOrRecovery);
-                                    button_setter("User Key Management".to_string());
-                                };
-                            }
+                        // When in UkmOrRecovery phase, determine if we got here as a consequence of
+                        // the user clicking the reset button
+                        let recovery_active =  *ui_signals.s_recover.read();
 
-                        let recovery_active = *s_recover.get();
-                        let reset_abandoned = *s_reset_abandoned.get();
-
+                        let reset_abandoned =  *ui_signals.s_reset_abandoned.read();
                         if !reset_abandoned {
-                            cursor_setter("wait".to_string());
-                            disabled_setter(true);
+                            ui_signals.s_cursor.set("wait".to_string());
+                            ui_signals.s_disabled.set(true);
                         }
                         else {
-                            s_reset_abandoned.setter()(false);
+                            ui_signals.s_reset_abandoned.set(false);
                         }
 
                         #[cfg(all(target_os = "windows", feature = "vsc"))]
-                        let mut serial_str_ota = s_serial.get().to_string();
+                        let mut serial_str_ota = app_signals.s_serial.read().to_string();
                         #[cfg(not(all(target_os = "windows", feature = "vsc")))]
-                        let serial_str_ota = s_serial.get().to_string();
+                        let serial_str_ota = app_signals.s_serial.read().to_string();
 
-                        let serial_u32 = match s_serial.get().parse::<u32>() {
+                        let serial_u32 = match app_signals.s_serial.read().parse::<u32>() {
                             Ok(serial_u32) => Some(serial_u32),
                             Err(e) => {
                                 let sm = format!("Failed to process serial number as YubiKey serial number: {e}.");
@@ -600,6 +390,8 @@ pub(crate) fn app<'a>(
                         };
 
                         async move {
+                            show_message!();
+
                             if reset_abandoned {
                                 // if we arrive here due to an aborted reset, just bail out
                                 return;
@@ -608,8 +400,9 @@ pub(crate) fn app<'a>(
                             if PB_BASE_URL.is_empty() {
                                 // error message is set up in match statement above if environment
                                 // is unrecognized and PB_BASE_URL is set to empty
-                                cursor_setter("default".to_string());
-                                disabled_setter(false);
+                                ui_signals.s_cursor.set("default".to_string());
+                                ui_signals.s_disabled.set(false);
+                                show_message!();
                                 return;
                             }
 
@@ -623,20 +416,21 @@ pub(crate) fn app<'a>(
                                         Ok(yk) => yk,
                                         Err(e) => {
                                             let sm = format!("Could not get the YubiKey with serial number {yks}. Please make sure the device is available then try again. Error: {e}");
-                                            error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
 
                                     if yubikey.authenticate(PB_MGMT_KEY.clone()).is_err() {
                                         let sm = format!("The YubiKey with serial number {} is not using the expected management key. Please reset the device then try again.", yubikey.serial());
-                                        error!("{}", sm);
-                                        error_msg_setter(sm.to_string());
-                                        cursor_setter("default".to_string());
-                                        disabled_setter(false);
+                                        set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+
+                                        // choice dialog is no longer used, show a toast then send the user to the reset form
+                                        ui_signals.s_reset_abandoned.set(false);
+                                        app_signals.s_reset_req.set(true);
+                                        clear_pin_and_puk!();
+                                        show_message!();
                                         return;
                                     }
 
@@ -644,14 +438,12 @@ pub(crate) fn app<'a>(
                                         Some(str) => str,
                                         None => {
                                             let sm = format!("No PIN was provided. Please enter the PIN for the YubiKey with serial number {} and try again", yks);
-                                            error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
-                                    pin_style_setter("display:table-row;");
+                                    ui_signals.s_pin_style.set("display:table-row;".to_string());
                                     (CryptoModule::YubiKey(yubikey), pin)
                                 }
                                 None => {
@@ -662,10 +454,8 @@ pub(crate) fn app<'a>(
                                             Ok(vsc) => vsc,
                                             Err(e) => {
                                                 let sm = format!("Could not get the VSC with serial number {serial_str_ota}. Please make sure the device is available then try again. Error: {e:?}");
-                                                error!("{}", sm);
-                                                error_msg_setter(sm.to_string());
-                                                cursor_setter("default".to_string());
-                                                disabled_setter(false);
+                                                set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
                                                 return;
                                             }
                                         };
@@ -673,50 +463,33 @@ pub(crate) fn app<'a>(
                                             Ok(s) => s,
                                             Err(e) => {
                                                 let sm = format!("Could not get the VSC ID for VSC with serial number {serial_str_ota}. Error: {e:?}");
-                                                error!("{}", sm);
-                                                error_msg_setter(sm.to_string());
-                                                cursor_setter("default".to_string());
-                                                disabled_setter(false);
+                                                set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
                                                 return;
                                             }
                                         };
-                                        pin_style_setter("display:none;");
-                                        (CryptoModule::SmartCard(vsc), "".to_string())
+                                        ui_signals.s_pin_style.set("display:none;".to_string());
+                                        (CryptoModule::SmartCard(vsc), String::new())
                                     }
                                     #[cfg(not(all(target_os = "windows", feature = "vsc")))]
                                     {
                                         let sm = "Failed to process serial number as YubiKey serial number.";
-                                        error!("{}", sm);
-                                        error_msg_setter(sm.to_string());
-                                        cursor_setter("default".to_string());
-                                        disabled_setter(false);
+                                        set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                        show_message!();
                                         return;
                                     }
                                 }
                             };
 
-                            // let yks = match serial_u32 {
-                            //     Some(serial_u32) => yubikey::Serial(serial_u32),
-                            //     None => {
-                            //         // error message is set up in match statement above if serial number
-                            //         // conversion fails
-                            //         cursor_setter("default".to_string());
-                            //         disabled_setter(false);
-                            //         return;
-                            //     }
-                            // };
-
-                            match p {
+                            match cur_phase {
                                 PreEnroll => {
                                     info!("Starting Pre-enroll operation...");
                                     let agent_edipi = match string_or_none(&ev, "edipi") {
                                         Some(agent_edipi) => agent_edipi,
                                         None => {
                                             let sm = "No Agent EDIPI was provided. Please enter the EDIPI of the cooperating Purebred Agent and try again";
-                                            error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
@@ -724,29 +497,23 @@ pub(crate) fn app<'a>(
                                         Some(pre_enroll_otp) => {
                                             if !pre_enroll_otp.chars().all(|c| c.is_numeric()) || 8 != pre_enroll_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
-                                                error!("{}", sm);
-                                                error_msg_setter(sm.to_string());
-                                                cursor_setter("default".to_string());
-                                                disabled_setter(false);
+                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
                                                 return;
                                             }
                                             pre_enroll_otp
                                         },
                                         None => {
                                             let sm = "No pre-enroll OTP was provided. Please enter a pre-enroll OTP and try again";
-                                            error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
                                     if check_otp(&pre_enroll_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
-                                        error!("{}", sm);
-                                        error_msg_setter(sm.to_string());
-                                        cursor_setter("default".to_string());
-                                        disabled_setter(false);
+                                        set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                        show_message!();
                                         return;
                                     }
                                     else {
@@ -760,9 +527,9 @@ pub(crate) fn app<'a>(
                                     else {
                                         None
                                     };
-                                    pin_setter(pin);
+                                    ui_signals.s_pin.set(pin);
                                     let agent_edipi_t = agent_edipi.clone();
-                                    edipi_setter(agent_edipi);
+                                    ui_signals.s_edipi.set(agent_edipi.trim().to_string());
                                     //let mut cm = CryptoModule::YubiKey(yubikey);
                                     let _ = tokio::spawn(async move {
                                         match pre_enroll(
@@ -794,21 +561,21 @@ pub(crate) fn app<'a>(
                                     match rx.recv() {
                                         Ok(result) => {
                                             if let Some(hash) = result.0 {
-                                                hash_setter(hash.clone());
+                                                ui_signals.s_hash.set(hash.clone());
                                                 enter_enroll_phase!();
                                             }
                                             else {
-                                                error_msg_setter(result.1.unwrap_or_default());
+                                                ui_signals.s_error_msg.set(result.1.unwrap_or_default());
                                             }
                                         }
                                         Err(e) => {
                                             let sm = format!("Failed to spawn thread for pre-enrollment: {e}").to_string();
                                             error!("{}", sm);
-                                            error_msg_setter(sm);
+                                            ui_signals.s_error_msg.set(sm.to_string());
                                         }
                                     }
-                                    cursor_setter("default".to_string());
-                                    disabled_setter(false);
+                                    ui_signals.s_cursor.set("default".to_string());
+                                    ui_signals.s_disabled.set(false);
                                 }
                                 Enroll => {
                                     info!("Starting Enroll operation...");
@@ -816,10 +583,8 @@ pub(crate) fn app<'a>(
                                         Some(agent_edipi) => agent_edipi,
                                         None => {
                                             let sm = "No Agent EDIPI was provided. Please enter the EDIPI of the cooperating Purebred Agent and try again";
-                                            error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
@@ -827,29 +592,23 @@ pub(crate) fn app<'a>(
                                         Some(enroll_otp) => {
                                             if !enroll_otp.chars().all(|c| c.is_numeric()) || 8 != enroll_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
-                                                error!("{}", sm);
-                                                error_msg_setter(sm.to_string());
-                                                cursor_setter("default".to_string());
-                                                disabled_setter(false);
+                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
                                                 return;
                                             }
                                             enroll_otp
                                         },
                                         None => {
                                             let sm = "No enroll OTP was provided. Please enter an enroll OTP and try again";
-                                            error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
                                     if check_otp(&enroll_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
-                                        error!("{}", sm);
-                                        error_msg_setter(sm.to_string());
-                                        cursor_setter("default".to_string());
-                                        disabled_setter(false);
+                                        set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                        show_message!();
                                         return;
                                     }
                                     else {
@@ -863,7 +622,7 @@ pub(crate) fn app<'a>(
                                     else {
                                         None
                                     };
-                                    pin_setter(pin);
+                                    ui_signals.s_pin.set(pin);
                                     let oai = OtaActionInputs::new(
                                         &serial_str_ota,
                                         &enroll_otp,
@@ -901,7 +660,7 @@ pub(crate) fn app<'a>(
                                     match rx.recv() {
                                         Ok(result) => {
                                             if let Some(error) = result {
-                                                error_msg_setter(error);
+                                                ui_signals.s_error_msg.set(error.to_string());
                                             }
                                             else {
                                                 enter_ukm_phase!();
@@ -910,11 +669,11 @@ pub(crate) fn app<'a>(
                                         Err(e) => {
                                             let sm = format!("Failed to spawn thread for enrollment: {e}").to_string();
                                             error!("{}", sm);
-                                            error_msg_setter(sm);
+                                            ui_signals.s_error_msg.set(sm.to_string());
                                         }
                                     }
-                                    cursor_setter("default".to_string());
-                                    disabled_setter(false);
+                                    ui_signals.s_cursor.set("default".to_string());
+                                    ui_signals.s_disabled.set(false);
                                 }
                                 Ukm | UkmOrRecovery => {
                                     info!("Ukm | UkmOrRecovery");
@@ -923,29 +682,23 @@ pub(crate) fn app<'a>(
                                         Some(ukm_otp) => {
                                             if !ukm_otp.chars().all(|c| c.is_numeric()) || 8 != ukm_otp.len() {
                                                 let sm = "OTP values MUST be exactly 8 characters long and only contain numeric values.";
-                                                error!("{}", sm);
-                                                error_msg_setter(sm.to_string());
-                                                cursor_setter("default".to_string());
-                                                disabled_setter(false);
+                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
                                                 return;
                                             }
                                             ukm_otp
                                         },
                                         None => {
                                             let sm = "No UKM OTP was provided. Please enter a UKM OTP and try again";
-                                            error!("{}", sm);
-                                            error_msg_setter(sm.to_string());
-                                            cursor_setter("default".to_string());
-                                            disabled_setter(false);
+                                            set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                            show_message!();
                                             return;
                                         }
                                     };
                                     if check_otp(&ukm_otp) {
                                         let sm = "OTP values MUST NOT be reused. Please obtain a fresh OTP and try again.";
-                                        error!("{}", sm);
-                                        error_msg_setter(sm.to_string());
-                                        cursor_setter("default".to_string());
-                                        disabled_setter(false);
+                                        set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                        show_message!();
                                         return;
                                     }
                                     else {
@@ -960,7 +713,7 @@ pub(crate) fn app<'a>(
                                     );
 
                                     if recovery_active {
-                                        recover_setter(false);
+                                        ui_signals.s_recover.set(false);
                                         info!("Starting recover operation...");
                                         let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
                                         let pin_t = if !pin.is_empty() {
@@ -969,7 +722,7 @@ pub(crate) fn app<'a>(
                                         else {
                                             None
                                         };
-                                        pin_setter(pin);
+                                        ui_signals.s_pin.set(pin);
                                         //let mut cm = CryptoModule::YubiKey(yubikey);
                                         let _ = tokio::spawn(async move {
                                             match recover(&mut cm, &oai, pin_t, Some(&PB_MGMT_KEY.clone()), &environment).await {
@@ -982,7 +735,7 @@ pub(crate) fn app<'a>(
                                                 Err(e) => {
                                                     let sm = format!("Recover failed: {:?}", e);
                                                     error!("{}", sm);
-                                                    if let Err(e) = tx.send(Some(format!("{sm}. Make sure the UKM OTP are correct and try again."))) {
+                                                    if let Err(e) = tx.send(Some(format!("{sm}. Make sure the UKM OTP is correct and try again."))) {
                                                         error!("Failed to send recover results to main thread: {e}");
                                                     }
                                                 }
@@ -991,17 +744,17 @@ pub(crate) fn app<'a>(
                                         match rx.recv() {
                                             Ok(result) => {
                                                 if let Some(error) = result {
-                                                    error_msg_setter(error);
+                                                    ui_signals.s_error_msg.set(error.to_string());
                                                 }
                                                 else {
-                                                    recover_setter(false);
-                                                    success_msg_setter("Recover completed successfully".to_string());
+                                                    ui_signals.s_recover.set(false);
+                                                    ui_signals.s_success_msg.set("Recover completed successfully".to_string());
                                                 }
                                             }
                                             Err(e) => {
                                                 let sm = format!("Failed to spawn thread for recover: {e}").to_string();
                                                 error!("{}", sm);
-                                                error_msg_setter(sm);
+                                                ui_signals.s_error_msg.set(sm.to_string());
                                             }
                                         }
                                     }
@@ -1014,7 +767,7 @@ pub(crate) fn app<'a>(
                                         else {
                                             None
                                         };
-                                        pin_setter(pin);
+                                        ui_signals.s_pin.set(pin);
                                         //let mut cm = CryptoModule::YubiKey(yubikey);
                                         let _ = tokio::spawn(async move {
                                             match ukm(&mut cm, &oai, pin_t, Some(&PB_MGMT_KEY.clone()), &environment).await {
@@ -1027,7 +780,7 @@ pub(crate) fn app<'a>(
                                                 Err(e) => {
                                                     let sm = format!("UKM failed: {:?}", e);
                                                     error!("{}", sm);
-                                                    if let Err(e) = tx.send(Some(format!("{sm}. Make sure the UKM OTP are correct and try again."))) {
+                                                    if let Err(e) = tx.send(Some(format!("{sm}. Make sure the UKM OTP is correct and try again."))) {
                                                         error!("Failed to send UKM results to main thread: {e}");
                                                     }
                                                 }
@@ -1036,209 +789,177 @@ pub(crate) fn app<'a>(
                                         match rx.recv() {
                                             Ok(result) => {
                                                 if let Some(error) = result {
-                                                    error_msg_setter(error);
+                                                    ui_signals.s_error_msg.set(error);
                                                 }
                                                 else {
                                                     enter_ukm_or_recovery_phase!();
-                                                    success_msg_setter("UKM completed successfully".to_string());
+                                                    ui_signals.s_success_msg.set("UKM completed successfully".to_string());
                                                 }
                                             }
                                             Err(e) => {
                                                 let sm = format!("Failed to spawn thread for UKM: {e}").to_string();
                                                 error!("{}", sm);
-                                                error_msg_setter(sm);
+                                                ui_signals.s_error_msg.set(sm.to_string());
                                             }
                                         }
                                     }
-                                    cursor_setter("default".to_string());
-                                    disabled_setter(false);
+                                    ui_signals.s_cursor.set("default".to_string());
+                                    ui_signals.s_disabled.set(false);
                                 }
                              }// end match phase
+                             show_message!();
                         } // end async move
                     }, // end onsubmit
                     table {
-                        class: "{s_cursor}",
+                        class: "{ui_signals.s_cursor}",
                         tbody {
                             tr{
-                                style: if *s_phase.get() != Enroll { "display:table-row;" } else {"display:none;"},
+                                style: if *app_signals.s_phase.read() != Enroll { "display:table-row;" } else {"display:none;"},
                                 td{div{label {r#for: "multi_serial", "Serial Number"}}}
                                 td{select {
-                                   disabled: "{s_disabled}",
+                                   disabled: "{ui_signals.s_disabled}",
                                    oninput: move |evt| {
-                                       serial_setter(evt.value.to_string());
-                                       check_phase_setter(true);
+                                       app_signals.s_serial.set(evt.value().to_string());
+                                       ui_signals.s_check_phase.set(true);
+                                       check_phase!();
                                    },
-                                   name: "serials", value: "{s_serial}",
-                                   serials.iter().map(|s|
-                                       rsx!{ option {
-                                           value : "{s}",
-                                           label : "{s}",
-                                           selected: if *s_serial.get() == *s {"true"} else {"false"}
-                                       }
-                                   })
+                                   name: "serials", value: "{app_signals.s_serial}",
+                                   {serialRsx}
                                 }}
                             }
                             tr{
-                                style: if *s_phase.get() == Enroll { "display:table-row;" } else {"display:none;"},
+                                style: if *app_signals.s_phase.read() == Enroll { "display:table-row;" } else {"display:none;"},
                                 td{div{label {r#for: "serial", "Serial Number"}}}
-                                td{input { r#type: "text", disabled: "{s_disabled}", name: "serial", readonly: true, value: "{s_serial}"}}
+                                td{input { r#type: "text", disabled: "{ui_signals.s_disabled}", name: "serial", readonly: true, value: "{app_signals.s_serial}"}}
                             }
                             tr{
-                                style: "{s_edipi_style}",
+                                style: "{ui_signals.s_edipi_style}",
                                 td{div{title: "EDIPI of the cooperating Purebred Agent.", label {r#for: "edipi", "Purebred Agent's EDIPI"}}}
-                                td{input { disabled: "{s_disabled}", r#type: "text", name: "edipi", placeholder: "Enter Purebred Agent's EDIPI", value: "{s_edipi}", maxlength: "10"}}
+                                td{input { disabled: "{ui_signals.s_disabled}", r#type: "text", name: "edipi", placeholder: "Enter Purebred Agent's EDIPI", value: "{ui_signals.s_edipi}", maxlength: "10"}}
                             }
                             tr{
-                                style: "{s_pre_enroll_otp_style}",
+                                style: "{ui_signals.s_pre_enroll_otp_style}",
                                 td{div{label {r#for: "pre_enroll_otp", "Pre-enroll OTP"}}}
-                                td{input { disabled: "{s_disabled}", r#type: "text", name: "pre_enroll_otp", placeholder: "Enter Pre-Enroll OTP", value: "{s_pre_enroll_otp}", maxlength: "8"}}
+                                td{input { disabled: "{ui_signals.s_disabled}", r#type: "text", name: "pre_enroll_otp", placeholder: "Enter Pre-Enroll OTP", value: "{ui_signals.s_pre_enroll_otp}", maxlength: "8"}}
                             }
                             tr{
-                                style: "{s_enroll_otp_style}",
+                                style: "{ui_signals.s_enroll_otp_style}",
                                 td{div{label {r#for: "hash", "Hash"}}}
-                                td{input { r#type: "text", name: "hash", readonly: true, value: "{s_hash}"}}
+                                td{input { r#type: "text", name: "hash", readonly: true, value: "{ui_signals.s_hash}"}}
                             }
                             tr{
-                                style: "{s_enroll_otp_style}",
+                                style: "{ui_signals.s_enroll_otp_style}",
                                 td{div{label {r#for: "enroll_otp", "Enroll OTP"}}}
-                                td{input { disabled: "{s_disabled}", r#type: "text", name: "enroll_otp", placeholder: "Enter Enroll OTP", value: "{s_enroll_otp}", maxlength: "8"}}
+                                td{input { disabled: "{ui_signals.s_disabled}", r#type: "text", name: "enroll_otp", placeholder: "Enter Enroll OTP", value: "{ui_signals.s_enroll_otp}", maxlength: "8"}}
                             }
                             tr{
-                                style: "{s_ukm_otp_style}",
+                                style: "{ui_signals.s_ukm_otp_style}",
                                 td{div{label {r#for: "ukm_otp", "UKM OTP"}}}
-                                td{input { disabled: "{s_disabled}", r#type: "text", name: "ukm_otp", placeholder: "Enter UKM OTP", value: "{s_ukm_otp}", minlength: "8", maxlength: "8"}}
+                                td{input { disabled: "{ui_signals.s_disabled}", r#type: "text", name: "ukm_otp", placeholder: "Enter UKM OTP", value: "{ui_signals.s_ukm_otp}", minlength: "8", maxlength: "8"}}
                             }
                             tr{
-                                style: "{s_pin_style}",
+                                style: "{ui_signals.s_pin_style}",
                                 td{div{label {r#for: "pin", "YubiKey PIN"}}}
-                                td{input { disabled: "{s_disabled}", r#type: "password", placeholder: "Enter YubiKey PIN", name: "pin", value: "{s_pin}", maxlength: "8"}}
+                                td{input { disabled: "{ui_signals.s_disabled}", r#type: "password", placeholder: "Enter YubiKey PIN", name: "pin", value: "{ui_signals.s_pin}", maxlength: "8"}}
                             }
                             tr{
-                                style: "{s_multi_env_style}",
+                                style: "{ui_signals.s_multi_env_style}",
                                 td{div{label {"Environment"}}}
                                 table {
                                     class: "nested_table",
                                     tr {
-                                        style: "{s_dev_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "dev", name: "environment", value: "DEV", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_dev_checked}" } }
+                                        style: "{ui_signals.s_dev_style}",
+                                        td{input { disabled: "{ui_signals.s_disabled}", r#type: "radio", id: "dev", name: "environment", value: "DEV", onclick: move |_|  {ui_signals.s_edipi.set( String::new());}, checked: "{ui_signals.s_dev_checked}" } }
                                         td{div{label {r#for: "dev", "Development"}}}
                                     }
                                     tr {
-                                        style: "{s_om_nipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "om_nipr", name: "environment", value: "OM_NIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_om_nipr_checked}" } }
+                                        style: "{ui_signals.s_om_nipr_style}",
+                                        td{input { disabled: "{ui_signals.s_disabled}", r#type: "radio", id: "om_nipr", name: "environment", value: "OM_NIPR", onclick: move |_|  {ui_signals.s_edipi.set( String::new());}, checked: "{ui_signals.s_om_nipr_checked}" } }
                                         td{div{label {r#for: "om_nipr", "NIPR O&M"}}}
                                     }
                                     tr {
-                                        style: "{s_nipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "nipr", name: "environment", value: "NIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_nipr_checked}" } }
+                                        style: "{ui_signals.s_nipr_style}",
+                                        td{input { disabled: "{ui_signals.s_disabled}", r#type: "radio", id: "nipr", name: "environment", value: "NIPR", onclick: move |_|  {ui_signals.s_edipi.set( String::new());}, checked: "{ui_signals.s_nipr_checked}" } }
                                         td{div{label {r#for: "nipr", "NIPR"}}}
                                     }
                                     tr {
-                                        style: "{s_om_sipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "om_sipr", name: "environment", value: "OM_SIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_om_sipr_checked}" } }
+                                        style: "{ui_signals.s_om_sipr_style}",
+                                        td{input { disabled: "{ui_signals.s_disabled}", r#type: "radio", id: "om_sipr", name: "environment", value: "OM_SIPR", onclick: move |_|  {ui_signals.s_edipi.set( String::new());}, checked: "{ui_signals.s_om_sipr_checked}" } }
                                         td{div{label {r#for: "om_sipr", "SIPR O&M"}}}
                                     }
                                     tr {
-                                        style: "{s_sipr_style}",
-                                        td{input { disabled: "{s_disabled}", r#type: "radio", id: "sipr", name: "environment", value: "SIPR", onclick: move |_| {s_edipi.setter()("".to_string());}, checked: "{s_sipr_checked}", }}
+                                        style: "{ui_signals.s_sipr_style}",
+                                        td{input { disabled: "{ui_signals.s_disabled}", r#type: "radio", id: "sipr", name: "environment", value: "SIPR", onclick: move |_|  {ui_signals.s_edipi.set( String::new());}, checked: "{ui_signals.s_sipr_checked}", }}
                                         td{div{label {r#for: "sipr", "SIPR"}}}
                                     }
                                 }
                             }
                         }
-                    }
-                    dioxus_toast::ToastFrame {
-                        manager: toast
-                    }
+                    } // end table
                     div {
                         style: "text-align:center;",
                         div {
                             style: "text-align:center;",
                             div{
                                 style: "text-align:center; display: inline-block; margin-right:5px;",
-                                button { disabled: "{s_disabled}", r#type: "submit", value: "Submit", "{s_button_label}" }
+                                button { disabled: "{ui_signals.s_disabled}", r#type: "submit", value: "Submit", "{ui_signals.s_button_label}" }
                             }
                             div{
-                                style: "text-align:center; display: {s_hide_recovery}; margin-right:5px;",
-                                button { disabled: "{s_disabled}", r#type: "submit", onclick: move |_| s_recover.setter()(true), value: "Recovery", "Recover Old Decryption Keys" }
+                                style: "text-align:center; display:  {ui_signals.s_hide_recovery}; margin-right:5px;",
+                                button { disabled: "{ui_signals.s_disabled}", r#type: "submit", onclick: move |_| ui_signals.s_recover.set(true), value: "Recovery", "Recover Old Decryption Keys" }
                             }
                         }
                         div{
-                            style: "text-align:center; display: {s_hide_reset}; margin-right:5px;",
-                            button { disabled: "{s_disabled}", value: "Reset",
+                            style: "text-align:center; display:  {ui_signals.s_hide_reset}; margin-right:5px;",
+                            button { disabled: "{ui_signals.s_disabled}", value: "Reset",
                                 onclick: move |_| {
-                                    s_success_msg.setter()(String::new());
-                                    s_error_msg.setter()(String::new());
+                                    ui_signals.s_success_msg.set(String::new());
+                                    ui_signals.s_error_msg.set(String::new());
 
                                     #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
                                     let reset_supported = true;
                                     #[cfg(not(all(target_os = "windows", feature = "vsc", feature = "reset_vsc")))]
-                                    let reset_supported = *s_pin_style.get() == "display:table-row;";
+                                    let reset_supported =  *ui_signals.s_pin_style.read() == "display:table-row;";
                                     if !reset_supported {
-                                        reset_abandoned_setter(true);
-                                        s_error_msg.setter()("VSC reset support is not provided".to_string());
+                                        ui_signals.s_reset_abandoned.set(true);
+                                        ui_signals.s_error_msg.set("VSC reset support is not provided".to_string());
                                         return;
                                     }
 
-                                    use native_dialog::{MessageDialog, MessageType};
-                                    let msg = format!("Are you sure you want to reset the device with serial number {s_serial} now?");
-                                    match MessageDialog::new()
-                                        .set_type(MessageType::Info)
-                                        .set_title("Reset?")
-                                        .set_text(&msg)
-                                        .show_confirm()
-                                    {
-                                        Ok(answer) => {
-                                            if answer {
-                                                reset_abandoned_setter(false);
-                                                reset_setter(true);
-                                            }
-                                            else {
-                                                reset_abandoned_setter(true);
-                                            }
-                                        },
-                                        Err(e) => {
-                                            error!("Failed to solicit reset answer from user: {e}");
-                                        }
-                                    }
+                                    ui_signals.s_reset_abandoned.set(false);
+                                    app_signals.s_reset_req.set(true);
+                                    clear_pin_and_puk!();
                                 },
                                 "Reset"
                             }
                         }
-                    }
+                    } // end div (with buttons)
                     div {
                         style: "text-align:center",
                         img {
-                            src: "data:image/png;base64, {s_disa_icon}",
+                            src: "data:image/png;base64,  {ui_signals.s_disa_icon}",
                             max_height: "25%",
                             max_width: "25%",
                             onclick: move |_| {
-                                let click_count_setter = s_click_count.setter();
-                                let click_start_setter = s_click_start.setter();
-                                #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                                let hide_reset_setter = s_hide_reset.setter();
-
-                                let last_count = s_click_count.get();
-                                let last_start = s_click_start.get();
-                                let disabled = *s_disabled.get();
+                                let last_count =  *ui_signals.s_click_count.read();
+                                let last_start =  *ui_signals.s_click_start.read();
+                                let disabled =  *ui_signals.s_disabled.read();
                                 match SystemTime::now().duration_since(UNIX_EPOCH) {
                                     Ok(n) => {
                                         #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
                                         let reset_supported = true;
                                         #[cfg(not(all(target_os = "windows", feature = "vsc", feature = "reset_vsc")))]
-                                        let reset_supported = *s_pin_style.get() == "display:table-row;";
+                                        let reset_supported =  *ui_signals.s_pin_style.read() == "display:table-row;";
 
                                         if !disabled && reset_supported {
                                             let secs = n.as_secs();
                                             if secs - last_start > 5 {
-                                                click_count_setter(1);
-                                                click_start_setter(secs);
-                                            } else if *last_count >= 4 {
-                                                #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-                                                hide_reset_setter("inline-block".to_string());
-                                            }
-                                            else {
-                                                click_count_setter(last_count+1);
+                                                ui_signals.s_click_count.set(1);
+                                                ui_signals.s_click_start.set(secs);
+                                            } else if last_count >= 4 {
+                                                ui_signals.s_hide_reset.set("inline-block".to_string());
+                                            } else {
+                                                ui_signals.s_click_count.set(last_count+1);
                                             }
                                         }
                                     }
@@ -1248,9 +969,9 @@ pub(crate) fn app<'a>(
                                 }
                             }
                         }
-                    }
-                }
-            }
-        }) //end cx.render
-    }
+                    } // end div (with icon)
+                } // end form
+            } // end div (with form)
+        } // end rsx!
+    } // end else
 }
