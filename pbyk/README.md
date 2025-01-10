@@ -172,10 +172,8 @@ The `pbyk` utility has been successfully tested against dev, om-sipr and sipr en
 - GUI support is not presently provided for Linux
 - 
 ### GUI mode
-- Copy and Paste does not work on macOS (see [Dioxus issue 1691](https://github.com/DioxusLabs/dioxus/issues/1691))
 - Console window remains visible when run in GUI mode except on Windows
 - State information is only saved when an action is performed, not when app is closed
-- YubiKey reset capability is not available on MacOS on x86_64 hardware
 
 ## Windows
 - When the VSC feature is used, the app takes several seconds to close
@@ -185,7 +183,7 @@ The `pbyk` utility has been successfully tested against dev, om-sipr and sipr en
 
 ## Minimum Supported Rust Version
 
-This crate requires **Rust 1.70** at a minimum.
+This crate requires **Rust 1.80.1** at a minimum.
 
 ## License
 

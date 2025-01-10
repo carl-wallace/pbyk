@@ -138,6 +138,7 @@ use yubikey::MgmKey;
 /// by the device.
 pub static PB_MGMT_KEY: LazyLock<MgmKey> = LazyLock::new(|| {
     MgmKey::new(hex!("020203040506070801020304050607080102030405060708")).unwrap()
+    // allow unwrap for static
 });
 
 /// `pkcs-9-at-challengePassword` from [RFC 2985 Section 5.4.1]
@@ -171,8 +172,6 @@ pub static ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE: LazyLock<ObjectIdentifier>
 /// `id-purebred-microsoft-attestation-attribute` from Red Hound's OID arc
 pub static ID_PUREBRED_MICROSOFT_ATTESTATION_ATTRIBUTE: LazyLock<ObjectIdentifier> =
     LazyLock::new(|| ObjectIdentifier::new_unwrap("1.3.6.1.4.1.37623.26.3"));
-
-// lazy_static seems to dislike compound cfg statements so moved CERT_SYSTEM_STORE_CURRENT_USER here
 
 #[cfg(target_os = "windows")]
 use windows::Win32::Security::Cryptography::{

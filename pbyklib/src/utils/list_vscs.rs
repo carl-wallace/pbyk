@@ -50,7 +50,7 @@ pub async fn list_vscs() -> Result<Vec<SmartCard>> {
         "Searching for TPM-based virtual smart cards using {} filter",
         readers_aqs
     );
-    let readers = DeviceInformation::FindAllAsyncAqsFilter(&readers_aqs)?.await?;
+    let readers = DeviceInformation::FindAllAsyncAqsFilter(&readers_aqs)?.get()?;
     for (i, item) in readers.into_iter().enumerate() {
         match item.Id() {
             Ok(id) => {
@@ -61,7 +61,7 @@ pub async fn list_vscs() -> Result<Vec<SmartCard>> {
                         continue;
                     }
                 };
-                let reader = match ao_scr.await {
+                let reader = match ao_scr.get() {
                     Ok(reader) => reader,
                     Err(e) => {
                         error!("Failed to get reader #{i} with: {e}. Continuing...");
@@ -75,7 +75,7 @@ pub async fn list_vscs() -> Result<Vec<SmartCard>> {
                         continue;
                     }
                 };
-                let cards = match ao_sc.await {
+                let cards = match ao_sc.get() {
                     Ok(cards) => cards,
                     Err(e) => {
                         error!("Failed to get cards from reader #{i} with: {e}. Continuing...");
@@ -131,7 +131,7 @@ pub async fn get_vsc(serial: &String) -> Result<SmartCard> {
         "Searching for TPM-based virtual smart cards using {} filter",
         readers_aqs
     );
-    let readers = DeviceInformation::FindAllAsyncAqsFilter(&readers_aqs)?.await?;
+    let readers = DeviceInformation::FindAllAsyncAqsFilter(&readers_aqs)?.get()?;
     for (i, item) in readers.into_iter().enumerate() {
         match item.Id() {
             Ok(id) => {
@@ -142,7 +142,7 @@ pub async fn get_vsc(serial: &String) -> Result<SmartCard> {
                         continue;
                     }
                 };
-                let reader = match ao_scr.await {
+                let reader = match ao_scr.get() {
                     Ok(reader) => reader,
                     Err(e) => {
                         error!("Failed to get reader #{i} with: {e}. Continuing...");
@@ -158,7 +158,7 @@ pub async fn get_vsc(serial: &String) -> Result<SmartCard> {
                             continue;
                         }
                     };
-                    let cards = match ao_sc.await {
+                    let cards = match ao_sc.get() {
                         Ok(cards) => cards,
                         Err(e) => {
                             error!("Failed to get cards from reader #{i} with: {e}. Continuing...");

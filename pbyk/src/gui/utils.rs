@@ -6,16 +6,17 @@
 use std::{fs, fs::File};
 
 use dioxus::prelude::*;
+use dioxus_desktop::DesktopContext;
+
 use home::home_dir;
 use log::{debug, error};
+use serde::{Deserialize, Serialize};
 use yubikey::{piv::SlotId, YubiKey};
 
 use certval::{is_self_signed, PDVCertificate, PkiEnvironment};
-use dioxus_desktop::use_window;
-
-use crate::args::PbYkArgs;
-use crate::gui::gui_main::Phase;
 use pbyklib::{utils::get_cert_from_slot, utils::state::create_app_home, Error, Result};
+
+use crate::{args::PbYkArgs, gui::gui_main::Phase};
 
 /// Read saved arguments from (home dir)/.pbyk/pbyk.cfg, which is a JSON-formatted representation of
 /// a PbYkArgs structure.
@@ -50,8 +51,6 @@ pub(crate) fn save_args(args: &PbYkArgs) -> Result<()> {
     Err(Error::Unrecognized)
 }
 
-use serde::{Deserialize, Serialize};
-
 /// Default window width
 static PBYK_DEFAULT_WIDTH: u32 = 625;
 /// Default window height
@@ -73,19 +72,14 @@ impl Default for SavedWindowsSize {
 }
 
 /// Saves the current window size to a file named sws.json in the .pbyk folder in the user's home directory.
-pub(crate) fn save_window_size(cx: Scope<'_>) -> Result<()> {
-    let window = use_window(cx);
+pub(crate) fn save_window_size(window: &DesktopContext) -> Result<()> {
     let scale_factor = if let Some(m) = window.current_monitor() {
         m.scale_factor()
     } else {
         1.0
     };
 
-    let inner_size = window
-        .webview
-        .window()
-        .inner_size()
-        .to_logical(scale_factor);
+    let inner_size = window.window.inner_size().to_logical(scale_factor);
     let sws = SavedWindowsSize {
         width: inner_size.width,
         height: inner_size.height,
@@ -133,7 +127,7 @@ pub(crate) fn read_saved_window_size() -> SavedWindowsSize {
 
 /// Searches the map for the given key. If an entry is found, the value is returned. Else, None is returned.
 pub(crate) fn string_or_none(ev: &Event<FormData>, key: &str) -> Option<String> {
-    if let Some(v) = ev.values.get(key) {
+    if let Some(v) = ev.values().get(key) {
         if !v[0].is_empty() {
             return Some(v[0].clone());
         }
@@ -143,7 +137,7 @@ pub(crate) fn string_or_none(ev: &Event<FormData>, key: &str) -> Option<String> 
 
 /// Searches the map for the given key. If an entry is found, the value is returned. Else, the provided default value is returned as a String.
 pub(crate) fn string_or_default(ev: &Event<FormData>, key: &str, default: &str) -> String {
-    if let Some(v) = ev.values.get(key) {
+    if let Some(v) = ev.values().get(key) {
         if !v[0].is_empty() {
             return v[0].clone();
         }
@@ -164,7 +158,15 @@ pub(crate) fn determine_phase(yubikey: &mut YubiKey) -> Phase {
         Ok(c) => {
             let mut pe = PkiEnvironment::default();
             pe.populate_5280_pki_environment();
-            let pdv = PDVCertificate::try_from(c).unwrap();
+            let pdv = match PDVCertificate::try_from(c) {
+                Ok(pdv) => pdv,
+                Err(e) => {
+                    error!(
+                        "Failed to parse certificate read from CardAuthentication slot with: {e:?}. Continuing with phase set to PreEnroll."
+                    );
+                    return Phase::PreEnroll;
+                }
+            };
             if !is_self_signed(&pe, &pdv) {
                 let r1 = get_cert_from_slot(yubikey, SlotId::Authentication);
                 let r2 = get_cert_from_slot(yubikey, SlotId::Signature);
@@ -221,59 +223,14 @@ pub(crate) fn get_default_env() -> &'static str {
 ///     - s_om_sipr_checked,
 ///     - s_nipr_checked,
 ///     - s_sipr_checked
-#[allow(clippy::type_complexity)]
-pub(crate) fn get_default_env_radio_selections(
-    cx: Scope<'_>,
-) -> (
-    &UseState<bool>,
-    &UseState<bool>,
-    &UseState<bool>,
-    &UseState<bool>,
-    &UseState<bool>,
-) {
+pub(crate) fn get_default_env_radio_selections() -> (bool, bool, bool, bool, bool) {
     match get_default_env() {
-        "DEV" => (
-            use_state(cx, || true),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-        ),
-        "OM_NIPR" => (
-            use_state(cx, || false),
-            use_state(cx, || true),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-        ),
-        "OM_SIPR" => (
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || true),
-            use_state(cx, || false),
-            use_state(cx, || false),
-        ),
-        "NIPR" => (
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || true),
-            use_state(cx, || false),
-        ),
-        "SIPR" => (
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || true),
-        ),
-        _ => (
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-            use_state(cx, || false),
-        ),
+        "DEV" => (true, false, false, false, false),
+        "OM_NIPR" => (false, true, false, false, false),
+        "OM_SIPR" => (false, false, true, false, false),
+        "NIPR" => (false, false, false, true, false),
+        "SIPR" => (false, false, false, false, true),
+        _ => (false, false, false, false, false),
     }
 }
 
