@@ -149,30 +149,6 @@ pub static PB_MGMT_KEY: LazyLock<MgmKey> = LazyLock::new(|| {
     // allow unwrap for static
 });
 
-/// `pkcs-9-at-challengePassword` from [RFC 2985 Section 5.4.1]
-///
-/// [RFC 2985 Section 5.4.1]: https://www.rfc-editor.org/rfc/rfc2985#section-5.4.1
-pub static ID_CHALLENGE_PASSWORD: LazyLock<ObjectIdentifier> =
-    LazyLock::new(|| ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.7"));
-
-/// `id-messageType` from [RFC 8894 Section 3.2.1.2]
-///
-/// [RFC 8894 Section 3.2.1.2]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.2
-pub static RFC8894_ID_MESSAGE_TYPE: LazyLock<ObjectIdentifier> =
-    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.2"));
-
-/// `id-senderNonce` from [RFC 8894 Section 3.2.1.5]
-///
-/// [RFC 8894 Section 3.2.1.5]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.5
-pub static RFC8894_ID_SENDER_NONCE: LazyLock<ObjectIdentifier> =
-    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.5"));
-
-/// `id-transactionID` from [RFC 8894 Section 3.2.1.1]
-///
-/// [RFC 8894 Section 3.2.1.1]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.1
-pub static RFC8894_ID_TRANSACTION_ID: LazyLock<ObjectIdentifier> =
-    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.7"));
-
 /// `id-purebred-yubikey-attestation-attribute` from Red Hound's OID arc
 pub static ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE: LazyLock<ObjectIdentifier> =
     LazyLock::new(|| ObjectIdentifier::new_unwrap("1.3.6.1.4.1.37623.26.4"));

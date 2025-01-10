@@ -1,4 +1,4 @@
-use pbyklib::misc::utils::purebred_authorize_request;
+use pbykcorelib::misc::utils::purebred_authorize_request;
 
 //------------------------------------------------------------------------------------
 // Tests

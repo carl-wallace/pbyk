@@ -67,31 +67,29 @@ impl From<serde_json::Error> for Error {
 }
 
 use const_oid::ObjectIdentifier;
-use lazy_static::lazy_static;
-
-lazy_static! {
+use std::sync::LazyLock;
 
 /// `pkcs-9-at-challengePassword` from [RFC 2985 Section 5.4.1]
 ///
 /// [RFC 2985 Section 5.4.1]: https://www.rfc-editor.org/rfc/rfc2985#section-5.4.1
-pub static ref ID_CHALLENGE_PASSWORD: ObjectIdentifier =
-ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.7");
+pub static ID_CHALLENGE_PASSWORD: LazyLock<ObjectIdentifier> =
+    LazyLock::new(|| ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.7"));
 
 /// `id-messageType` from [RFC 8894 Section 3.2.1.2]
 ///
 /// [RFC 8894 Section 3.2.1.2]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.2
-pub static ref  RFC8894_ID_MESSAGE_TYPE: ObjectIdentifier =
-ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.2");
+pub static RFC8894_ID_MESSAGE_TYPE: LazyLock<ObjectIdentifier> =
+    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.2"));
 
 /// `id-senderNonce` from [RFC 8894 Section 3.2.1.5]
 ///
 /// [RFC 8894 Section 3.2.1.5]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.5
-pub static ref  RFC8894_ID_SENDER_NONCE: ObjectIdentifier =
-ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.5");
+pub static RFC8894_ID_SENDER_NONCE: LazyLock<ObjectIdentifier> =
+    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.5"));
 
 /// `id-transactionID` from [RFC 8894 Section 3.2.1.1]
 ///
 /// [RFC 8894 Section 3.2.1.1]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.1
-pub static ref  RFC8894_ID_TRANSACTION_ID: ObjectIdentifier =
-ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.7");
-}
+pub static RFC8894_ID_TRANSACTION_ID: LazyLock<ObjectIdentifier> =
+    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.7"));
+
