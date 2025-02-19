@@ -27,3 +27,11 @@ subtle-encoding = "0.5.1"
 
 pb_pki = {git="https://github.com/carl-wallace/pb_pki.git"}
 rand_core = "0.6.4"
+
+[features]
+default = ["dev"]
+dev = ["pb_pki/dev"]
+om_nipr = ["pb_pki/om_nipr"]
+om_sipr = ["pb_pki/om_sipr"]
+nipr = ["pb_pki/nipr"]
+sipr = ["pb_pki/sipr"]
