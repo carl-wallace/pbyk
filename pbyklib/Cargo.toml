@@ -11,10 +11,10 @@ pbykcorelib = {path = "../pbykcorelib"}
 
 base64ct = { version="1.6.0", features = ["alloc"] }
 # EnvelopedDataBuilder is not yet released, hence use of private branch
-cms = {version = "0.2.1", git = "https://github.com/carl-wallace/formats.git", features = ["builder"], branch = "pbyk"}
+cms = {version = "0.2.2", git = "https://github.com/carl-wallace/formats.git", features = ["builder"], branch = "pbyk"}
 # todo - replace openssl P12 usage with pkcs12 crate
 # pkcs12 = {version = "0.0.0", git = "https://github.com/carl-wallace/formats.git", branch = "pbyk"}
-const-oid = { version = "0.9.5", features = ["db"] }
+const-oid = { version = "0.9.6", features = ["db"] }
 der = { version = "0.7.8", features = ["alloc", "derive", "oid", "pem"] }
 spki = "0.7.3"
 x509-cert = "0.2.5"
@@ -22,31 +22,31 @@ x509-cert = "0.2.5"
 # certval has not yet been released, hence use of private branch
 certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"]}
 
-aes = "0.8.3"
+aes = "0.8.4"
 cipher = "0.4.4"
 cbc = "0.1.2"
 pkcs1 = "0.7.5"
-rsa = { version = "0.9.6", features = ["sha2"] }
+rsa = { version = "0.9.7", features = ["sha2"] }
 sha-1 = {version = "0.10.1", default-features = false}
 sha2 = "0.10.8"
-signature = { version = "2.1.0", features = ["digest", "alloc"]}
+signature = { version = "2.2.0", features = ["digest", "alloc"]}
 
-hex-literal = "0.4.1"
-home = "0.5.9"
-log = "0.4.20"
-plist = "1.6.0"
+hex-literal = "1.0.0"
+home = "0.5.11"
+log = "0.4.26"
+plist = "1.7.0"
 rand_core = { version = "0.6.4", features = ["std"] }
-reqwest = {version = "0.12.4", features = ["rustls-tls", "multipart", "blocking"]}
-serde = { version = "1.0.195", default-features = false, features = ["derive"] }
-serde_json = "1.0.111"
-subtle = { version = "2.5.0", default-features = false }
+reqwest = {version = "0.12.12", features = ["rustls-tls", "multipart", "blocking"]}
+serde = { version = "1.0.218", default-features = false, features = ["derive"] }
+serde_json = "1.0.140"
+subtle = { version = "2.6.1", default-features = false }
 subtle-encoding = "0.5.1"
-tokio = { version = "1.35.1", features = ["full", "time", "rt-multi-thread"]}
-uuid = { version = "1.7.0", features = ["v4"] }
+tokio = { version = "1.43.0", features = ["full", "time", "rt-multi-thread"]}
+uuid = { version = "1.15.1", features = ["v4"] }
 # the yubikey fork features a length check needed when pbyk is run in presence of some middleware. use fork until upstream is updated with length check added to form.
 #yubikey = { version = "0.8.0", features = ["untested"] }
 yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "pbyk", features = ["untested"]}
-zeroize = "1.7.0"
+zeroize = "1.8.1"
 
 # DO NOT ADVANCE OPENSSL CRATE BEYOND 0.10.55 UNTIL PORTAL IS NO LONGER USING RC2-40 (!).
 # When this is updated, remove the old test cases that use RC2 in p12.rs.
