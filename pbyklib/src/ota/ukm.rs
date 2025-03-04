@@ -8,7 +8,7 @@ use zeroize::Zeroizing;
 use crate::ota::get_device_cred_from_smartcard;
 
 use crate::ota::CryptoModule;
-use crate::{ota::OtaActionInputs, Error, Result, PB_MGMT_KEY};
+use crate::{Error, PB_MGMT_KEY, Result, ota::OtaActionInputs};
 
 /// Obtains fresh PIV and signature credentials and current encryption credential using the indicted
 /// YubiKey device using the URL obtained from `ukm_inputs`

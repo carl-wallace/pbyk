@@ -92,4 +92,3 @@ pub static RFC8894_ID_SENDER_NONCE: LazyLock<ObjectIdentifier> =
 /// [RFC 8894 Section 3.2.1.1]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.1
 pub static RFC8894_ID_TRANSACTION_ID: LazyLock<ObjectIdentifier> =
     LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.7"));
-

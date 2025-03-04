@@ -5,8 +5,8 @@ use zeroize::Zeroizing;
 use log::{error, info};
 
 use crate::{
+    Error, PB_MGMT_KEY, Result,
     ota::{CryptoModule, OtaActionInputs},
-    Error, Result, PB_MGMT_KEY,
 };
 use pbykcorelib::misc::enroll::fetch_phase1;
 use pbykcorelib::misc::network::post_body;

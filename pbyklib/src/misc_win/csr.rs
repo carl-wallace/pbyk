@@ -8,9 +8,9 @@ use std::{ffi::CString, ptr::null, time::Duration};
 
 use log::error;
 use windows::Win32::Security::Cryptography::{
-    CertCloseStore, CertEnumCertificatesInStore, CertGetCertificateContextProperty, CertOpenStore,
-    CryptMemAlloc, CryptMemFree, CERT_CONTEXT, CERT_KEY_PROV_INFO_PROP_ID,
-    CERT_STORE_OPEN_EXISTING_FLAG, CERT_STORE_PROV_SYSTEM_A, CRYPT_KEY_PROV_INFO,
+    CERT_CONTEXT, CERT_KEY_PROV_INFO_PROP_ID, CERT_STORE_OPEN_EXISTING_FLAG,
+    CERT_STORE_PROV_SYSTEM_A, CRYPT_KEY_PROV_INFO, CertCloseStore, CertEnumCertificatesInStore,
+    CertGetCertificateContextProperty, CertOpenStore, CryptMemAlloc, CryptMemFree,
     PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
 };
 
@@ -22,13 +22,13 @@ use cms::{
     builder::SignedDataBuilder, cert::CertificateChoices, signed_data::EncapsulatedContentInfo,
 };
 use const_oid::db::rfc5912::{ID_CCT_PKI_DATA, ID_CE_SUBJECT_KEY_IDENTIFIER};
-use der::{asn1::OctetString, Choice, Decode, Encode, Sequence};
+use der::{Choice, Decode, Encode, Sequence, asn1::OctetString};
 use x509_cert::{
+    Certificate,
     builder::{Builder, CertificateBuilder, Profile},
     request::CertReq,
     serial_number::SerialNumber,
     time::Validity,
-    Certificate,
 };
 
 use certval::{ExtensionProcessing, PDVCertificate, PDVExtension};
@@ -41,7 +41,7 @@ use windows::core::HSTRING;
 use crate::misc::utils::get_encap_content;
 use crate::misc_win::csr::TaggedRequest::Tcr;
 use crate::misc_win::vsc_signer::CertContext;
-use crate::{Error, Result, CERT_SYSTEM_STORE_CURRENT_USER};
+use crate::{CERT_SYSTEM_STORE_CURRENT_USER, Error, Result};
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -59,8 +59,11 @@ fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
                         }
                     }
                     Err(e) => {
-                        error!("Failed to parse SubjectKeyIdentifier extension from Certificate with serial number {} as\
-                         an OctetString: {}. Ignoring and continuing...", cert.tbs_certificate.serial_number, e);
+                        error!(
+                            "Failed to parse SubjectKeyIdentifier extension from Certificate with serial number {} as\
+                         an OctetString: {}. Ignoring and continuing...",
+                            cert.tbs_certificate.serial_number, e
+                        );
                     }
                 }
             }
@@ -316,13 +319,17 @@ pub(crate) fn get_credential_list(target_cert: Option<PDVCertificate>) -> Result
                                     )) {
                                         Ok(cc) => rv.push(cc),
                                         Err(e) => {
-                                            error!("Failed to prepare CertContext in get_credential_list: {e:?}. Continuing...")
+                                            error!(
+                                                "Failed to prepare CertContext in get_credential_list: {e:?}. Continuing..."
+                                            )
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
-                                error!("Failed to parse certificate from MY store: {e:?}. Ignoring and continuing...");
+                                error!(
+                                    "Failed to parse certificate from MY store: {e:?}. Ignoring and continuing..."
+                                );
                             }
                         };
                     }
@@ -464,7 +471,9 @@ fn list_container_names_test() {
                         println!("subject: {subject}\n");
                     }
                     Err(e) => {
-                        error!("Failed to prepare CertContext in list_container_names_test: {e:?}. Continuing...");
+                        error!(
+                            "Failed to prepare CertContext in list_container_names_test: {e:?}. Continuing..."
+                        );
                     }
                 }
                 prev_cert_context =

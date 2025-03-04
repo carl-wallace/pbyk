@@ -30,9 +30,11 @@ async fn test_om_nipr_get_ca_cert_pass() {
 #[cfg(not(feature = "dev"))]
 #[tokio::test]
 async fn test_dev_get_ca_cert_fail() {
-    assert!(portal_status_check("https://pb2.redhoundsoftware.net")
-        .await
-        .is_err());
+    assert!(
+        portal_status_check("https://pb2.redhoundsoftware.net")
+            .await
+            .is_err()
+    );
 }
 
 #[cfg(not(feature = "om_sipr"))]

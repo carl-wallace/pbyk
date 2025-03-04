@@ -3,19 +3,19 @@
 #![cfg(target_os = "windows")]
 
 use std::{
-    ffi::{c_void, CString},
+    ffi::{CString, c_void},
     ptr::null,
 };
 
 use log::error;
 
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use windows::{core::HSTRING, Security::Cryptography::Certificates::CertificateStores};
+use windows::{Security::Cryptography::Certificates::CertificateStores, core::HSTRING};
 
 use windows::Win32::Security::Cryptography::{
-    CertCloseStore, CertDeleteCertificateFromStore, CertEnumCertificatesInStore, CertOpenStore,
-    CERT_STORE_OPEN_EXISTING_FLAG, CERT_STORE_PROV_SYSTEM_A, PKCS_7_ASN_ENCODING,
-    X509_ASN_ENCODING,
+    CERT_STORE_OPEN_EXISTING_FLAG, CERT_STORE_PROV_SYSTEM_A, CertCloseStore,
+    CertDeleteCertificateFromStore, CertEnumCertificatesInStore, CertOpenStore,
+    PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
 };
 
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]

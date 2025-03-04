@@ -10,13 +10,13 @@ use std::{ffi::c_void, ptr::NonNull};
 use log::{debug, error};
 use rsa::RsaPublicKey;
 use windows::{
-    core::PCWSTR,
     Win32::Security::Cryptography::{
-        CertDuplicateCertificateContext, CertFreeCertificateContext, NCryptOpenKey,
-        NCryptOpenStorageProvider, NCryptSignHash, BCRYPT_PAD_PKCS1, BCRYPT_PKCS1_PADDING_INFO,
-        BCRYPT_SHA256_ALGORITHM, CERT_CONTEXT, CERT_KEY_SPEC, CRYPT_KEY_PROV_INFO, NCRYPT_FLAGS,
-        NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
+        BCRYPT_PAD_PKCS1, BCRYPT_PKCS1_PADDING_INFO, BCRYPT_SHA256_ALGORITHM, CERT_CONTEXT,
+        CERT_KEY_SPEC, CRYPT_KEY_PROV_INFO, CertDuplicateCertificateContext,
+        CertFreeCertificateContext, NCRYPT_FLAGS, NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
+        NCryptOpenKey, NCryptOpenStorageProvider, NCryptSignHash,
     },
+    core::PCWSTR,
 };
 
 use sha2::{Digest, Sha256};
@@ -25,7 +25,7 @@ use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier};
 use x509_cert::Certificate;
 
 use crate::Error::BadInput;
-use crate::{misc::scep::get_rsa_key_from_cert, misc_win::csr::get_key_provider_info, Result};
+use crate::{Result, misc::scep::get_rsa_key_from_cert, misc_win::csr::get_key_provider_info};
 
 /// Wrapper for pointers to [CERT_CONTEXT](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/struct.CERT_CONTEXT.html)
 /// objects to ensure memory is freed when no longer used, to allow for thread safety, and to provide [Signer](https://docs.rs/signature/latest/signature/trait.Signer.html)

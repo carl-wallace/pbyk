@@ -9,7 +9,7 @@ use der::{Decode, Encode};
 use spki::SubjectPublicKeyInfoRef;
 use x509_cert::Certificate;
 use yubikey::certificate::yubikey_signer::{Rsa2048, YubiRsa};
-use yubikey::{piv::SlotId::CardAuthentication, MgmKey, YubiKey};
+use yubikey::{MgmKey, YubiKey, piv::SlotId::CardAuthentication};
 
 use pbykcorelib::misc::network::post_body;
 use pbykcorelib::misc::utils::{get_as_string, get_signed_data};
@@ -17,14 +17,14 @@ use pbykcorelib::misc::utils::{get_as_string, get_signed_data};
 use crate::misc_yubikey::yk_signer::YkSigner;
 use crate::ota::phase3;
 use crate::{
+    Error, Result,
     misc_yubikey::{
         p12::import_p12,
         scep::process_scep_payload,
         utils::{get_uuid_from_cert, verify_and_decrypt},
     },
-    ota::{phase1, OtaActionInputs, Phase2Request, Phase3Request},
+    ota::{OtaActionInputs, Phase2Request, Phase3Request, phase1},
     utils::get_cert_from_slot,
-    Error, Result,
 };
 
 /// Execute the phase 2 portion of the OTA protocol as part of Purebred enrollment
@@ -214,7 +214,9 @@ pub async fn enroll(
     let uuid = match get_uuid_from_cert(yubikey) {
         Ok(uuid) => uuid,
         Err(e) => {
-            error!("Failed to read UUID from device certificate in CardAuthentication slot. Try resetting the device and re-enrolling: {e:?}");
+            error!(
+                "Failed to read UUID from device certificate in CardAuthentication slot. Try resetting the device and re-enrolling: {e:?}"
+            );
             return Err(e);
         }
     };

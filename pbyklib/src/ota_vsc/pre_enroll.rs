@@ -10,11 +10,11 @@ use sha1::Sha1;
 use sha2::Digest;
 
 use crate::{
+    Result,
     misc::{network::post_body, utils::buffer_to_hex},
     misc_win::utils::generate_self_signed_cert_vsc,
     misc_win::vsc_state::{get_version_and_product, get_vsc_id_and_uuid},
     ota::VscPreenroll,
-    Result,
 };
 
 /// Executes "Phase 0" to prepare a TPM-based virtual smart card (VSC) for enrollment

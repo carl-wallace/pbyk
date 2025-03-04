@@ -7,11 +7,11 @@ use windows::Security::Cryptography::Certificates::{Certificate, UserCertificate
 use windows::{Devices::SmartCards::SmartCard, Security::Cryptography::CryptographicBuffer};
 
 use crate::{
+    Result,
     misc_win::{
         cert_store::delete_cert_hashes_from_named_store, vsc_state::read_saved_state_or_default,
     },
     utils::get_vsc_id_from_serial,
-    Result,
 };
 
 pub async fn reset_vsc(smart_card: &SmartCard) -> Result<()> {

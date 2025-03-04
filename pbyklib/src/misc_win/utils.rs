@@ -6,7 +6,6 @@ use std::{io::Cursor, sync::Mutex};
 
 use log::{debug, error, info};
 use windows::{
-    core::{HSTRING, PCWSTR},
     Devices::SmartCards::SmartCard,
     Security::Cryptography::{
         Certificates::{
@@ -17,18 +16,19 @@ use windows::{
         CryptographicBuffer,
     },
     Win32::Security::Cryptography::{
-        NCryptDecrypt, NCryptOpenKey, NCryptOpenStorageProvider, BCRYPT_PAD_PKCS1, CERT_KEY_SPEC,
-        NCRYPT_FLAGS, NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
+        BCRYPT_PAD_PKCS1, CERT_KEY_SPEC, NCRYPT_FLAGS, NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
+        NCryptDecrypt, NCryptOpenKey, NCryptOpenStorageProvider,
     },
+    core::{HSTRING, PCWSTR},
 };
 
 use base64ct::{Base64, Encoding};
-use cipher::{generic_array::GenericArray, BlockDecryptMut, KeyIvInit};
+use cipher::{BlockDecryptMut, KeyIvInit, generic_array::GenericArray};
 use cms::{
     content_info::ContentInfo,
     enveloped_data::{EnvelopedData, RecipientInfo},
 };
-use der::{asn1::OctetString, Decode, Encode};
+use der::{Decode, Encode, asn1::OctetString};
 
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use crate::misc::utils::buffer_to_hex;
@@ -45,6 +45,7 @@ use std::sync::LazyLock;
 use crate::misc_win::cert_store::delete_cert_from_store;
 use crate::misc_win::csr::consume_attested_csr;
 use crate::{
+    Error, Result,
     misc::p12::process_p12,
     misc::utils::{get_as_string, purebred_authorize_request},
     misc_win::{
@@ -55,7 +56,6 @@ use crate::{
         scep::process_scep_payload_vsc,
         vsc_signer::CertContext,
     },
-    Error, Result,
 };
 
 //------------------------------------------------------------------------------------
@@ -267,7 +267,9 @@ pub(crate) async fn generate_self_signed_cert_vsc(
         Err(e) => {
             if gamble_on_attestation(true) {
                 attestation_does_not_work();
-                debug!("Attempting to generate a fresh key pair without attestation in generate_self_signed_cert_vsc after an attempt with attestation failed with: {e:?}");
+                debug!(
+                    "Attempting to generate a fresh key pair without attestation in generate_self_signed_cert_vsc after an attempt with attestation failed with: {e:?}"
+                );
                 (
                     generate_csr(
                         subject_name,
@@ -384,7 +386,9 @@ pub(crate) async fn generate_self_signed_cert_vsc(
             Ok((self_signed.to_der()?, attestation))
         }
         None => {
-            error!("Failed to retrieve credential for freshly generated key pair in generate_self_signed_cert_vsc");
+            error!(
+                "Failed to retrieve credential for freshly generated key pair in generate_self_signed_cert_vsc"
+            );
             Err(Error::Unrecognized)
         }
     }
@@ -421,7 +425,9 @@ pub(crate) async fn import_p12_vsc(
         )?
         .get()
     {
-        error!("Failed to install PKCS #12 object into SmartCard: {e:?}. Trying to install into software module.");
+        error!(
+            "Failed to install PKCS #12 object into SmartCard: {e:?}. Trying to install into software module."
+        );
         CertificateEnrollmentManager::UserCertificateEnrollmentManager()?
             .ImportPfxDataToKspAsync(
                 &base64_pkcs12_h,
@@ -548,7 +554,9 @@ pub(crate) async fn process_payloads_vsc(
                                 Some(pc) => match pc.as_dictionary() {
                                     Some(d) => d,
                                     None => {
-                                        error!("Failed to parse PayloadContent as a dictionary for SCEP payload.");
+                                        error!(
+                                            "Failed to parse PayloadContent as a dictionary for SCEP payload."
+                                        );
                                         return Err(Error::Plist);
                                     }
                                 },
@@ -574,7 +582,9 @@ pub(crate) async fn process_payloads_vsc(
                                 Some(pc) => match pc.as_data() {
                                     Some(d) => d,
                                     None => {
-                                        error!("Failed to parse PayloadContent as a data for PKCS #12 payload.");
+                                        error!(
+                                            "Failed to parse PayloadContent as a data for PKCS #12 payload."
+                                        );
                                         return Err(Error::Plist);
                                     }
                                 },
@@ -588,7 +598,9 @@ pub(crate) async fn process_payloads_vsc(
                                 Some(pc) => match pc.as_string() {
                                     Some(d) => d,
                                     None => {
-                                        error!("Failed to parse Password as a data for PKCS #12 payload.");
+                                        error!(
+                                            "Failed to parse Password as a data for PKCS #12 payload."
+                                        );
                                         return Err(Error::Plist);
                                     }
                                 },
@@ -601,7 +613,9 @@ pub(crate) async fn process_payloads_vsc(
                                 Some(pc) => match pc.as_string() {
                                     Some(d) => d.to_string(),
                                     None => {
-                                        error!("Failed to parse Password as a data for PKCS #12 payload.");
+                                        error!(
+                                            "Failed to parse Password as a data for PKCS #12 payload."
+                                        );
                                         return Err(Error::Plist);
                                     }
                                 },
@@ -613,7 +627,9 @@ pub(crate) async fn process_payloads_vsc(
                                 import_p12_vsc(smartcard, payload_content, password, &friendly_name)
                                     .await
                             {
-                                error!("Failed to process PKCS #12 payload at index {p12_index}: {e:?}.");
+                                error!(
+                                    "Failed to process PKCS #12 payload at index {p12_index}: {e:?}."
+                                );
                                 return Err(e);
                             }
                             p12_index += 1;

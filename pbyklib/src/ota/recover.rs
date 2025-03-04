@@ -8,7 +8,7 @@ use zeroize::Zeroizing;
 use windows::Devices::SmartCards::SmartCard;
 
 use crate::ota::CryptoModule;
-use crate::{ota::OtaActionInputs, Error, Result, PB_MGMT_KEY};
+use crate::{Error, PB_MGMT_KEY, Result, ota::OtaActionInputs};
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::misc_win::vsc_signer::CertContext;

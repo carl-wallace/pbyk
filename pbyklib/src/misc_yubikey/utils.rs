@@ -9,7 +9,7 @@ use std::{
 use log::{error, info};
 use rand_core::{OsRng, RngCore};
 
-use cipher::{generic_array::GenericArray, BlockDecryptMut, KeyIvInit};
+use cipher::{BlockDecryptMut, KeyIvInit, generic_array::GenericArray};
 use sha1::Sha1;
 use sha2::Digest;
 
@@ -21,30 +21,30 @@ use cms::{
 use const_oid::db::rfc4519::COMMON_NAME;
 use der::zeroize::Zeroizing;
 use der::{
+    Decode, Encode, Tag, Tagged,
     asn1::{
         Ia5StringRef, OctetString, PrintableStringRef, TeletexStringRef, UtcTime, Utf8StringRef,
     },
-    Decode, Encode, Tag, Tagged,
 };
 use x509_cert::{
+    Certificate,
     builder::CertificateBuilder,
     ext::pkix::SubjectKeyIdentifier,
     name::Name,
     serial_number::SerialNumber,
     time::{Time, Validity},
-    Certificate,
 };
 use yubikey::{
+    Key, MgmKey, PinPolicy, TouchPolicy, Uuid, YubiKey,
     certificate::yubikey_signer::{Rsa2048, YubiRsa},
     piv,
     piv::{AlgorithmId, SlotId},
-    Key, MgmKey, PinPolicy, TouchPolicy, Uuid, YubiKey,
 };
 
 use crate::{
+    Error, Result,
     misc::rsa_utils::decrypt_inner,
     misc_yubikey::{p12::import_p12, scep::process_scep_payload},
-    Error, Result,
 };
 use pbykcorelib::misc::utils::{
     get_as_string, get_encrypted_payload_content, purebred_authorize_request,
@@ -169,7 +169,9 @@ pub(crate) fn get_uuid_from_cert(yubikey: &mut YubiKey) -> Result<String> {
                 };
                 if let Some(v) = val {
                     if Uuid::parse_str(v).is_err() {
-                        error!("Value read from common name of certificate read from CardAuthentication slot could not be parsed as a UUID: {v}");
+                        error!(
+                            "Value read from common name of certificate read from CardAuthentication slot could not be parsed as a UUID: {v}"
+                        );
                         return Err(Error::UnexpectedValue);
                     }
                     return Ok(v.to_string());
@@ -252,7 +254,9 @@ pub(crate) fn generate_self_signed_cert(
         yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>>,
     >| {
         if let Err(e) = builder.add_extension(&skid) {
-            error!("Failed to add SKID extension to certificate builder when generating self-signed certificate for Yubikey: {e:?}");
+            error!(
+                "Failed to add SKID extension to certificate builder when generating self-signed certificate for Yubikey: {e:?}"
+            );
         }
         Ok(())
     };
@@ -386,7 +390,9 @@ pub(crate) async fn process_payloads(
                                 Some(pc) => match pc.as_dictionary() {
                                     Some(d) => d,
                                     None => {
-                                        error!("Failed to parse PayloadContent as a dictionary for SCEP payload.");
+                                        error!(
+                                            "Failed to parse PayloadContent as a dictionary for SCEP payload."
+                                        );
                                         return Err(Error::Plist);
                                     }
                                 },
@@ -415,7 +421,9 @@ pub(crate) async fn process_payloads(
                                 Some(pc) => match pc.as_data() {
                                     Some(d) => d,
                                     None => {
-                                        error!("Failed to parse PayloadContent as a data for PKCS #12 payload.");
+                                        error!(
+                                            "Failed to parse PayloadContent as a data for PKCS #12 payload."
+                                        );
                                         return Err(Error::Plist);
                                     }
                                 },
@@ -429,7 +437,9 @@ pub(crate) async fn process_payloads(
                                 Some(pc) => match pc.as_string() {
                                     Some(d) => d,
                                     None => {
-                                        error!("Failed to parse Password as a data for PKCS #12 payload.");
+                                        error!(
+                                            "Failed to parse Password as a data for PKCS #12 payload."
+                                        );
                                         return Err(Error::Plist);
                                     }
                                 },
@@ -449,7 +459,9 @@ pub(crate) async fn process_payloads(
                             )
                             .await
                             {
-                                error!("Failed to process PKCS #12 payload at index {p12_index}: {e:?}.");
+                                error!(
+                                    "Failed to process PKCS #12 payload at index {p12_index}: {e:?}."
+                                );
                                 return Err(e);
                             }
                             p12_index += 1;

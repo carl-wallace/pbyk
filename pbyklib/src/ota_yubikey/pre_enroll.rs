@@ -9,14 +9,14 @@ use base64ct::{Base64, Encoding};
 use der::Encode;
 
 use yubikey::{
-    piv::{AlgorithmId, SlotId},
     MgmKey, Uuid, YubiKey,
+    piv::{AlgorithmId, SlotId},
 };
 
 use crate::{
+    Error, Result,
     misc_yubikey::utils::{generate_self_signed_cert, get_attestation_p7},
     ota::Preenroll,
-    Error, Result,
 };
 use pbykcorelib::misc::network::post_body;
 use pbykcorelib::misc::utils::buffer_to_hex;

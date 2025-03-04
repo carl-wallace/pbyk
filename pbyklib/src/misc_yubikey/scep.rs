@@ -10,31 +10,31 @@ use signature::Signer as OtherSigner;
 
 use cms::{cert::CertificateChoices, content_info::ContentInfo, signed_data::SignedData};
 use der::{
-    asn1::{BitString, SetOfVec},
     Decode, Encode,
+    asn1::{BitString, SetOfVec},
 };
 use spki::SignatureBitStringEncoding;
 use x509_cert::{
+    Certificate,
     attr::Attribute,
     request::{CertReq, CertReqInfo},
     spki::SubjectPublicKeyInfoRef,
-    Certificate,
 };
 use yubikey::{
+    MgmKey, YubiKey,
     certificate::{
-        yubikey_signer::{Rsa2048, YubiRsa},
         CertInfo,
+        yubikey_signer::{Rsa2048, YubiRsa},
     },
     piv::{AlgorithmId, SlotId},
-    MgmKey, YubiKey,
 };
 
 use crate::{
+    Error, ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE, Result,
     misc_yubikey::{
         utils::{generate_self_signed_cert, get_attestation_p7, verify_and_decrypt},
         yk_signer::YkSigner,
     },
-    Error, Result, ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE,
 };
 use pbykcorelib::misc::utils::{get_email_addresses, get_subject_name};
 use pbykcorelib::misc::{network::get_ca_cert, scep::prepare_scep_signed_data};

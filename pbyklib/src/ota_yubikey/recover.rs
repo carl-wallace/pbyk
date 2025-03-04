@@ -1,12 +1,12 @@
 //! Interacts with Purebred portal to recover escrowed keys to a YubiKey device
 
 use log::{error, info};
-use yubikey::{piv::SlotId, MgmKey, YubiKey};
+use yubikey::{MgmKey, YubiKey, piv::SlotId};
 
 use crate::{
+    Result,
     misc_yubikey::utils::{process_payloads, verify_and_decrypt},
     ota::OtaActionInputs,
-    Result,
 };
 use pbykcorelib::misc::network::get_profile;
 

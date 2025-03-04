@@ -4,7 +4,7 @@ use log::{debug, error};
 use windows::core::HSTRING;
 
 use crate::misc_win::vsc_state::{get_vsc_id, get_vsc_id_and_uuid};
-use crate::{Error, Result, CERT_SYSTEM_STORE_CURRENT_USER};
+use crate::{CERT_SYSTEM_STORE_CURRENT_USER, Error, Result};
 use windows::Devices::Enumeration::DeviceInformation;
 use windows::Devices::SmartCards::{SmartCard, SmartCardReader, SmartCardReaderKind};
 
@@ -21,8 +21,8 @@ use std::ptr::NonNull;
 use std::{ffi::CString, ptr::null};
 
 use windows::Win32::Security::Cryptography::{
-    CertCloseStore, CertEnumCertificatesInStore, CertOpenStore, CERT_STORE_OPEN_EXISTING_FLAG,
-    CERT_STORE_PROV_SYSTEM_A, PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
+    CERT_STORE_OPEN_EXISTING_FLAG, CERT_STORE_PROV_SYSTEM_A, CertCloseStore,
+    CertEnumCertificatesInStore, CertOpenStore, PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
 };
 
 use certval::{buffer_to_hex, is_self_issued};
@@ -57,7 +57,9 @@ pub async fn list_vscs() -> Result<Vec<SmartCard>> {
                 let ao_scr = match SmartCardReader::FromIdAsync(&id) {
                     Ok(ao_scr) => ao_scr,
                     Err(e) => {
-                        error!("Failed to get async operation for reader #{i} with: {e}. Continuing...");
+                        error!(
+                            "Failed to get async operation for reader #{i} with: {e}. Continuing..."
+                        );
                         continue;
                     }
                 };
@@ -71,7 +73,9 @@ pub async fn list_vscs() -> Result<Vec<SmartCard>> {
                 let ao_sc = match reader.FindAllCardsAsync() {
                     Ok(ao_sc) => ao_sc,
                     Err(e) => {
-                        error!("Failed to get async operation for cards for reader #{i} with: {e}. Continuing...");
+                        error!(
+                            "Failed to get async operation for cards for reader #{i} with: {e}. Continuing..."
+                        );
                         continue;
                     }
                 };
@@ -138,7 +142,9 @@ pub async fn get_vsc(serial: &String) -> Result<SmartCard> {
                 let ao_scr = match SmartCardReader::FromIdAsync(&id) {
                     Ok(ao_scr) => ao_scr,
                     Err(e) => {
-                        error!("Failed to get async operation for reader #{i} with: {e}. Continuing...");
+                        error!(
+                            "Failed to get async operation for reader #{i} with: {e}. Continuing..."
+                        );
                         continue;
                     }
                 };
@@ -235,7 +241,9 @@ pub fn get_device_cred(cn: &str, allow_self_signed: bool) -> Result<CertContext>
                             )) {
                                 Ok(cc) => rv.push(cc),
                                 Err(e) => {
-                                    error!("Failed to prepare CertContext in get_device_cred: {e:?}. Continuing...")
+                                    error!(
+                                        "Failed to prepare CertContext in get_device_cred: {e:?}. Continuing..."
+                                    )
                                 }
                             };
                         } else {
@@ -244,7 +252,9 @@ pub fn get_device_cred(cn: &str, allow_self_signed: bool) -> Result<CertContext>
                     }
                 }
                 Err(e) => {
-                    error!("Failed to prepare wrapped CertContext in get_device_cred: {e:?}. Continuing...");
+                    error!(
+                        "Failed to prepare wrapped CertContext in get_device_cred: {e:?}. Continuing..."
+                    );
                 }
             }
             cur_cert_context = CertEnumCertificatesInStore(cert_store, Some(cur_cert_context));
