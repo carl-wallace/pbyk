@@ -21,7 +21,7 @@ use yubikey::MgmKey;
 //------------------------------------------------------------------------------------
 /// Execute the phase 1 portion of the OTA protocol as part of Purebred enrollment. Logs error
 /// details before returning.
-pub(crate) async fn phase1(url: &str, env: &str) -> Result<(String, String)> {
+pub async fn phase1(url: &str, env: &str) -> Result<(String, String)> {
     info!("Executing Phase 1");
     let p1_resp = fetch_phase1(url, env).await?;
 
