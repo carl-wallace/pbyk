@@ -7,6 +7,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Error {
     BadInput,
+    Http(StatusCode),
     NotFound,
     Network,
     Forbidden,
@@ -67,6 +68,7 @@ impl From<serde_json::Error> for Error {
 }
 
 use const_oid::ObjectIdentifier;
+use reqwest::StatusCode;
 use std::sync::LazyLock;
 
 /// `pkcs-9-at-challengePassword` from [RFC 2985 Section 5.4.1]

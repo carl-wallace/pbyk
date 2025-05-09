@@ -80,7 +80,7 @@ fn check_response(response: &Response, uri: &str) -> Result<()> {
         return Err(Error::UnexpectedDeviceState);
     } else if status != 200 {
         error!("Request to {uri} failed with {:?}", status);
-        return Err(Error::Network);
+        return Err(Error::Http(status));
     }
     Ok(())
 }
@@ -105,7 +105,7 @@ pub async fn get_profile(url: &str) -> Result<Vec<u8>> {
                     "Received failure response from {url}: {}",
                     response.status()
                 );
-                Err(Error::Network)
+                Err(Error::Http(status))
             } else {
                 match response.bytes().await {
                     Ok(bytes) => Ok(bytes.to_vec()),
