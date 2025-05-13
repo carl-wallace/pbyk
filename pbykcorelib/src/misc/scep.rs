@@ -267,7 +267,7 @@ pub async fn post_scep_request(pki_op_url: &str, signed_data_pkcs7_der: &[u8]) -
         Ok(r) => Ok(r),
         Err(e) => {
             error!("Failed to submit SCEP request to {pki_op_url}: {e:?}");
-            Err(Error::Network)
+            Err(e)
         }
     }
 }

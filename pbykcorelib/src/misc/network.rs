@@ -117,7 +117,7 @@ pub async fn get_profile(url: &str) -> Result<Vec<u8>> {
             }
         }
         Err(e) => {
-            error!("Failed to get response from {url}: {e:?}");
+            error!("Failed to get a response from {url}: {e:?}");
             Err(Error::Network)
         }
     }
