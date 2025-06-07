@@ -82,7 +82,7 @@ where
     S: Keypair + DynSignatureAlgorithmIdentifier + Signer<rsa::pkcs1v15::Signature>,
 {
     info!("Executing Phase 3");
-    let signed_data_pkcs7_der = get_signed_data(signer, ca_issued_device_cert, phase3_req)?;
+    let signed_data_pkcs7_der = get_signed_data(signer, ca_issued_device_cert, phase3_req, None)?;
     match post_body(
         phase3_url,
         &signed_data_pkcs7_der,

@@ -49,7 +49,7 @@ async fn phase2(
         yubikey::certificate::yubikey_signer::Signer::new(yubikey, CardAuthentication, spki_ref)
             .map_err(|_| Error::Unrecognized)?;
 
-    let signed_data_pkcs7_der = match get_signed_data(&signer, self_signed_cert, phase2_req) {
+    let signed_data_pkcs7_der = match get_signed_data(&signer, self_signed_cert, phase2_req, None) {
         Ok(d) => d,
         Err(e) => {
             error!("Failed to generate SignedData for Phase 2 request: {e:?}");

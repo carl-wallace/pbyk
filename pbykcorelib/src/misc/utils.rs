@@ -302,12 +302,15 @@ pub fn get_signed_data<S>(
     signer: &S,
     signers_cert: &Certificate,
     data_to_sign: &[u8],
+    encap_type: Option<ObjectIdentifier>
 ) -> Result<Vec<u8>>
 where
     S: Keypair + DynSignatureAlgorithmIdentifier + Signer<rsa::pkcs1v15::Signature>,
 {
+    let econtent_type = encap_type.unwrap_or_else(|| const_oid::db::rfc5911::ID_DATA);
+    
     let content = EncapsulatedContentInfo {
-        econtent_type: const_oid::db::rfc5911::ID_DATA,
+        econtent_type,
         econtent: Some(Any::new(Tag::OctetString, data_to_sign)?),
     };
 
