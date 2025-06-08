@@ -188,7 +188,7 @@ pub fn prepare_scep_signed_data<S>(
 where
     S: Keypair + DynSignatureAlgorithmIdentifier + Signer<rsa::pkcs1v15::Signature>,
 {
-    let si = signer_identifier_from_cert(&self_signed_cert)?;
+    let si = signer_identifier_from_cert(&self_signed_cert, true)?;
 
     let content = EncapsulatedContentInfo {
         econtent_type: const_oid::db::rfc5911::ID_DATA,

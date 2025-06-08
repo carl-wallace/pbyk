@@ -31,6 +31,7 @@ use x509_cert::{
 };
 
 use certval::PkiEnvironment;
+use cms::cert::IssuerAndSerialNumber;
 use signature::{Keypair, Signer};
 
 use crate::{misc::pki::validate_cert, Error, Result};
@@ -273,15 +274,26 @@ pub async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec
 }
 
 /// Create a SKID-based SignerIdentifier from certificate
-pub fn signer_identifier_from_cert(cert: &Certificate) -> Result<SignerIdentifier> {
-    let skid_bytes = skid_from_cert(cert)?;
-    let os = match OctetString::new(skid_bytes) {
-        Ok(os) => os,
-        Err(e) => return Err(Error::Asn1(e)),
-    };
-    let skid = SubjectKeyIdentifier::from(os);
+pub(crate) fn signer_identifier_from_cert(
+    cert: &Certificate,
+    use_skid: bool,
+) -> Result<SignerIdentifier> {
+    if use_skid {
+        let skid_bytes = skid_from_cert(cert)?;
+        let os = match OctetString::new(skid_bytes) {
+            Ok(os) => os,
+            Err(e) => return Err(Error::Asn1(e)),
+        };
+        let skid = SubjectKeyIdentifier::from(os);
 
-    Ok(SignerIdentifier::SubjectKeyIdentifier(skid))
+        Ok(SignerIdentifier::SubjectKeyIdentifier(skid))
+    } else {
+        let ias = IssuerAndSerialNumber {
+            issuer: cert.tbs_certificate.issuer.clone(),
+            serial_number: cert.tbs_certificate.serial_number.clone(),
+        };
+        Ok(SignerIdentifier::IssuerAndSerialNumber(ias))
+    }
 }
 
 /// Create a SKID-based RecipientIdentifier from certificate
@@ -302,13 +314,14 @@ pub fn get_signed_data<S>(
     signer: &S,
     signers_cert: &Certificate,
     data_to_sign: &[u8],
-    encap_type: Option<ObjectIdentifier>
+    encap_type: Option<ObjectIdentifier>,
+    use_skid: bool,
 ) -> Result<Vec<u8>>
 where
     S: Keypair + DynSignatureAlgorithmIdentifier + Signer<rsa::pkcs1v15::Signature>,
 {
-    let econtent_type = encap_type.unwrap_or_else(|| const_oid::db::rfc5911::ID_DATA);
-    
+    let econtent_type = encap_type.unwrap_or(const_oid::db::rfc5911::ID_DATA);
+
     let content = EncapsulatedContentInfo {
         econtent_type,
         econtent: Some(Any::new(Tag::OctetString, data_to_sign)?),
@@ -319,7 +332,7 @@ where
         parameters: None,
     };
 
-    let si = signer_identifier_from_cert(signers_cert)?;
+    let si = signer_identifier_from_cert(signers_cert, use_skid)?;
 
     let external_message_digest = None;
     let signer_info_builder_1 = match SignerInfoBuilder::new(

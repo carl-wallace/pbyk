@@ -38,7 +38,7 @@ fn log_certs_in_path(path: &CertificationPath) {
 ///
 /// `validate_cert` mostly serves to prepare TaSource and CertSource instances for inclusion in a `PkiEnvironment` that
 /// is passed to `validate_cert_buf`, which executes the validation operation and returns the result.
-pub(crate) async fn validate_cert(
+pub async fn validate_cert(
     leaf_cert: &Vec<u8>,
     intermediate: Vec<Certificate>,
     env: &str,
