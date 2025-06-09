@@ -22,7 +22,7 @@ use const_oid::{
     },
     ObjectIdentifier,
 };
-use der::{asn1::OctetString, Any, Decode, Encode, Tag};
+use der::{asn1::OctetString, Any, AnyRef, Decode, Encode, Tag};
 use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier};
 use x509_cert::{
     ext::pkix::{BasicConstraints, SubjectKeyIdentifier},
@@ -329,7 +329,7 @@ where
 
     let digest_algorithm = AlgorithmIdentifierOwned {
         oid: const_oid::db::rfc5912::ID_SHA_256,
-        parameters: None,
+        parameters: Some(Any::from(AnyRef::NULL)),
     };
 
     let si = signer_identifier_from_cert(signers_cert, use_skid)?;
