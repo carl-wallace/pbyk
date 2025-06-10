@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2021"
 
 [dependencies]
-base64ct = { version="1.6.0", features = ["alloc"] }
+base64ct = { version="1.8.0", features = ["alloc"] }
 cms = {version = "0.2.2", git = "https://github.com/carl-wallace/formats.git", features = ["builder"], branch = "pbyk"}
 const-oid = { version = "0.9.5", features = ["db"] }
 der = { version = "0.7.8", features = ["alloc", "derive", "oid", "pem"] }
@@ -18,11 +18,11 @@ rsa = { version = "0.9.7", features = ["sha2"] }
 sha2 = "0.10.8"
 signature = { version = "2.2.0", features = ["digest", "alloc"]}
 
-log = "0.4.22"
-plist = "1.7.0"
-reqwest = {version = "0.12.12", features = ["rustls-tls", "multipart", "blocking"]}
-serde = { version = "1.0.217", default-features = false, features = ["derive"] }
-serde_json = "1.0.135"
+log = "0.4.27"
+plist = "1.7.1"
+reqwest = {version = "0.12.20", features = ["rustls-tls", "multipart", "blocking"]}
+serde = { version = "1.0.219", default-features = false, features = ["derive"] }
+serde_json = "1.0.140"
 subtle-encoding = "0.5.1"
 
 pb_pki = {git="https://github.com/carl-wallace/pb_pki.git"}
