@@ -1,5 +1,6 @@
 //! Utility functions for use within pbyklib
 
+use spki::EncodePublicKey;
 use std::{collections::BTreeMap, io::Cursor, str::FromStr};
 
 use log::error;
@@ -104,7 +105,7 @@ fn hash_content(sd: &SignedData, content: &[u8]) -> Result<BTreeMap<ObjectIdenti
 /// BasicConstraints is found with isCA set to false or no BasicConstraints is found, and an error
 /// if BasicConstraints is found but cannot be parsed.
 fn is_ca(cert: &Certificate) -> Result<bool> {
-    match &cert.tbs_certificate.extensions {
+    match cert.tbs_certificate().extensions() {
         Some(extensions) => {
             for ext in extensions {
                 if ext.extn_id == ID_CE_BASIC_CONSTRAINTS {
@@ -257,7 +258,7 @@ pub async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec
                 &data_to_verify[..],
                 si.signature.as_bytes(),
                 &si.signature_algorithm,
-                &leaf_cert.tbs_certificate.subject_public_key_info,
+                leaf_cert.tbs_certificate().subject_public_key_info(),
             )
             .is_ok()
         {
@@ -289,8 +290,8 @@ pub(crate) fn signer_identifier_from_cert(
         Ok(SignerIdentifier::SubjectKeyIdentifier(skid))
     } else {
         let ias = IssuerAndSerialNumber {
-            issuer: cert.tbs_certificate.issuer.clone(),
-            serial_number: cert.tbs_certificate.serial_number.clone(),
+            issuer: cert.tbs_certificate().issuer().clone(),
+            serial_number: cert.tbs_certificate().serial_number().clone(),
         };
         Ok(SignerIdentifier::IssuerAndSerialNumber(ias))
     }
@@ -319,6 +320,7 @@ pub fn get_signed_data<S>(
 ) -> Result<Vec<u8>>
 where
     S: Keypair + DynSignatureAlgorithmIdentifier + Signer<rsa::pkcs1v15::Signature>,
+    <S as Keypair>::VerifyingKey: EncodePublicKey,
 {
     let econtent_type = encap_type.unwrap_or(const_oid::db::rfc5911::ID_DATA);
 
@@ -336,7 +338,6 @@ where
 
     let external_message_digest = None;
     let signer_info_builder_1 = match SignerInfoBuilder::new(
-        signer,
         si,
         digest_algorithm.clone(),
         &content,
@@ -356,7 +357,7 @@ where
         .map_err(|_err| Error::Unrecognized)?
         .add_certificate(CertificateChoices::Certificate(signers_cert.clone()))
         .map_err(|_err| Error::Unrecognized)?
-        .add_signer_info(signer_info_builder_1)
+        .add_signer_info(signer_info_builder_1, signer)
         .map_err(|_err| Error::Unrecognized)?
         .build()
         .map_err(|_err| Error::Unrecognized)?;
@@ -373,7 +374,7 @@ where
 
 /// Extract SKID extension value from certificate or calculate a SKID value from the SubjectPublicKeyInfo
 pub fn skid_from_cert(cert: &Certificate) -> Result<Vec<u8>> {
-    if let Some(exts) = &cert.tbs_certificate.extensions {
+    if let Some(exts) = cert.tbs_certificate().extensions() {
         for ext in exts {
             if ext.extn_id == ID_CE_SUBJECT_KEY_IDENTIFIER {
                 match OctetString::from_der(ext.extn_value.as_bytes()) {
@@ -386,7 +387,7 @@ pub fn skid_from_cert(cert: &Certificate) -> Result<Vec<u8>> {
         }
     }
 
-    let working_spki = &cert.tbs_certificate.subject_public_key_info;
+    let working_spki = cert.tbs_certificate().subject_public_key_info();
     match working_spki.subject_public_key.as_bytes() {
         Some(spki) => Ok(Sha256::digest(spki).to_vec()),
         None => {

@@ -1,5 +1,6 @@
 //! Executes OTA protocol in support of Purebred enrollment
 
+use spki::EncodePublicKey;
 use zeroize::Zeroizing;
 
 use log::{error, info};
@@ -80,6 +81,7 @@ pub(crate) async fn phase3<S>(
 ) -> Result<()>
 where
     S: Keypair + DynSignatureAlgorithmIdentifier + Signer<rsa::pkcs1v15::Signature>,
+    <S as Keypair>::VerifyingKey: EncodePublicKey,
 {
     info!("Executing Phase 3");
     let signed_data_pkcs7_der =

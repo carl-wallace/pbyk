@@ -2,7 +2,9 @@
 
 use log::error;
 use plist::Dictionary;
-use rand_core::OsRng;
+use rand::rngs::OsRng;
+use rand_core::TryRngCore;
+use spki::EncodePublicKey;
 
 use rsa::RsaPublicKey;
 
@@ -128,7 +130,7 @@ pub fn prepare_attributes(
 
 /// Returns public key from a certificate as an RsaPublicKey
 pub fn get_rsa_key_from_cert(cert: &Certificate) -> Result<RsaPublicKey> {
-    let spki_bytes = cert.tbs_certificate.subject_public_key_info.to_der()?;
+    let spki_bytes = cert.tbs_certificate().subject_public_key_info().to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&spki_bytes)?;
     match RsaPublicKey::try_from(spki_ref) {
         Ok(r) => Ok(r),
@@ -144,11 +146,9 @@ pub fn prepare_enveloped_data(csr_der: &[u8], ca_cert: &Certificate) -> Result<V
     let recipient_identifier = recipient_identifier_from_cert(ca_cert)?;
     let recipient_public_key = get_rsa_key_from_cert(ca_cert)?;
 
-    let mut rng = OsRng;
     let recipient_info_builder = KeyTransRecipientInfoBuilder::new(
         recipient_identifier,
         KeyEncryptionInfo::Rsa(recipient_public_key),
-        &mut rng,
     )
     .map_err(|_| Error::Unrecognized)?;
 
@@ -161,7 +161,7 @@ pub fn prepare_enveloped_data(csr_der: &[u8], ca_cert: &Certificate) -> Result<V
     .map_err(|_| Error::Unrecognized)?;
 
     // Add recipient info. Multiple recipients are possible, but not used here.
-    let mut rng = OsRng;
+    let mut rng = OsRng.unwrap_err();
     let enveloped_data = enveloped_data_builder
         .add_recipient_info(recipient_info_builder)
         .map_err(|_| Error::Unrecognized)?
@@ -187,6 +187,7 @@ pub fn prepare_scep_signed_data<S>(
 ) -> Result<Vec<u8>>
 where
     S: Keypair + DynSignatureAlgorithmIdentifier + Signer<rsa::pkcs1v15::Signature>,
+    <S as Keypair>::VerifyingKey: EncodePublicKey,
 {
     let si = signer_identifier_from_cert(&self_signed_cert, true)?;
 
@@ -201,7 +202,6 @@ where
 
     let external_message_digest = None;
     let mut signer_info_builder = SignerInfoBuilder::new(
-        signer,
         si,
         digest_algorithm.clone(),
         &content,
@@ -248,7 +248,7 @@ where
         .map_err(|_| Error::Unrecognized)?
         .add_certificate(CertificateChoices::Certificate(self_signed_cert))
         .map_err(|_| Error::Unrecognized)?
-        .add_signer_info(signer_info_builder)
+        .add_signer_info(signer_info_builder, signer)
         .map_err(|_| Error::Unrecognized)?
         .build()
         .map_err(|_| Error::Unrecognized)?;

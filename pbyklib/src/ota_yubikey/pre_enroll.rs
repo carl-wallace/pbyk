@@ -2,8 +2,7 @@
 
 use log::{debug, info};
 
-use sha1::Sha1;
-use sha2::Digest;
+use sha1::{Digest, Sha1};
 
 use base64ct::{Base64, Encoding};
 use der::Encode;

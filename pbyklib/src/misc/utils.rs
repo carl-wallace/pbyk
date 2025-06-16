@@ -103,7 +103,7 @@ fn hash_content(sd: &SignedData, content: &[u8]) -> Result<BTreeMap<ObjectIdenti
 /// BasicConstraints is found with isCA set to false or no BasicConstraints is found, and an error
 /// if BasicConstraints is found but cannot be parsed.
 fn is_ca(cert: &Certificate) -> Result<bool> {
-    match &cert.tbs_certificate.extensions {
+    match &cert.tbs_certificate().extensions {
         Some(extensions) => {
             for ext in extensions {
                 if ext.extn_id == ID_CE_BASIC_CONSTRAINTS {
@@ -256,7 +256,7 @@ pub(crate) async fn purebred_authorize_request(content: &[u8], env: &str) -> Res
                 &data_to_verify[..],
                 si.signature.as_bytes(),
                 &si.signature_algorithm,
-                &leaf_cert.tbs_certificate.subject_public_key_info,
+                &leaf_cert.tbs_certificate().subject_public_key_info,
             )
             .is_ok()
         {
@@ -357,7 +357,7 @@ where
 
 /// Extract SKID extension value from certificate or calculate a SKID value from the SubjectPublicKeyInfo
 pub(crate) fn skid_from_cert(cert: &Certificate) -> Result<Vec<u8>> {
-    if let Some(exts) = &cert.tbs_certificate.extensions {
+    if let Some(exts) = &cert.tbs_certificate().extensions {
         for ext in exts {
             if ext.extn_id == ID_CE_SUBJECT_KEY_IDENTIFIER {
                 match OctetString::from_der(ext.extn_value.as_bytes()) {
@@ -370,7 +370,7 @@ pub(crate) fn skid_from_cert(cert: &Certificate) -> Result<Vec<u8>> {
         }
     }
 
-    let working_spki = &cert.tbs_certificate.subject_public_key_info;
+    let working_spki = &cert.tbs_certificate().subject_public_key_info;
     match working_spki.subject_public_key.as_bytes() {
         Some(spki) => Ok(Sha256::digest(spki).to_vec()),
         None => {

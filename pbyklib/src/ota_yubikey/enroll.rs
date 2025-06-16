@@ -40,8 +40,8 @@ async fn phase2(
     info!("Executing Phase 2");
 
     let enc_spki = self_signed_cert
-        .tbs_certificate
-        .subject_public_key_info
+        .tbs_certificate()
+        .subject_public_key_info()
         .to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
 
@@ -269,7 +269,10 @@ pub async fn enroll(
         return Err(Error::Plist);
     }
 
-    let enc_spki = new_cert.tbs_certificate.subject_public_key_info.to_der()?;
+    let enc_spki = new_cert
+        .tbs_certificate()
+        .subject_public_key_info()
+        .to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
 
     let signer: YkSigner<'_, YubiRsa<Rsa2048>> =

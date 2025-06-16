@@ -49,7 +49,7 @@ use crate::{CERT_SYSTEM_STORE_CURRENT_USER, Error, Result};
 /// Takes a `Certificate` object and a byte array and returns true if the `Certificate` contains a `SubjectKeyIdentifier`
 /// extension whose value matches the byte array.
 fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
-    if let Some(exts) = &cert.tbs_certificate.extensions {
+    if let Some(exts) = &cert.tbs_certificate().extensions {
         for ext in exts {
             if ext.extn_id == ID_CE_SUBJECT_KEY_IDENTIFIER {
                 match OctetString::from_der(ext.extn_value.as_bytes()) {
@@ -62,7 +62,8 @@ fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
                         error!(
                             "Failed to parse SubjectKeyIdentifier extension from Certificate with serial number {} as\
                          an OctetString: {}. Ignoring and continuing...",
-                            cert.tbs_certificate.serial_number, e
+                            cert.tbs_certificate().serial_number,
+                            e
                         );
                     }
                 }
@@ -88,7 +89,7 @@ fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
 /// * `signer` - [CertContext] object that (presumably) wraps a `CERT_CONTEXT` that references the `Certificate` in `cert`
 pub(crate) fn resign_as_self(cert: &Certificate, signer: &CertContext) -> Result<Certificate> {
     let profile = Profile::Leaf {
-        issuer: cert.tbs_certificate.subject.clone(),
+        issuer: cert.tbs_certificate().subject.clone(),
         enable_key_agreement: false,
         enable_key_encipherment: true,
         include_subject_key_identifier: true,
@@ -96,10 +97,10 @@ pub(crate) fn resign_as_self(cert: &Certificate, signer: &CertContext) -> Result
 
     let builder = CertificateBuilder::new(
         profile,
-        cert.tbs_certificate.serial_number.clone(),
-        cert.tbs_certificate.validity,
-        cert.tbs_certificate.subject.clone(),
-        cert.tbs_certificate.subject_public_key_info.clone(),
+        cert.tbs_certificate().serial_number.clone(),
+        cert.tbs_certificate().validity,
+        cert.tbs_certificate().subject.clone(),
+        cert.tbs_certificate().subject_public_key_info.clone(),
         signer,
     )?;
 
@@ -218,7 +219,7 @@ async fn consume_parsed_csr(csr: &CertReq) -> Result<(String, Certificate)> {
 
     // generate fake certificate with a ~10 year validity period
     let profile = Profile::Leaf {
-        issuer: issuer_cert.tbs_certificate.issuer.clone(),
+        issuer: issuer_cert.tbs_certificate().issuer.clone(),
         enable_key_agreement: false,
         enable_key_encipherment: true,
         include_subject_key_identifier: true,
@@ -467,7 +468,7 @@ fn list_container_names_test() {
                         }
 
                         let cur_cert = cert_context.cert();
-                        let subject = cur_cert.tbs_certificate.subject.to_string();
+                        let subject = cur_cert.tbs_certificate().subject.to_string();
                         println!("subject: {subject}\n");
                     }
                     Err(e) => {

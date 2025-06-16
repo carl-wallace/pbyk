@@ -94,7 +94,7 @@ fn prepare_scep_request_vsc(
 ) -> Result<Vec<u8>> {
     let cert_req_info = CertReqInfo {
         version: Default::default(),
-        subject: self_signed_cert.tbs_certificate.subject.clone(),
+        subject: self_signed_cert.tbs_certificate().subject.clone(),
         public_key: self_signed_cert
             .tbs_certificate
             .subject_public_key_info

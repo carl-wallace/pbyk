@@ -5,14 +5,19 @@ use std::{
     str::FromStr,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use yubikey::certificate::yubikey_signer;
 
 use log::{error, info};
-use rand_core::{OsRng, RngCore};
+use rand_core::{OsRng, RngCore, TryRngCore};
 
 use cipher::{BlockDecryptMut, KeyIvInit, generic_array::GenericArray};
-use sha1::Sha1;
-use sha2::Digest;
+use sha1::{Digest, Sha1};
 
+use crate::{
+    Error, Result,
+    misc::rsa_utils::decrypt_inner,
+    misc_yubikey::{p12::import_p12, scep::process_scep_payload},
+};
 use cms::{
     content_info::ContentInfo,
     enveloped_data::{EnvelopedData, RecipientInfo},
@@ -26,6 +31,9 @@ use der::{
         Ia5StringRef, OctetString, PrintableStringRef, TeletexStringRef, UtcTime, Utf8StringRef,
     },
 };
+use pbykcorelib::misc::utils::{
+    get_as_string, get_encrypted_payload_content, purebred_authorize_request,
+};
 use x509_cert::{
     Certificate,
     builder::CertificateBuilder,
@@ -34,20 +42,10 @@ use x509_cert::{
     serial_number::SerialNumber,
     time::{Time, Validity},
 };
+use yubikey::certificate::SelfSigned;
 use yubikey::{
-    Key, MgmKey, PinPolicy, TouchPolicy, Uuid, YubiKey,
-    certificate::yubikey_signer::{Rsa2048, YubiRsa},
-    piv,
+    Key, MgmKey, PinPolicy, TouchPolicy, Uuid, YubiKey, piv,
     piv::{AlgorithmId, SlotId},
-};
-
-use crate::{
-    Error, Result,
-    misc::rsa_utils::decrypt_inner,
-    misc_yubikey::{p12::import_p12, scep::process_scep_payload},
-};
-use pbykcorelib::misc::utils::{
-    get_as_string, get_encrypted_payload_content, purebred_authorize_request,
 };
 
 /// Generates an attestation for the indicated slot and returns a P7 containing that attestation and
@@ -153,8 +151,8 @@ pub(crate) fn get_uuid_from_cert(yubikey: &mut YubiKey) -> Result<String> {
         }
     };
 
-    for n in cert.cert.tbs_certificate.subject.0.iter() {
-        for a in n.0.iter() {
+    for n in cert.cert.tbs_certificate().subject().iter_rdn() {
+        for a in n.iter() {
             if a.oid == COMMON_NAME {
                 let val = match a.value.tag() {
                     Tag::PrintableString => PrintableStringRef::try_from(&a.value)
@@ -205,7 +203,7 @@ pub(crate) fn generate_self_signed_cert(
     };
 
     let mut serial = [0u8; 20];
-    OsRng.fill_bytes(&mut serial);
+    OsRng.unwrap_err().fill_bytes(&mut serial);
     serial[0] = 0x01;
     let serial = SerialNumber::new(&serial[..]).expect("serial can't be more than 20 bytes long");
 
@@ -223,8 +221,8 @@ pub(crate) fn generate_self_signed_cert(
         )
         .map_err(|_| Error::Unrecognized)?,
     );
-    let validity = Validity {
-        not_before: Time::UtcTime(
+    let validity = Validity::new(
+        Time::UtcTime(
             UtcTime::from_unix_duration(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -233,7 +231,7 @@ pub(crate) fn generate_self_signed_cert(
             .map_err(|_| Error::Unrecognized)?,
         ),
         not_after,
-    };
+    );
     let name = Name::from_str(name)?;
     let spki_buffer = public_key.to_der()?;
     let b = Sha1::digest(spki_buffer);
@@ -249,10 +247,7 @@ pub(crate) fn generate_self_signed_cert(
         return Err(Error::YubiKey(e));
     }
 
-    let builder = |builder: &mut CertificateBuilder<
-        '_,
-        yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>>,
-    >| {
+    let builder = |builder: &mut CertificateBuilder<SelfSigned>| {
         if let Err(e) = builder.add_extension(&skid) {
             error!(
                 "Failed to add SKID extension to certificate builder when generating self-signed certificate for Yubikey: {e:?}"
@@ -261,9 +256,11 @@ pub(crate) fn generate_self_signed_cert(
         Ok(())
     };
 
-    match yubikey::certificate::Certificate::generate_self_signed(
-        yubikey, slot, serial, validity, name, public_key, builder,
-    ) {
+    match yubikey::certificate::Certificate::generate_self_signed::<
+        _,
+        yubikey_signer::YubiRsa<yubikey_signer::Rsa2048>,
+    >(yubikey, slot, serial, validity, name, public_key, builder)
+    {
         Ok(cert) => Ok(cert.cert),
         Err(e) => Err(Error::YubiKey(e)),
     }
@@ -316,7 +313,7 @@ pub(crate) async fn verify_and_decrypt(
     let os_iv = OctetString::from_der(&enc_params)?;
     let iv = os_iv.as_bytes();
 
-    let ct = match ed.encrypted_content.encrypted_content {
+    let mut ct = match ed.encrypted_content.encrypted_content {
         Some(ct) => ct.as_bytes().to_vec(),
         None => return Err(Error::Unrecognized),
     };
@@ -346,8 +343,8 @@ pub(crate) async fn verify_and_decrypt(
         /// decryption type
         type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
         let cipher = Aes256CbcDec::new(key, iv.into());
-        if let Ok(pt) = cipher.decrypt_padded_vec_mut::<cipher::block_padding::Pkcs7>(&ct) {
-            return Ok(Zeroizing::new(pt));
+        if let Ok(pt) = cipher.decrypt_padded_mut::<cipher::block_padding::Pkcs7>(&mut ct) {
+            return Ok(Zeroizing::new(pt.to_vec()));
         }
     }
     Err(Error::Unrecognized)

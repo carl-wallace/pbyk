@@ -50,7 +50,7 @@ fn sign_request(
     cert: &Certificate,
     data: &[u8],
 ) -> Result<BitString> {
-    let enc_spki = cert.tbs_certificate.subject_public_key_info.to_der()?;
+    let enc_spki = cert.tbs_certificate().subject_public_key_info().to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
     let signer: yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>> =
         yubikey::certificate::yubikey_signer::Signer::new(yubikey, slot_id, spki_ref)
@@ -82,10 +82,10 @@ fn prepare_csr(
 ) -> Result<Vec<u8>> {
     let cert_req_info = CertReqInfo {
         version: Default::default(),
-        subject: self_signed_cert.tbs_certificate.subject.clone(),
+        subject: self_signed_cert.tbs_certificate().subject().clone(),
         public_key: self_signed_cert
-            .tbs_certificate
-            .subject_public_key_info
+            .tbs_certificate()
+            .subject_public_key_info()
             .clone(),
         attributes: attrs,
     };
@@ -111,7 +111,7 @@ fn prepare_csr(
 
     let cert_req = CertReq {
         info: cert_req_info,
-        algorithm: self_signed_cert.signature_algorithm.clone(),
+        algorithm: self_signed_cert.signature_algorithm().clone(),
         signature: sig,
     };
 
@@ -206,7 +206,7 @@ pub(crate) async fn process_scep_payload(
         error!("Failed to authenticate using management key in process_scep_payload: {e:?}");
         return Err(Error::YubiKey(e));
     }
-    let enc_spki = ss.tbs_certificate.subject_public_key_info.to_der()?;
+    let enc_spki = ss.tbs_certificate().subject_public_key_info().to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
 
     let signer: YkSigner<'_, YubiRsa<Rsa2048>> = match YkSigner::new(yubikey, slot_id, spki_ref) {

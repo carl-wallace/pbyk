@@ -3,7 +3,7 @@ use pbyklib::utils::portal_status_check::portal_status_check;
 #[cfg(feature = "dev")]
 #[tokio::test]
 async fn test_dev_get_ca_cert_pass() {
-    assert!(portal_status_check("https://ee-sw-ca-53.redhoundsoftware.net/ca/device-enroll/pkiclient.exe?operation=GetCACert")
+    assert!(portal_status_check("https://ee-derility-ca-3.redhoundsoftware.net/ca/device-enroll/pkiclient.exe?operation=GetCACert")
         .await
         .is_ok());
 }

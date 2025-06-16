@@ -119,7 +119,7 @@ async fn validate_cert_buf(
                     info!(
                         "Validated {} certificate path for {}",
                         path.intermediates.len() + 2,
-                        name_to_string(&path.target.decoded_cert.tbs_certificate.subject)
+                        name_to_string(path.target.decoded_cert.tbs_certificate().subject())
                     );
                     return Ok(());
                 }
@@ -127,7 +127,7 @@ async fn validate_cert_buf(
                     error!(
                         "Failed to validate {} certificate path for {}: {e:?}",
                         path.intermediates.len() + 2,
-                        name_to_string(&path.target.decoded_cert.tbs_certificate.subject)
+                        name_to_string(path.target.decoded_cert.tbs_certificate().subject())
                     );
                     //return Err(Error::Attestation);
                 }
@@ -135,7 +135,7 @@ async fn validate_cert_buf(
         }
         error!(
             "Failed to find a valid certificate path for {}",
-            name_to_string(&target_cert.decoded_cert.tbs_certificate.subject)
+            name_to_string(target_cert.decoded_cert.tbs_certificate().subject())
         );
         Err(Error::BadInput)
     } else {

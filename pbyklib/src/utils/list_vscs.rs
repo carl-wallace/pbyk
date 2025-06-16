@@ -233,7 +233,7 @@ pub fn get_device_cred(cn: &str, allow_self_signed: bool) -> Result<CertContext>
                     };
 
                     let cur_cert = cert_context.cert();
-                    let subject = cur_cert.tbs_certificate.subject.to_string();
+                    let subject = cur_cert.tbs_certificate().subject.to_string();
                     if subject.contains(cn) {
                         if allow_self_signed || !is_self_issued(cur_cert) {
                             match CertContext::dup(NonNull::new_unchecked(
