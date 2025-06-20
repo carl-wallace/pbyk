@@ -275,10 +275,7 @@ pub async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec
 }
 
 /// Create a SKID-based SignerIdentifier from certificate
-pub fn signer_identifier_from_cert(
-    cert: &Certificate,
-    use_skid: bool,
-) -> Result<SignerIdentifier> {
+pub fn signer_identifier_from_cert(cert: &Certificate, use_skid: bool) -> Result<SignerIdentifier> {
     if use_skid {
         let skid_bytes = skid_from_cert(cert)?;
         let os = match OctetString::new(skid_bytes) {
