@@ -10,7 +10,7 @@ use yubikey::certificate::yubikey_signer;
 use log::{error, info};
 use rand_core::{OsRng, RngCore, TryRngCore};
 
-use cipher::{BlockDecryptMut, KeyIvInit, generic_array::GenericArray};
+use cipher::{BlockModeDecrypt, KeyIvInit};
 use sha1::{Digest, Sha1};
 
 use crate::{
@@ -338,12 +338,16 @@ pub(crate) async fn verify_and_decrypt(
             _ => continue,
         };
 
-        let key = GenericArray::from_slice(&dec_key.1[dec_key.2 as usize..]);
-
         /// decryption type
         type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-        let cipher = Aes256CbcDec::new(key, iv.into());
-        if let Ok(pt) = cipher.decrypt_padded_mut::<cipher::block_padding::Pkcs7>(&mut ct) {
+        let cipher = match Aes256CbcDec::new_from_slices(&dec_key.1, iv) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("Failed to create new Aes256CbcDec instance: {e}. Continuing...");
+                continue;
+            }
+        };
+        if let Ok(pt) = cipher.decrypt_padded::<cipher::block_padding::Pkcs7>(&mut ct) {
             return Ok(Zeroizing::new(pt.to_vec()));
         }
     }

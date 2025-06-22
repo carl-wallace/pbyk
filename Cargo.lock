@@ -19,23 +19,12 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aes"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
-dependencies = [
- "cfg-if",
- "cipher 0.4.4",
- "cpufeatures",
-]
-
-[[package]]
-name = "aes"
 version = "0.9.0-rc.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd4838e4ad37bb032dea137f441d5f71c16c26c068af512e64c5bc13a88cdfc7"
 dependencies = [
  "cfg-if",
- "cipher 0.5.0-rc.0",
+ "cipher",
  "cpufeatures",
 ]
 
@@ -45,7 +34,7 @@ version = "0.3.0-rc.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ca68b29bb0493ce60e7b429074337ed28a419f919cb3702cd28c77561eac338"
 dependencies = [
- "aes 0.9.0-rc.0",
+ "aes",
  "const-oid",
 ]
 
@@ -401,15 +390,6 @@ dependencies = [
 
 [[package]]
 name = "block-padding"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8894febbff9f758034a5b8e12d87918f56dfc64a8e1fe757d65e29041538d93"
-dependencies = [
- "generic-array",
-]
-
-[[package]]
-name = "block-padding"
 version = "0.4.0-rc.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee88d14c41bbae2e333f574a27fc73d96fe1039e5a356c20d06a7f2a34cd8e5a"
@@ -493,20 +473,11 @@ dependencies = [
 
 [[package]]
 name = "cbc"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26b52a9543ae338f279b96b0b9fed9c8093744685043739079ce85cd58f289a6"
-dependencies = [
- "cipher 0.4.4",
-]
-
-[[package]]
-name = "cbc"
 version = "0.2.0-rc.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ef95f543a56c245d9d0826ccbb34636ee983b3e846eff57bc5fc72e1bce1701"
 dependencies = [
- "cipher 0.5.0-rc.0",
+ "cipher",
 ]
 
 [[package]]
@@ -647,22 +618,12 @@ checksum = "bd1b64030216239a2e7c364b13cd96a2097ebf0dfe5025f2dedee14a23f2ab60"
 
 [[package]]
 name = "cipher"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
-dependencies = [
- "crypto-common 0.1.6",
- "inout 0.1.4",
-]
-
-[[package]]
-name = "cipher"
 version = "0.5.0-rc.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd4ef774202f1749465fc7cf88d70fc30620e8cacd5429268f4bff7d003bd976"
 dependencies = [
  "crypto-common 0.2.0-rc.3",
- "inout 0.2.0-rc.5",
+ "inout",
 ]
 
 [[package]]
@@ -710,11 +671,11 @@ name = "cms"
 version = "0.3.0-pre.0"
 source = "git+https://github.com/RustCrypto/formats.git#50685d9de374054c1e6d26d491d0ae444b314ce0"
 dependencies = [
- "aes 0.9.0-rc.0",
+ "aes",
  "aes-kw",
  "ansi-x963-kdf",
- "cbc 0.2.0-rc.0",
- "cipher 0.5.0-rc.0",
+ "cbc",
+ "cipher",
  "const-oid",
  "der",
  "digest 0.11.0-rc.0",
@@ -1219,7 +1180,7 @@ version = "0.9.0-rc.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8025983b9f9f242e94d459a57b81c571e92e4e1717ca57d092d8a69fc539efa1"
 dependencies = [
- "cipher 0.5.0-rc.0",
+ "cipher",
 ]
 
 [[package]]
@@ -2947,21 +2908,11 @@ dependencies = [
 
 [[package]]
 name = "inout"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
-dependencies = [
- "block-padding 0.3.3",
- "generic-array",
-]
-
-[[package]]
-name = "inout"
 version = "0.2.0-rc.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c774c86bce20ea04abe1c37cf0051c5690079a3a28ef5fdac2a5a0412b3d7d74"
 dependencies = [
- "block-padding 0.4.0-rc.3",
+ "block-padding",
  "hybrid-array",
 ]
 
@@ -4028,7 +3979,7 @@ version = "0.1.1"
 dependencies = [
  "base64ct",
  "certval",
- "cipher 0.5.0-rc.0",
+ "cipher",
  "cms",
  "const-oid",
  "der",
@@ -4052,11 +4003,11 @@ dependencies = [
 name = "pbyklib"
 version = "0.1.1"
 dependencies = [
- "aes 0.8.4",
+ "aes",
  "base64ct",
- "cbc 0.1.2",
+ "cbc",
  "certval",
- "cipher 0.4.4",
+ "cipher",
  "cms",
  "const-oid",
  "der",
@@ -4074,7 +4025,7 @@ dependencies = [
  "rsa",
  "serde",
  "serde_json",
- "sha-1",
+ "sha1 0.11.0-rc.0",
  "sha2 0.11.0-rc.0",
  "signature",
  "spki",
@@ -5277,17 +5228,6 @@ checksum = "d98238b800e0d1576d8b6e3de32827c2d74bee68bb97748dcf5071fb53965432"
 dependencies = [
  "nodrop",
  "stable_deref_trait",
-]
-
-[[package]]
-name = "sha-1"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5058ada175748e33390e40e872bd0fe59a19f265d0158daa551c5a88a76009c"
-dependencies = [
- "cfg-if",
- "cpufeatures",
- "digest 0.10.7",
 ]
 
 [[package]]
