@@ -3,7 +3,7 @@
 use crate::{Error, Result};
 use der::zeroize::Zeroizing;
 use log::error;
-use openssl_10_55::pkcs12::Pkcs12;
+use openssl::pkcs12::Pkcs12;
 use std::sync::Once;
 
 /// Guard to ensure openssl::init is called just once
@@ -18,7 +18,7 @@ pub fn process_p12(
     want_key: bool,
 ) -> Result<(Vec<u8>, Option<Zeroizing<Vec<u8>>>)> {
     INIT.call_once(|| {
-        openssl_10_55::init();
+        openssl::init();
     });
 
     let pkcs12 = match Pkcs12::from_der(enc_p12) {

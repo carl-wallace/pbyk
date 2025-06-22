@@ -51,8 +51,7 @@ zeroize = "1.8.1"
 # DO NOT ADVANCE OPENSSL CRATE BEYOND 0.10.55 UNTIL PORTAL IS NO LONGER USING RC2-40 (!).
 # When this is updated, remove the old test cases that use RC2 in p12.rs.
 # This also requires openssl-src on 111.26.0+1.1.1u and openssl-sys on 0.9.90,
-# openssl = {version = "0.10.55", features = ["vendored"]}
-openssl_10_55 = { package = "openssl", version = "0.10.55", features = ["vendored"] }
+openssl = {version = "0.10.55", features = ["vendored"]}
 
 pb_pki = {git="https://github.com/carl-wallace/pb_pki.git", branch = "updates"}
 
