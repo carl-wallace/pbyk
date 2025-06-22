@@ -597,7 +597,7 @@ async fn interactive_main() {
 
     let ca_base_url = match args.environment {
         #[cfg(feature = "dev")]
-        Some(Environment::DEV) => "https://ee-sw-ca-53.redhoundsoftware.net".to_string(),
+        Some(Environment::DEV) => "https://ee-derility-ca-3.redhoundsoftware.net/".to_string(),
         #[cfg(feature = "om_nipr")]
         Some(Environment::OM_NIPR) => "https://ee-derility-ca-1.c3pki.oandm.disa.mil".to_string(),
         #[cfg(feature = "om_sipr")]
