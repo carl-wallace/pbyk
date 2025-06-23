@@ -340,7 +340,7 @@ pub(crate) async fn verify_and_decrypt(
 
         /// decryption type
         type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-        let cipher = match Aes256CbcDec::new_from_slices(&dec_key.1, iv) {
+        let cipher = match Aes256CbcDec::new_from_slices(&dec_key.1[dec_key.2 as usize..], iv) {
             Ok(c) => c,
             Err(e) => {
                 error!("Failed to create new Aes256CbcDec instance: {e}. Continuing...");
