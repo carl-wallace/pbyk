@@ -15,8 +15,8 @@ cms = {version = "0.3.0-pre.0"}
 # todo - replace openssl P12 usage with pkcs12 crate
 # pkcs12 = {version = "0.0.0", git = "https://github.com/carl-wallace/formats.git", branch = "pbyk"}
 const-oid = { version = "0.10.1", features = ["db"] }
-der = { version = "0.8.0-rc.4", features = ["alloc", "derive", "oid", "pem"] }
-spki = "0.8.0-rc.2"
+der = { version = "0.8.0-rc.6", features = ["alloc", "derive", "oid", "pem"] }
+spki = "0.8.0-rc.3"
 x509-cert = "0.3.0-rc.0"
 
 # certval has not yet been released, hence use of private branch
@@ -26,7 +26,7 @@ aes = "0.9.0-rc.0"
 cipher = "0.5.0-rc.0"
 cbc = "0.2.0-rc.0"
 pkcs1 = "0.8.0-rc.2"
-rsa = { version = "0.10.0-rc.0", features = ["sha2"] }
+rsa = { version = "0.10.0-rc.1", features = ["sha2"] }
 sha1 = {version = "0.11.0-rc.0", default-features = false}
 sha2 = "0.11.0-rc.0"
 signature = { version = "3.0.0-rc.1", features = ["digest", "alloc"]}
@@ -36,12 +36,12 @@ home = "0.5.11"
 log = "0.4.27"
 plist = "1.7.1"
 rand_core = { version = "0.9.3", features = ["std", "os_rng"] }
-reqwest = {version = "0.12.20", features = ["rustls-tls", "multipart", "blocking"]}
+reqwest = {version = "0.12.22", features = ["rustls-tls", "multipart", "blocking"]}
 serde = { version = "1.0.219", default-features = false, features = ["derive"] }
 serde_json = "1.0.140"
 subtle = { version = "2.6.1", default-features = false }
 subtle-encoding = "0.5.1"
-tokio = { version = "1.45.1", features = ["full", "time", "rt-multi-thread"]}
+tokio = { version = "1.46.1", features = ["full", "time", "rt-multi-thread"]}
 uuid = { version = "1.17.0", features = ["v4"] }
 # the yubikey fork features a length check needed when pbyk is run in presence of some middleware. use fork until upstream is updated with length check added to form.
 #yubikey = { version = "0.8.0", features = ["untested"] }

@@ -30,6 +30,8 @@ x509-ocsp        = { git = "https://github.com/RustCrypto/formats.git" }
 sha1             = { git = "https://github.com/RustCrypto/hashes.git" }
 sha2             = { git = "https://github.com/RustCrypto/hashes.git" }
 
+crypto-bigint = { git = "https://github.com/RustCrypto/crypto-bigint.git" }
+
 # Miscellaneous repos
 curve25519-dalek = { git = "https://github.com/baloo/curve25519-dalek.git", branch = "baloo/rand-0.9" }
 ed25519-dalek    = { git = "https://github.com/baloo/curve25519-dalek.git", branch = "baloo/rand-0.9" }

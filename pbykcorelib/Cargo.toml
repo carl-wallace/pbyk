@@ -7,21 +7,21 @@ edition = "2021"
 base64ct = { version="1.8.0", features = ["alloc"] }
 cms = { version = "0.3.0-pre.0", features = ["builder"] }
 const-oid = { version = "0.10.1", features = ["db"] }
-der = { version = "0.8.0-rc.4", features = ["alloc", "derive", "oid", "pem"] }
-spki = "0.8.0-rc.2"
+der = { version = "0.8.0-rc.6", features = ["alloc", "derive", "oid", "pem"] }
+spki = "0.8.0-rc.3"
 x509-cert = "0.3.0-rc.0"
 
 # certval has not yet been released, hence use of private branch
 certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std", "rsa"], branch = "updates"}
 
 cipher = { version = "0.5.0-rc.0", features = ["alloc", "block-padding", "rand_core"] }
-rsa = { version = "0.10.0-rc.0", features = ["sha2"] }
+rsa = { version = "0.10.0-rc.1", features = ["sha2"] }
 sha2 = "0.11.0-rc.0"
 signature = { version = "3.0.0-rc.1", features = ["digest", "alloc"]}
 
 log = "0.4.27"
 plist = "1.7.1"
-reqwest = {version = "0.12.20", features = ["rustls-tls", "multipart", "blocking"]}
+reqwest = {version = "0.12.22", features = ["rustls-tls", "multipart", "blocking"]}
 serde = { version = "1.0.219", default-features = false, features = ["derive"] }
 serde_json = "1.0.140"
 subtle-encoding = "0.5.1"
