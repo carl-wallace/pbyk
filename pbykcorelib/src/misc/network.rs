@@ -15,20 +15,6 @@ pub static TIMEOUT: u64 = 60;
 //------------------------------------------------------------------------------------
 // Local methods
 //------------------------------------------------------------------------------------
-/// Returns Content-Type header value from Response or an empty string
-fn get_content_type(response: &Response) -> String {
-    match response.headers().get("Content-Type") {
-        Some(content_type_val) => match content_type_val.to_str() {
-            Ok(s) => s.to_string(),
-            Err(e) => {
-                error!("Failed to process content type: {e:?}");
-                String::new()
-            }
-        },
-        None => String::new(),
-    }
-}
-
 /// Takes an encoded ContentInfo and returns the first Certificate read from SignedData payload
 fn get_first_cert_from_signed_data(enc_ci: &[u8]) -> Result<x509_cert::Certificate> {
     match ContentInfo::from_der(enc_ci) {
@@ -88,6 +74,20 @@ fn check_response(response: &Response, uri: &str) -> Result<()> {
 //------------------------------------------------------------------------------------
 // Public methods
 //------------------------------------------------------------------------------------
+/// Returns Content-Type header value from Response or an empty string
+pub fn get_content_type(response: &Response) -> String {
+    match response.headers().get("Content-Type") {
+        Some(content_type_val) => match content_type_val.to_str() {
+            Ok(s) => s.to_string(),
+            Err(e) => {
+                error!("Failed to process content type: {e:?}");
+                String::new()
+            }
+        },
+        None => String::new(),
+    }
+}
+
 /// Retrieves a configuration profile from the indicated URL
 pub async fn get_profile(url: &str) -> Result<Vec<u8>> {
     let client = get_reqwest_client_rustls(TIMEOUT, None)?;
