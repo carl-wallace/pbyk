@@ -274,7 +274,7 @@ pub async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec
 }
 
 /// Create a SKID-based SignerIdentifier from certificate
-pub(crate) fn signer_identifier_from_cert(
+pub fn signer_identifier_from_cert(
     cert: &Certificate,
     use_skid: bool,
 ) -> Result<SignerIdentifier> {
