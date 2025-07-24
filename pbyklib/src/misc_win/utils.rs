@@ -31,23 +31,24 @@ use cms::{
 use der::{Decode, Encode, asn1::OctetString};
 
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use crate::misc::utils::buffer_to_hex;
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use crate::misc_win::scep::get_vsc_id_from_smartcard;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use crate::misc_win::vsc_state::{read_saved_state_or_default, save_state};
 use certval::PDVCertificate;
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use certval::buffer_to_hex;
 use der::zeroize::Zeroizing;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use sha2::{Digest, Sha256};
 use std::sync::LazyLock;
+
+use pbykcorelib::misc::utils::{get_as_string, purebred_authorize_request};
 
 use crate::misc_win::cert_store::delete_cert_from_store;
 use crate::misc_win::csr::consume_attested_csr;
 use crate::{
     Error, Result,
     misc::p12::process_p12,
-    misc::utils::{get_as_string, purebred_authorize_request},
     misc_win::{
         csr::{
             consume_csr, get_credential_list, get_key_provider_info, prepare_base64_certs_only_p7,
@@ -469,7 +470,7 @@ pub(crate) async fn verify_and_decrypt_vsc(
     let xml = purebred_authorize_request(content, env).await?;
 
     let enc_ci = match is_ota {
-        true => crate::misc::utils::get_encrypted_payload_content(&xml)?,
+        true => pbykcorelib::misc::utils::get_encrypted_payload_content(&xml)?,
         false => xml.to_vec(),
     };
 

@@ -24,8 +24,10 @@ use signature::{Keypair, Signer};
 use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier};
 use x509_cert::Certificate;
 
+use pbykcorelib::misc::scep::get_rsa_key_from_cert;
+
 use crate::Error::BadInput;
-use crate::{Result, misc::scep::get_rsa_key_from_cert, misc_win::csr::get_key_provider_info};
+use crate::{Error, Result, misc_win::csr::get_key_provider_info};
 
 /// Wrapper for pointers to [CERT_CONTEXT](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/struct.CERT_CONTEXT.html)
 /// objects to ensure memory is freed when no longer used, to allow for thread safety, and to provide [Signer](https://docs.rs/signature/latest/signature/trait.Signer.html)
@@ -97,7 +99,7 @@ impl CertContext {
             Ok(k) => k,
             Err(e) => {
                 error!("Failed to get RSA key from certificate: {e:?}");
-                return Err(e);
+                return Err(Error::Pbykcorelib(e));
             }
         };
 
@@ -130,7 +132,7 @@ impl CertContext {
                 Ok(k) => k,
                 Err(e) => {
                     error!("Failed to get RSA key from certificate: {e:?}");
-                    return Err(e);
+                    return Err(Error::Pbykcorelib(e));
                 }
             };
             Ok(CertContext {

@@ -38,10 +38,10 @@ use const_oid::db::rfc5911::ID_SIGNED_DATA;
 use der::asn1::Int;
 use windows::core::HSTRING;
 
-use crate::misc::utils::get_encap_content;
 use crate::misc_win::csr::TaggedRequest::Tcr;
 use crate::misc_win::vsc_signer::CertContext;
 use crate::{CERT_SYSTEM_STORE_CURRENT_USER, Error, Result};
+use pbykcorelib::misc::utils::get_encap_content;
 
 //------------------------------------------------------------------------------------
 // Local methods
