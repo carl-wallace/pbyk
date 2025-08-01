@@ -13,7 +13,7 @@ use pbyklib::utils::list_vscs::{
 
 use pbyklib::{
     utils::list_yubikeys::{get_yubikey, list_yubikeys},
-    Error, Result, PB_MGMT_KEY,
+    Error, Result, get_pb_default
 };
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
@@ -197,7 +197,8 @@ pub(crate) fn GuiMain() -> Element {
 
             if let Some(mut yubikey) = yubikey {
                 debug!("Determining YubiKey phase inside main");
-                match yubikey.authenticate(&PB_MGMT_KEY.clone()) {
+                let mgmt_key = get_pb_default(&yubikey);
+                match yubikey.authenticate(&mgmt_key) {
                     Ok(_) => {
                         phase = determine_phase(&mut yubikey);
                     }

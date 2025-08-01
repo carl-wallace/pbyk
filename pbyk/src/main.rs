@@ -32,7 +32,7 @@ use pbyklib::{
     utils::{
         get_yubikey, list_yubikeys, num_yubikeys, portal_status_check, reset_yubikey, scep_check,
     },
-    Error, PB_MGMT_KEY,
+    Error, get_pb_default
 };
 
 mod args;
@@ -499,7 +499,8 @@ async fn interactive_main() {
                     // let pin = "123456".to_string();
                     // let puk = "12345678".to_string();
 
-                    if let Err(e) = reset_yubikey(&mut yubikey, &pin, &puk, &PB_MGMT_KEY) {
+                    let mgmt_key = get_pb_default(&yubikey);
+                    if let Err(e) = reset_yubikey(&mut yubikey, &pin, &puk, &mgmt_key) {
                         println!("{}: reset failed with: {e}", "ERROR".bold());
                     }
                     return;
@@ -655,7 +656,8 @@ async fn interactive_main() {
     // ----------------------------------------------------------------------------------
     #[allow(unused_assignments)]
     let mut require_pin = false;
-    let mut cm = match &args.serial {
+
+    let (mut cm, mgmt_key) = match &args.serial {
         Some(serial) => match serial.parse::<u32>() {
             Ok(s) => {
                 let mut yubikey = match get_yubikey(Some(Serial(s))) {
@@ -665,13 +667,13 @@ async fn interactive_main() {
                         return;
                     }
                 };
-
-                if yubikey.authenticate(&PB_MGMT_KEY.clone()).is_err() {
+                let tmp = get_pb_default(&yubikey);
+                if yubikey.authenticate(&tmp).is_err() {
                     println!("{}: this YubiKey is not using the expected management key. Please reset the device then try again.", "ERROR".bold());
                     return;
                 }
                 require_pin = true;
-                CryptoModule::YubiKey(yubikey)
+                (CryptoModule::YubiKey(yubikey), Some(tmp))
             }
             Err(err) => {
                 #[cfg(all(target_os = "windows", feature = "vsc"))]
@@ -740,8 +742,6 @@ async fn interactive_main() {
     // comment out above loop and uncomment below to run in debugger
     // let pin = "123456";
 
-    let mgmt_key = PB_MGMT_KEY.clone();
-
     if let Some(pre_enroll_otp) = args.pre_enroll_otp {
         match pre_enroll(
             &mut cm,
@@ -749,7 +749,7 @@ async fn interactive_main() {
             &pre_enroll_otp,
             &pb_base_url,
             pin,
-            Some(&mgmt_key),
+            mgmt_key,
         )
         .await
         {
@@ -784,7 +784,7 @@ async fn interactive_main() {
             &args.agent_edipi.unwrap().to_string(), // allow unwrap where clap enforces presence
             &oai,
             pin,
-            Some(&mgmt_key),
+            mgmt_key,
             &env,
         )
         .await
@@ -815,7 +815,7 @@ async fn interactive_main() {
             &pb_base_url,
             &app,
         );
-        match ukm(&mut cm, &oai, pin, Some(&mgmt_key), &env).await {
+        match ukm(&mut cm, &oai, pin, mgmt_key, &env).await {
             Ok(_) => {
                 println!("UKM completed successfully");
             }
@@ -842,7 +842,7 @@ async fn interactive_main() {
             &pb_base_url,
             &app,
         );
-        match recover(&mut cm, &oai, pin, Some(&mgmt_key), &env).await {
+        match recover(&mut cm, &oai, pin, mgmt_key, &env).await {
             Ok(_) => {
                 println!("Recover completed successfully");
             }

@@ -17,7 +17,7 @@ use crate::gui::utils::string_or_default;
 use crate::Phase::PreEnroll;
 use pbyklib::{
     utils::{get_yubikey, reset_yubikey},
-    PB_MGMT_KEY,
+    get_pb_default,
 };
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn reset(
@@ -154,7 +154,8 @@ pub(crate) fn reset(
                                     }
                                 };
 
-                                if let Err(e) = reset_yubikey(&mut yubikey, &pin1, &puk1, &PB_MGMT_KEY.clone()) {
+                                let mgmt_key = get_pb_default(&yubikey);
+                                if let Err(e) = reset_yubikey(&mut yubikey, &pin1, &puk1, &mgmt_key) {
                                     let sm = format!("Failed to reset YubiKey with serial number {yks}: {e}.");
                                     error!("{}", sm);
                                     ui_signals.s_pin.set( String::new());

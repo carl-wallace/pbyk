@@ -135,19 +135,37 @@ impl From<cms::builder::Error> for Error {
 }
 
 use const_oid::ObjectIdentifier;
-use hex_literal::hex;
 use std::sync::LazyLock;
 
-use yubikey::{MgmKey};
+use yubikey::{MgmAlgorithmId, MgmKey, Version, YubiKey};
 /// Default management key for YubiKey devices enrolled with Purebred
 ///
 /// The value used by Purebred is a slight modification (020203040506070801020304050607080102030405060708) to
 /// the [default value](https://docs.yubico.com/hardware/yubikey/yk-tech-manual/fips-specifics.html#id4) used natively
 /// by the device.
-pub static PB_MGMT_KEY: LazyLock<MgmKey> = LazyLock::new(|| {
-    MgmKey::from_bytes(hex!("020203040506070801020304050607080102030405060708")).unwrap()
-    // allow unwrap for static
-});
+const DEFAULT_PB_MGM_KEY: [u8; 24] = [
+    2, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8,
+];
+
+/// Return firmware-appropriate default management key
+pub fn get_pb_default(yubikey: &YubiKey) -> MgmKey {
+    match yubikey.version() {
+        // Initial firmware versions default to 3DES.
+        Version { major: ..=4, .. }
+        | Version {
+            major: 5,
+            minor: ..=6,
+            ..
+        } => MgmKey::from_bytes(DEFAULT_PB_MGM_KEY.as_slice(), MgmAlgorithmId::ThreeDes).unwrap(),
+        // Firmware 5.7.0 and above default to AES-192.
+        Version {
+            major: 5,
+            minor: 7..,
+            ..
+        }
+        | Version { major: 6.., .. } => MgmKey::from_bytes(DEFAULT_PB_MGM_KEY.as_slice(), MgmAlgorithmId::Aes192).unwrap(),
+    }
+}
 
 /// `id-purebred-yubikey-attestation-attribute` from Red Hound's OID arc
 pub static ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE: LazyLock<ObjectIdentifier> =

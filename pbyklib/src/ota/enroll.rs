@@ -5,10 +5,7 @@ use zeroize::Zeroizing;
 
 use log::{error, info};
 
-use crate::{
-    Error, PB_MGMT_KEY, Result,
-    ota::{CryptoModule, OtaActionInputs},
-};
+use crate::{Error, Result, ota::{CryptoModule, OtaActionInputs}, get_pb_default};
 use pbykcorelib::misc::enroll::fetch_phase1;
 use pbykcorelib::misc::network::post_body;
 use pbykcorelib::misc::utils::get_signed_data;
@@ -116,7 +113,7 @@ pub async fn enroll(
     agent_edipi: &str,
     oai: &OtaActionInputs,
     pin: Option<Zeroizing<String>>,
-    mgmt_key: Option<&MgmKey>,
+    mgmt_key: Option<MgmKey>,
     env: &str,
 ) -> Result<()> {
     match cm {
@@ -134,7 +131,7 @@ pub async fn enroll(
                 agent_edipi,
                 oai,
                 pin.as_bytes(),
-                mgmt_key.unwrap_or(&PB_MGMT_KEY.clone()),
+                &mgmt_key.unwrap_or(get_pb_default(yk)),
                 env,
             )
             .await

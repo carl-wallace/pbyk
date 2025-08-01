@@ -5,7 +5,7 @@ use yubikey::MgmKey;
 use zeroize::Zeroizing;
 
 use crate::ota::CryptoModule;
-use crate::{Error, PB_MGMT_KEY, Result};
+use crate::{get_pb_default, Error, Result};
 
 /// Executes "Phase 0" to prepare a device for enrollment
 ///
@@ -24,7 +24,7 @@ pub async fn pre_enroll(
     pre_enroll_otp: &str,
     base_url: &str,
     pin: Option<Zeroizing<String>>,
-    mgmt_key: Option<&MgmKey>,
+    mgmt_key: Option<MgmKey>,
 ) -> Result<String> {
     match cm {
         CryptoModule::YubiKey(yk) => {
@@ -42,7 +42,7 @@ pub async fn pre_enroll(
                 pre_enroll_otp,
                 base_url,
                 pin.as_bytes(),
-                mgmt_key.unwrap_or(&PB_MGMT_KEY.clone()),
+                &mgmt_key.unwrap_or(get_pb_default(yk)),
             )
             .await
         }

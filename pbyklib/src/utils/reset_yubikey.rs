@@ -76,13 +76,20 @@ pub fn reset_yubikey(
         error!("Failed to verify using default PIN post-reset: {e:?}");
         return Err(e);
     }
-    let mgmt_key = MgmKey3Des::from_bytes(DEFAULT_MGM_KEY)?;
+    let cfg = yubikey.config()?;
+    let mgmt_key = MgmKey::get_default(yubikey)?;
     if let Err(e) = yubikey.authenticate(&mgmt_key) {
         error!("Failed to authenticate using default management key post-reset: {e:?}");
         return Err(e);
     }
 
+
     /// Template value for CCC
+    /// f0: Card Identifier
+    ///  - 0xa000000116 == GSC-IS RID
+    ///  - 0xff == Manufacturer ID (dummy)
+    ///  - 0x02 == Card type (javaCard)
+    ///  - next 14 bytes: card ID
     const CCC_TMPL: &[u8] = &[
         0xf0, 0x15, 0xa0, 0x00, 0x00, 0x01, 0x16, 0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf1, 0x01, 0x21, 0xf2, 0x01, 0x21, 0xf3,
@@ -104,7 +111,7 @@ pub fn reset_yubikey(
         error!("Failed to set CccId: {e:?}");
         return Err(e);
     }
-    let _ = CccId::get(yubikey);
+    let x = CccId::get(yubikey);
 
     /// Template value for CHUID
     const CHUID_TMPL: &[u8] = &[
