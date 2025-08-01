@@ -197,7 +197,7 @@ pub(crate) fn GuiMain() -> Element {
 
             if let Some(mut yubikey) = yubikey {
                 debug!("Determining YubiKey phase inside main");
-                match yubikey.authenticate(PB_MGMT_KEY.clone()) {
+                match yubikey.authenticate(&PB_MGMT_KEY.clone()) {
                     Ok(_) => {
                         phase = determine_phase(&mut yubikey);
                     }

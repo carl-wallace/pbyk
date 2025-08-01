@@ -138,14 +138,14 @@ use const_oid::ObjectIdentifier;
 use hex_literal::hex;
 use std::sync::LazyLock;
 
-use yubikey::MgmKey;
+use yubikey::{MgmKey};
 /// Default management key for YubiKey devices enrolled with Purebred
 ///
 /// The value used by Purebred is a slight modification (020203040506070801020304050607080102030405060708) to
 /// the [default value](https://docs.yubico.com/hardware/yubikey/yk-tech-manual/fips-specifics.html#id4) used natively
 /// by the device.
 pub static PB_MGMT_KEY: LazyLock<MgmKey> = LazyLock::new(|| {
-    MgmKey::new(hex!("020203040506070801020304050607080102030405060708")).unwrap()
+    MgmKey::from_bytes(hex!("020203040506070801020304050607080102030405060708")).unwrap()
     // allow unwrap for static
 });
 

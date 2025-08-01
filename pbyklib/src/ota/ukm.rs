@@ -40,7 +40,7 @@ pub async fn ukm(
                 yk,
                 ukm_inputs,
                 pin.as_bytes(),
-                mgmt_key.unwrap_or(&PB_MGMT_KEY),
+                mgmt_key.unwrap_or(&PB_MGMT_KEY.clone()),
                 env,
             )
             .await

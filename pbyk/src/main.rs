@@ -666,7 +666,7 @@ async fn interactive_main() {
                     }
                 };
 
-                if yubikey.authenticate(PB_MGMT_KEY.clone()).is_err() {
+                if yubikey.authenticate(&PB_MGMT_KEY.clone()).is_err() {
                     println!("{}: this YubiKey is not using the expected management key. Please reset the device then try again.", "ERROR".bold());
                     return;
                 }

@@ -163,7 +163,7 @@ pub(crate) fn app(
 
                         if let Some(mut yubikey) = yubikey {
                             debug!("Determining phase of newly selected YubiKey: {serial}");
-                            match yubikey.authenticate(PB_MGMT_KEY.clone()) {
+                            match yubikey.authenticate(&PB_MGMT_KEY.clone()) {
                                 Ok(_) => {
                                     let phase = determine_phase(&mut yubikey);
                                     if phase != *app_signals.s_phase.read() {
@@ -342,7 +342,8 @@ pub(crate) fn app(
 
                         let PB_BASE_URL = match environment.as_str() {
                             #[cfg(feature = "dev")]
-                            "DEV" => "https://carls-mbp-2:8443".to_string(), // "https://pb2.redhoundsoftware.net".to_string(),
+                            "DEV" => "https://pb2.redhoundsoftware.net".to_string(),
+                            //"DEV" => "https://carls-mbp-2:8443".to_string(),
                             #[cfg(feature = "om_nipr")]
                             "OM_NIPR" => "https://purebred.c3pki.oandm.disa.mil".to_string(),
                             #[cfg(feature = "om_sipr")]
@@ -422,7 +423,7 @@ pub(crate) fn app(
                                         }
                                     };
 
-                                    if yubikey.authenticate(PB_MGMT_KEY.clone()).is_err() {
+                                    if yubikey.authenticate(&PB_MGMT_KEY.clone()).is_err() {
                                         let sm = format!("The YubiKey with serial number {} is not using the expected management key. Please reset the device then try again.", yubikey.serial());
                                         set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
 

@@ -2,10 +2,14 @@
 
 use log::{error, info};
 use rand_core::{OsRng, RngCore, TryRngCore};
-use yubikey::{CccId, ChuId, MgmKey, YubiKey};
+use yubikey::{CccId, ChuId, MgmKey, MgmKey3Des, MgmKeyOps, YubiKey};
 
 #[cfg(target_os = "windows")]
 use crate::misc_win::yubikey::cleanup_capi_yubikey;
+
+const DEFAULT_MGM_KEY: [u8; 24] = [
+    1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8,
+];
 
 /// Resets a given YubiKey for enrollment with Purebred
 ///
@@ -72,7 +76,8 @@ pub fn reset_yubikey(
         error!("Failed to verify using default PIN post-reset: {e:?}");
         return Err(e);
     }
-    if let Err(e) = yubikey.authenticate(MgmKey::default()) {
+    let mgmt_key = MgmKey3Des::from_bytes(DEFAULT_MGM_KEY)?;
+    if let Err(e) = yubikey.authenticate(&mgmt_key) {
         error!("Failed to authenticate using default management key post-reset: {e:?}");
         return Err(e);
     }
@@ -128,7 +133,7 @@ pub fn reset_yubikey(
         error!("Failed to set management key: {e:?}");
         return Err(e);
     }
-    if let Err(e) = yubikey.authenticate(management_key.clone()) {
+    if let Err(e) = yubikey.authenticate(management_key) {
         error!("Failed to authenticate using management key in generate_self_signed_cert: {e:?}");
         return Err(e);
     }

@@ -45,7 +45,7 @@ pub async fn recover(
                 yk,
                 recover_inputs,
                 pin.as_bytes(),
-                mgmt_key.unwrap_or(&PB_MGMT_KEY),
+                mgmt_key.unwrap_or(&PB_MGMT_KEY.clone()),
                 env,
             )
             .await

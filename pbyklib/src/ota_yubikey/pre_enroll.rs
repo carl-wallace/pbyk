@@ -7,10 +7,7 @@ use sha1::{Digest, Sha1};
 use base64ct::{Base64, Encoding};
 use der::Encode;
 
-use yubikey::{
-    MgmKey, Uuid, YubiKey,
-    piv::{AlgorithmId, SlotId},
-};
+use yubikey::{Uuid, YubiKey, piv::{AlgorithmId, SlotId}, MgmKeyOps};
 
 use crate::{
     Error, Result,
@@ -36,13 +33,13 @@ use pbykcorelib::misc::utils::buffer_to_hex;
 /// * `agent_edipi` - string containing 10 digit EDIPI of Purebred Agent who provided the `pre_enroll_otp` parameter
 /// * `pre_enroll_otp`- string containing 8 digit time-limited one-time password value provided by Purebred Agent identified by the `agent_edipi` parameter
 /// * `base_url` - base URI of Purebred portal to use to enroll YubiKey, for example, `https://pb2.redhoundsoftware.net`
-pub async fn pre_enroll(
+pub async fn pre_enroll<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     agent_edipi: &str,
     pre_enroll_otp: &str,
     base_url: &str,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
 ) -> Result<String> {
     info!("Pre-enrolling YubiKey with serial {}", yubikey.serial());
 

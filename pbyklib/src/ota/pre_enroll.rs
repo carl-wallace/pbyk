@@ -42,7 +42,7 @@ pub async fn pre_enroll(
                 pre_enroll_otp,
                 base_url,
                 pin.as_bytes(),
-                mgmt_key.unwrap_or(&PB_MGMT_KEY),
+                mgmt_key.unwrap_or(&PB_MGMT_KEY.clone()),
             )
             .await
         }

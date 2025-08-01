@@ -18,7 +18,8 @@ rpassword = "7.4.0"
 tokio = { version = "1.45.1", features = ["full", "time", "rt-multi-thread"]}
 # the yubikey fork features a length check needed when pbyk is run in presence of some middleware. use fork until upstream is updated with length check added to form.
 #yubikey = { version = "0.8.0", features = ["untested"] }
-yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "updates", features = ["untested"]}
+#yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "updates", features = ["untested"]}
+yubikey = { path = "/Users/cwallace/devel/carl-wallace/yubikey.rs", features = ["untested"]}
 zeroize = "1.8.1"
 
 dioxus = {version = "0.6.1", optional = true}
@@ -37,7 +38,7 @@ serde_json = "1.0.140"
 base64ct = { version="1.8.0", features = ["alloc"] }
 
 # certval has not yet been released, hence use of private branch
-certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"], branch = "updates"}
+certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std"], branch = "c7"}
 futures = { version = "0.3.31", optional = true }
 
 [dev-dependencies]
