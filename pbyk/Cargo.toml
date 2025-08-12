@@ -18,8 +18,7 @@ rpassword = "7.4.0"
 tokio = { version = "1.45.1", features = ["full", "time", "rt-multi-thread"]}
 # the yubikey fork features a length check needed when pbyk is run in presence of some middleware. use fork until upstream is updated with length check added to form.
 #yubikey = { version = "0.8.0", features = ["untested"] }
-#yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "updates", features = ["untested"]}
-yubikey = { path = "/Users/cwallace/devel/carl-wallace/yubikey.rs", features = ["untested"]}
+yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "aes_mgmt", features = ["untested"]}
 zeroize = "1.8.1"
 
 dioxus = {version = "0.6.1", optional = true}
