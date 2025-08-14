@@ -242,7 +242,7 @@ pub(crate) async fn generate_self_signed_cert_vsc(
     sc: &SmartCard,
 ) -> Result<(Vec<u8>, Option<String>)> {
     debug!(
-        "Attempting to generate a fresh key pair with attestation in generate_self_signed_cert_vsc"
+        "Attempting to generate a fresh key pair with attestation in generate_self_signed_cert_vsc for {subject_name}"
     );
 
     let with_attestation = gamble_on_attestation(true);

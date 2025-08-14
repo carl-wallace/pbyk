@@ -74,7 +74,7 @@ pub async fn pre_enroll(
         Err(e) => return Err(e.into()),
     };
 
-    debug!("Submitting pre-enrollment request");
+    debug!("Submitting pre-enrollment request: {json_pre_enroll}");
     match post_body(
         format!("{base_url}/pb/admin_submit").as_str(),
         json_pre_enroll.as_bytes(),

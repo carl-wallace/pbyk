@@ -3,8 +3,24 @@
 #![cfg(all(target_os = "windows", feature = "vsc"))]
 
 use core::ffi::c_void;
+use der::ErrorKind;
+use spki::SubjectPublicKeyInfoRef;
 use std::ptr::NonNull;
+use std::vec;
 use std::{ffi::CString, ptr::null, time::Duration};
+use x509_cert::TbsCertificate;
+use x509_cert::builder::profile::BuilderProfile;
+use x509_cert::ext::AsExtension;
+use x509_cert::ext::Extension;
+use x509_cert::ext::pkix::AuthorityKeyIdentifier;
+use x509_cert::ext::pkix::KeyUsage;
+use x509_cert::ext::pkix::KeyUsages;
+use x509_cert::ext::pkix::SubjectAltName;
+use x509_cert::ext::pkix::SubjectKeyIdentifier;
+use x509_cert::ext::pkix::name::GeneralName;
+use x509_cert::ext::pkix::name::GeneralNames;
+use x509_cert::ext::pkix::name::HardwareModuleName;
+use x509_cert::name::Name;
 
 use log::error;
 use windows::Win32::Security::Cryptography::{
@@ -41,7 +57,106 @@ use const_oid::db::rfc5911::ID_SIGNED_DATA;
 use der::asn1::Int;
 use pbykcorelib::misc::utils::get_encap_content;
 use windows::core::HSTRING;
-use x509_cert::builder::profile;
+
+pub struct PurebredDevId {
+    /// issuer   Name,
+    /// represents the name signing the certificate
+    pub issuer: Name,
+
+    subject: Name,
+
+    subject_alt_name: Option<GeneralNames>,
+}
+
+impl PurebredDevId {
+    /// Create a new DevID
+    ///
+    /// Spec: 802.1AR Section 8.10.4 subjectAltName
+    /// Also documented in
+    /// <https://trustedcomputinggroup.org/wp-content/uploads/TPM-2p0-Keys-for-Device-Identity-and-Attestation_v1_r12_pub10082021.pdf#page=58>
+    pub fn new(issuer: Name, subject: Name, alt_names: Option<GeneralNames>) -> Result<Self> {
+        // If alt_name is present it is required to include `HardwareModuleName`
+        // HardwareModuleName is der-encoded in an OtherName field of GeneralNames.
+        if let Some(ref alt_names) = alt_names {
+            // TODO: do we need to validate the SAN more than that? check for duplicates?
+            let mut found = false;
+            for gn in alt_names {
+                match gn {
+                    GeneralName::OtherName(on)
+                        if HardwareModuleName::from_other_name(on)?.is_some() =>
+                    {
+                        found = true;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+
+            if !found {
+                return Err(der::Error::from(ErrorKind::Failed).into());
+            }
+        }
+
+        Ok(Self {
+            issuer,
+            subject,
+            subject_alt_name: alt_names,
+        })
+    }
+}
+impl BuilderProfile for PurebredDevId {
+    fn get_issuer(&self, _subject: &Name) -> Name {
+        self.issuer.clone()
+    }
+
+    fn get_subject(&self) -> Name {
+        self.subject.clone()
+    }
+
+    fn build_extensions(
+        &self,
+        spk: SubjectPublicKeyInfoRef<'_>,
+        issuer_spk: SubjectPublicKeyInfoRef<'_>,
+        tbs: &TbsCertificate,
+    ) -> std::result::Result<Vec<Extension>, x509_cert::builder::Error> {
+        let mut extensions: vec::Vec<Extension> = vec::Vec::new();
+
+        // # Table 8-2 - DevID certificate and intermediate certificate extensions
+
+        let ski = SubjectKeyIdentifier::try_from(spk)?;
+
+        // ## authorityKeyIdentifier MUST
+        // Section 8.10.1
+        extensions.push(
+            AuthorityKeyIdentifier::try_from(issuer_spk.clone())?
+                .to_extension(&tbs.subject(), &extensions)?,
+        );
+
+        // ## subjectKeyIdentifier NOT RECOMMENDED
+
+        // ## keyUsage SHOULD
+        // Section 8.10.3
+        //
+        // NOTE(baloo):
+        //   IEEE spec allows for keyEncipherment but that would be used for TLS1.2 RSA and RSA_PSK
+        //   (IE: non-DH) session scheme.
+        //   In the mean time, when used with TPMs, the [TCG] will only allow for `digitalSignature`:
+        //   Use of digitalSignature (only) is RECOMMENDED. Refer to section 3.8.
+        //
+        // [TCG]: https://trustedcomputinggroup.org/wp-content/uploads/TPM-2p0-Keys-for-Device-Identity-and-Attestation_v1_r12_pub10082021.pdf#page=57
+        let key_usage = KeyUsages::DigitalSignature.into();
+        extensions.push(KeyUsage(key_usage).to_extension(&tbs.subject(), &extensions)?);
+
+        // ## subjectAltName SHOULD
+        // 8.10.4
+        if let Some(san) = &self.subject_alt_name {
+            extensions.push(SubjectAltName(san.clone()).to_extension(&tbs.subject(), &extensions)?);
+        }
+
+        extensions.push(ski.to_extension(&tbs.subject(), &extensions)?);
+        Ok(extensions)
+    }
+}
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -95,7 +210,11 @@ pub(crate) fn resign_as_self(cert: &Certificate, signer: &CertContext) -> Result
     //     include_subject_key_identifier: true,
     // };
 
-    let profile = profile::cabf::Root::new(false, cert.tbs_certificate().subject().clone())?;
+    let profile = PurebredDevId::new(
+        cert.tbs_certificate().subject().clone(),
+        cert.tbs_certificate().subject().clone(),
+        None,
+    )?;
     let builder = CertificateBuilder::new(
         profile,
         cert.tbs_certificate().serial_number().clone(),
@@ -217,7 +336,11 @@ async fn consume_parsed_csr(csr: &CertReq) -> Result<(String, Certificate)> {
     let issuer_cert = Certificate::from_der(issuer_cert_bytes)?;
 
     // generate fake certificate with a ~10 year validity period
-    let profile = profile::cabf::Root::new(false, issuer_cert.tbs_certificate().issuer().clone())?;
+    let profile = PurebredDevId::new(
+        issuer_cert.tbs_certificate().issuer().clone(),
+        csr.info.subject.clone(),
+        None,
+    )?;
     // let profile = Profile::Leaf {
     //     issuer: issuer_cert.tbs_certificate().issuer().clone(),
     //     enable_key_agreement: false,
