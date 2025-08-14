@@ -238,6 +238,7 @@ impl UiSignals {
             if is_yubikey {
                 match get_pre_enroll_hash_yubikey(&app_signals.s_serial.read()) {
                     Ok(hash) => {
+                        // todo - this causes a runtime debug message
                         s_hash.set(hash);
                     }
                     Err(_e) => {

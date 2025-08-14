@@ -39,6 +39,15 @@ async fn phase2<K: MgmKeyOps>(
 ) -> Result<Vec<u8>> {
     info!("Executing Phase 2");
 
+    if let Err(e) = yubikey.verify_pin(pin) {
+        error!("Failed to verify PIN in prepare_csr: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
+    if let Err(e) = yubikey.authenticate(mgmt_key) {
+        error!("Failed to authenticate using management key in prepare_csr: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
+
     let enc_spki = self_signed_cert
         .tbs_certificate()
         .subject_public_key_info()
