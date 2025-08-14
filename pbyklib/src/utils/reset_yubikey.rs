@@ -2,14 +2,10 @@
 
 use log::{error, info};
 use rand_core::{OsRng, RngCore, TryRngCore};
-use yubikey::{CccId, ChuId, MgmKey, MgmKey3Des, MgmKeyOps, YubiKey};
+use yubikey::{CccId, ChuId, MgmKey, MgmKeyOps, YubiKey};
 
 #[cfg(target_os = "windows")]
 use crate::misc_win::yubikey::cleanup_capi_yubikey;
-
-const DEFAULT_MGM_KEY: [u8; 24] = [
-    1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8,
-];
 
 /// Resets a given YubiKey for enrollment with Purebred
 ///
@@ -76,13 +72,11 @@ pub fn reset_yubikey(
         error!("Failed to verify using default PIN post-reset: {e:?}");
         return Err(e);
     }
-    let cfg = yubikey.config()?;
     let mgmt_key = MgmKey::get_default(yubikey)?;
     if let Err(e) = yubikey.authenticate(&mgmt_key) {
         error!("Failed to authenticate using default management key post-reset: {e:?}");
         return Err(e);
     }
-
 
     /// Template value for CCC
     /// f0: Card Identifier
@@ -111,7 +105,6 @@ pub fn reset_yubikey(
         error!("Failed to set CccId: {e:?}");
         return Err(e);
     }
-    let x = CccId::get(yubikey);
 
     /// Template value for CHUID
     const CHUID_TMPL: &[u8] = &[

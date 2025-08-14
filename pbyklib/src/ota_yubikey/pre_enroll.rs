@@ -7,7 +7,10 @@ use sha1::{Digest, Sha1};
 use base64ct::{Base64, Encoding};
 use der::Encode;
 
-use yubikey::{Uuid, YubiKey, piv::{AlgorithmId, SlotId}, MgmKeyOps};
+use yubikey::{
+    MgmKeyOps, Uuid, YubiKey,
+    piv::{AlgorithmId, SlotId},
+};
 
 use crate::{
     Error, Result,

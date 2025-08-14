@@ -43,7 +43,10 @@ use x509_cert::{
     time::{Time, Validity},
 };
 use yubikey::certificate::SelfSigned;
-use yubikey::{Key, PinPolicy, TouchPolicy, Uuid, YubiKey, piv, piv::{AlgorithmId, SlotId}, MgmKeyOps};
+use yubikey::{
+    Key, MgmKeyOps, PinPolicy, TouchPolicy, Uuid, YubiKey, piv,
+    piv::{AlgorithmId, SlotId},
+};
 
 /// Generates an attestation for the indicated slot and returns a P7 containing that attestation and
 /// the attestation certificate read from the Attestation slot.

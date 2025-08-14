@@ -28,11 +28,12 @@ use colored::Colorize;
 use dioxus_desktop::tao::window::Icon;
 
 use pbyklib::{
+    get_pb_default,
     ota::{enroll, pre_enroll, recover, ukm, OtaActionInputs},
     utils::{
         get_yubikey, list_yubikeys, num_yubikeys, portal_status_check, reset_yubikey, scep_check,
     },
-    Error, get_pb_default
+    Error,
 };
 
 mod args;

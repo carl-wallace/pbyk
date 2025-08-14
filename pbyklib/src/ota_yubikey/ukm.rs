@@ -1,7 +1,7 @@
 //! Interacts with Purebred portal to provision fresh PIV and signature credentials and current recovered encryption credential to a YubiKey device
 
 use log::{error, info};
-use yubikey::{YubiKey, piv::SlotId, MgmKeyOps};
+use yubikey::{MgmKeyOps, YubiKey, piv::SlotId};
 
 use crate::{
     Result,

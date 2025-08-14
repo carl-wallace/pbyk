@@ -5,7 +5,10 @@ use zeroize::Zeroizing;
 
 use log::{error, info};
 
-use crate::{Error, Result, ota::{CryptoModule, OtaActionInputs}, get_pb_default};
+use crate::{
+    Error, Result, get_pb_default,
+    ota::{CryptoModule, OtaActionInputs},
+};
 use pbykcorelib::misc::enroll::fetch_phase1;
 use pbykcorelib::misc::network::post_body;
 use pbykcorelib::misc::utils::get_signed_data;

@@ -9,7 +9,7 @@ use der::{Decode, Encode};
 use spki::SubjectPublicKeyInfoRef;
 use x509_cert::Certificate;
 use yubikey::certificate::yubikey_signer::{Rsa2048, YubiRsa};
-use yubikey::{YubiKey, piv::SlotId::CardAuthentication, MgmKeyOps};
+use yubikey::{MgmKeyOps, YubiKey, piv::SlotId::CardAuthentication};
 
 use pbykcorelib::misc::network::post_body;
 use pbykcorelib::misc::utils::{get_as_string, get_signed_data};

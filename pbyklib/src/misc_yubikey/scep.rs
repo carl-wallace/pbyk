@@ -20,10 +20,14 @@ use x509_cert::{
     request::{CertReq, CertReqInfo},
     spki::SubjectPublicKeyInfoRef,
 };
-use yubikey::{YubiKey, certificate::{
-    CertInfo,
-    yubikey_signer::{Rsa2048, YubiRsa},
-}, piv::{AlgorithmId, SlotId}, MgmKeyOps};
+use yubikey::{
+    MgmKeyOps, YubiKey,
+    certificate::{
+        CertInfo,
+        yubikey_signer::{Rsa2048, YubiRsa},
+    },
+    piv::{AlgorithmId, SlotId},
+};
 
 use crate::{
     Error, ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE, Result,

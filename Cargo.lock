@@ -7148,6 +7148,7 @@ dependencies = [
 [[package]]
 name = "yubikey"
 version = "0.8.0"
+source = "git+https://github.com/carl-wallace/yubikey.rs.git?branch=aes_mgmt#a77be0b65f0d0e8467d1de136cc1afb73b0d1da4"
 dependencies = [
  "aes",
  "base16ct",

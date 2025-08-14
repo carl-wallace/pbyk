@@ -163,7 +163,9 @@ pub fn get_pb_default(yubikey: &YubiKey) -> MgmKey {
             minor: 7..,
             ..
         }
-        | Version { major: 6.., .. } => MgmKey::from_bytes(DEFAULT_PB_MGM_KEY.as_slice(), MgmAlgorithmId::Aes192).unwrap(),
+        | Version { major: 6.., .. } => {
+            MgmKey::from_bytes(DEFAULT_PB_MGM_KEY.as_slice(), MgmAlgorithmId::Aes192).unwrap()
+        }
     }
 }
 

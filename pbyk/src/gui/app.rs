@@ -15,12 +15,12 @@ use log::{debug, error, info};
 use zeroize::Zeroizing;
 
 use pbyklib::{
+    get_pb_default,
     ota::{
         data::OtaActionInputs, enroll::enroll, pre_enroll::pre_enroll, recover::recover, ukm::ukm,
         CryptoModule,
     },
     utils::list_yubikeys::get_yubikey,
-    get_pb_default,
 };
 
 use crate::args::PbYkArgs;
@@ -536,7 +536,7 @@ pub(crate) fn app(
 
                                     #[allow(irrefutable_let_patterns)]
                                     let mgmt_key = if let CryptoModule::YubiKey(yubikey) = &mut cm {
-                                        Some(get_pb_default(&yubikey))
+                                        Some(get_pb_default(yubikey))
                                     } else {
                                         None
                                     };
@@ -641,7 +641,7 @@ pub(crate) fn app(
                                     );
                                     #[allow(irrefutable_let_patterns)]
                                     let mgmt_key = if let CryptoModule::YubiKey(yubikey) = &mut cm {
-                                        Some(get_pb_default(&yubikey))
+                                        Some(get_pb_default(yubikey))
                                     } else {
                                         None
                                     };
@@ -740,7 +740,7 @@ pub(crate) fn app(
                                         ui_signals.s_pin.set(pin);
                                         #[allow(irrefutable_let_patterns)]
                                         let mgmt_key = if let CryptoModule::YubiKey(yubikey) = &mut cm {
-                                            Some(get_pb_default(&yubikey))
+                                            Some(get_pb_default(yubikey))
                                         } else {
                                             None
                                         };
@@ -791,7 +791,7 @@ pub(crate) fn app(
                                         ui_signals.s_pin.set(pin);
                                         #[allow(irrefutable_let_patterns)]
                                         let mgmt_key = if let CryptoModule::YubiKey(yubikey) = &mut cm {
-                                            Some(get_pb_default(&yubikey))
+                                            Some(get_pb_default(yubikey))
                                         } else {
                                             None
                                         };

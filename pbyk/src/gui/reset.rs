@@ -16,8 +16,8 @@ use crate::gui::utils::parse_reader_from_vsc_display;
 use crate::gui::utils::string_or_default;
 use crate::Phase::PreEnroll;
 use pbyklib::{
-    utils::{get_yubikey, reset_yubikey},
     get_pb_default,
+    utils::{get_yubikey, reset_yubikey},
 };
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn reset(
@@ -80,15 +80,7 @@ pub(crate) fn reset(
                     let puk2 = string_or_default(&ev, "puk2", "");
 
                     let serial = string_or_default(&ev, "serial", "");
-                    let serial_u32 = match app_signals.s_serial.read().parse::<u32>() {
-                        Ok(serial_u32) => Some(serial_u32),
-                        Err(_e) => {
-                            // let sm = format!("ERROR: failed to process YubiKey serial number: {e}.");
-                            // error!("{}", sm);
-                            // error_msg_setter(sm.to_string());
-                            None
-                        }
-                    };
+                    let serial_u32 = app_signals.s_serial.read().parse::<u32>().ok();
 
                     async move {
                         if is_yubikey{

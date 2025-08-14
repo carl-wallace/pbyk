@@ -12,8 +12,9 @@ use pbyklib::utils::list_vscs::{
 };
 
 use pbyklib::{
+    get_pb_default,
     utils::list_yubikeys::{get_yubikey, list_yubikeys},
-    Error, Result, get_pb_default
+    Error, Result,
 };
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
