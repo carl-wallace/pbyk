@@ -13,6 +13,7 @@ extern crate cfg_if;
 use dioxus::desktop::muda::{Menu, PredefinedMenuItem, Submenu};
 
 use clap::{CommandFactory, Parser};
+use colored::ColoredString;
 #[cfg(feature = "gui")]
 use dioxus::LaunchBuilder;
 #[cfg(feature = "gui")]
@@ -28,7 +29,7 @@ use colored::Colorize;
 use dioxus_desktop::tao::window::Icon;
 
 use pbyklib::{
-    get_pb_default,
+    get_min_pin_size, get_pb_default,
     ota::{enroll, pre_enroll, recover, ukm, OtaActionInputs},
     utils::{
         get_yubikey, list_yubikeys, num_yubikeys, portal_status_check, reset_yubikey, scep_check,
@@ -62,6 +63,7 @@ use log::error;
 use log::debug;
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 use pbyklib::utils::reset_vsc::reset_vsc;
+use yubikey::{Version, YubiKey};
 
 /// Confirms provided arguments include at least one Action, Diagnostic or Utility argument
 fn sanity_check(args: &PbYkArgs) -> bool {
@@ -87,6 +89,28 @@ fn sanity_check(args: &PbYkArgs) -> bool {
         false
     } else {
         true
+    }
+}
+
+/// Return a PIN prompt appropriate for the active firmware
+fn get_pin_prompt(yubikey: &YubiKey) -> ColoredString {
+    match yubikey.version() {
+        // Initial firmware versions default to 3DES.
+        Version { major: ..=4, .. }
+        | Version {
+            major: 5,
+            minor: ..=6,
+            ..
+        } => "Enter new PIN; PINs must contain 6 to 8 ASCII characters".bold(),
+        // Firmware 5.7.0 and above default to AES-192.
+        Version {
+            major: 5,
+            minor: 7..,
+            ..
+        }
+        | Version { major: 6.., .. } => {
+            "Enter new PIN; PINs must contain 8 ASCII characters".bold()
+        }
     }
 }
 
@@ -438,6 +462,8 @@ async fn interactive_main() {
                         }
                     };
 
+                    let min_pin_len = get_min_pin_size(&yubikey);
+
                     println!(
                         "Starting reset of YubiKey with serial number {}. Use Ctrl+C to cancel.",
                         yubikey.serial()
@@ -447,12 +473,7 @@ async fn interactive_main() {
                     let pin = loop {
                         let pin = Zeroizing::new(
                             rpassword::prompt_password(
-                                format!(
-                                    "{}: ",
-                                    "Enter new PIN; PINs must contain 6 to 8 ASCII characters"
-                                        .bold()
-                                )
-                                .to_string(),
+                                format!("{}: ", get_pin_prompt(&yubikey)).to_string(),
                             )
                             .unwrap(), // allow panic for IO errors here
                         );
@@ -464,8 +485,11 @@ async fn interactive_main() {
                         );
                         if pin != pin2 {
                             println!("{}: PINs do not match", "ERROR".bold());
-                        } else if pin.len() < 6 {
-                            println!("{}: PIN is not at least 6 characters long", "ERROR".bold());
+                        } else if pin.len() < min_pin_len as usize {
+                            println!(
+                                "{}: PIN is not at least {min_pin_len} characters long",
+                                "ERROR".bold()
+                            );
                         } else if pin.len() > 8 {
                             println!("{}: PIN is longer than 8 characters long", "ERROR".bold());
                         } else if !pin.is_ascii() {

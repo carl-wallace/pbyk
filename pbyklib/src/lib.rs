@@ -169,6 +169,25 @@ pub fn get_pb_default(yubikey: &YubiKey) -> MgmKey {
     }
 }
 
+pub fn get_min_pin_size(yubikey: &YubiKey) -> i8 {
+    match yubikey.version() {
+        // Initial firmware versions default to 3DES.
+        Version { major: ..=4, .. }
+        | Version {
+            major: 5,
+            minor: ..=6,
+            ..
+        } => 6,
+        // Firmware 5.7.0 and above default to AES-192.
+        Version {
+            major: 5,
+            minor: 7..,
+            ..
+        }
+        | Version { major: 6.., .. } => 8,
+    }
+}
+
 /// `id-purebred-yubikey-attestation-attribute` from Red Hound's OID arc
 pub static ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE: LazyLock<ObjectIdentifier> =
     LazyLock::new(|| ObjectIdentifier::new_unwrap("1.3.6.1.4.1.37623.26.4"));
