@@ -17,10 +17,6 @@ use crate::misc_win::cert_store::delete_cert_from_store;
 use crate::ota::phase3;
 use crate::{
     Error,
-    misc::{
-        network::post_body,
-        utils::{get_as_string, get_signed_data},
-    },
     misc_win::{
         csr::get_credential_list,
         scep::process_scep_payload_vsc,
@@ -30,6 +26,10 @@ use crate::{
     },
     ota::{OtaActionInputs, Phase2Request, Phase3Request, phase1},
     utils::list_vscs::get_device_cred,
+};
+use pbykcorelib::misc::{
+    network::post_body,
+    utils::{get_as_string, get_signed_data},
 };
 
 //------------------------------------------------------------------------------------
@@ -44,13 +44,14 @@ async fn phase2(
     env: &str,
 ) -> crate::Result<Vec<u8>> {
     let self_signed_cert = signer.cert();
-    let signed_data_pkcs7_der = match get_signed_data(signer, self_signed_cert, phase2_req) {
-        Ok(d) => d,
-        Err(e) => {
-            error!("Failed to generate SignedData for Phase 2 request: {e:?}");
-            return Err(e);
-        }
-    };
+    let signed_data_pkcs7_der =
+        match get_signed_data(signer, self_signed_cert, phase2_req, None, true) {
+            Ok(d) => d,
+            Err(e) => {
+                error!("Failed to generate SignedData for Phase 2 request: {e:?}");
+                return Err(Error::Pbykcorelib(e));
+            }
+        };
 
     let p2resp = post_body(
         url,

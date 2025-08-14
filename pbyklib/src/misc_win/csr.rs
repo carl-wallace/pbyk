@@ -25,23 +25,23 @@ use const_oid::db::rfc5912::{ID_CCT_PKI_DATA, ID_CE_SUBJECT_KEY_IDENTIFIER};
 use der::{Choice, Decode, Encode, Sequence, asn1::OctetString};
 use x509_cert::{
     Certificate,
-    builder::{Builder, CertificateBuilder, Profile},
+    builder::{Builder, CertificateBuilder},
     request::CertReq,
     serial_number::SerialNumber,
     time::Validity,
 };
 
+use crate::misc_win::csr::TaggedRequest::Tcr;
+use crate::misc_win::vsc_signer::CertContext;
+use crate::{CERT_SYSTEM_STORE_CURRENT_USER, Error, Result};
 use certval::{ExtensionProcessing, PDVCertificate, PDVExtension};
 use cms::content_info::ContentInfo;
 use cms::signed_data::SignedData;
 use const_oid::db::rfc5911::ID_SIGNED_DATA;
 use der::asn1::Int;
+use pbykcorelib::misc::utils::get_encap_content;
 use windows::core::HSTRING;
-
-use crate::misc::utils::get_encap_content;
-use crate::misc_win::csr::TaggedRequest::Tcr;
-use crate::misc_win::vsc_signer::CertContext;
-use crate::{CERT_SYSTEM_STORE_CURRENT_USER, Error, Result};
+use x509_cert::builder::profile;
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -49,7 +49,7 @@ use crate::{CERT_SYSTEM_STORE_CURRENT_USER, Error, Result};
 /// Takes a `Certificate` object and a byte array and returns true if the `Certificate` contains a `SubjectKeyIdentifier`
 /// extension whose value matches the byte array.
 fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
-    if let Some(exts) = &cert.tbs_certificate().extensions {
+    if let Some(exts) = cert.tbs_certificate().extensions() {
         for ext in exts {
             if ext.extn_id == ID_CE_SUBJECT_KEY_IDENTIFIER {
                 match OctetString::from_der(ext.extn_value.as_bytes()) {
@@ -62,7 +62,7 @@ fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
                         error!(
                             "Failed to parse SubjectKeyIdentifier extension from Certificate with serial number {} as\
                          an OctetString: {}. Ignoring and continuing...",
-                            cert.tbs_certificate().serial_number,
+                            cert.tbs_certificate().serial_number(),
                             e
                         );
                     }
@@ -88,23 +88,22 @@ fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
 ///   allow use a private key before a CA-issued certificate has been issued
 /// * `signer` - [CertContext] object that (presumably) wraps a `CERT_CONTEXT` that references the `Certificate` in `cert`
 pub(crate) fn resign_as_self(cert: &Certificate, signer: &CertContext) -> Result<Certificate> {
-    let profile = Profile::Leaf {
-        issuer: cert.tbs_certificate().subject.clone(),
-        enable_key_agreement: false,
-        enable_key_encipherment: true,
-        include_subject_key_identifier: true,
-    };
+    // let profile = Profile::Leaf {
+    //     issuer: cert.tbs_certificate().subject().clone(),
+    //     enable_key_agreement: false,
+    //     enable_key_encipherment: true,
+    //     include_subject_key_identifier: true,
+    // };
 
+    let profile = profile::cabf::Root::new(false, cert.tbs_certificate().subject().clone())?;
     let builder = CertificateBuilder::new(
         profile,
-        cert.tbs_certificate().serial_number.clone(),
-        cert.tbs_certificate().validity,
-        cert.tbs_certificate().subject.clone(),
-        cert.tbs_certificate().subject_public_key_info.clone(),
-        signer,
+        cert.tbs_certificate().serial_number().clone(),
+        cert.tbs_certificate().validity().clone(),
+        cert.tbs_certificate().subject_public_key_info().clone(),
     )?;
 
-    Ok(builder.build()?)
+    Ok(builder.build(signer)?)
 }
 
 /// `PKIData` is defined in [RFC 5272 Section 3.2.1]. This implementation ignores the control_sequence,
@@ -218,23 +217,22 @@ async fn consume_parsed_csr(csr: &CertReq) -> Result<(String, Certificate)> {
     let issuer_cert = Certificate::from_der(issuer_cert_bytes)?;
 
     // generate fake certificate with a ~10 year validity period
-    let profile = Profile::Leaf {
-        issuer: issuer_cert.tbs_certificate().issuer.clone(),
-        enable_key_agreement: false,
-        enable_key_encipherment: true,
-        include_subject_key_identifier: true,
-    };
+    let profile = profile::cabf::Root::new(false, issuer_cert.tbs_certificate().issuer().clone())?;
+    // let profile = Profile::Leaf {
+    //     issuer: issuer_cert.tbs_certificate().issuer().clone(),
+    //     enable_key_agreement: false,
+    //     enable_key_encipherment: true,
+    //     include_subject_key_identifier: true,
+    // };
 
     let builder = CertificateBuilder::new(
         profile,
         SerialNumber::from(1u32),
         Validity::from_now(Duration::new(365 * 24 * 60 * 60 * 10, 0))?,
-        csr.info.subject.clone(),
         csr.info.public_key.clone(),
-        &signer,
     )?;
 
-    let certificate = builder.build()?;
+    let certificate = builder.build(&signer)?;
     let p7 = prepare_base64_certs_only_p7(&certificate)?;
     Ok((p7, certificate))
 }

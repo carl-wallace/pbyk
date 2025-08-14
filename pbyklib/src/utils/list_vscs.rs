@@ -2,6 +2,7 @@
 
 use log::{debug, error};
 use windows::core::HSTRING;
+use x509_cert::certificate::Rfc5280;
 
 use crate::misc_win::vsc_state::{get_vsc_id, get_vsc_id_and_uuid};
 use crate::{CERT_SYSTEM_STORE_CURRENT_USER, Error, Result};
@@ -25,11 +26,11 @@ use windows::Win32::Security::Cryptography::{
     CertEnumCertificatesInStore, CertOpenStore, PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
 };
 
-use certval::{buffer_to_hex, is_self_issued};
+use crate::misc_win::vsc_signer::CertContext;
+use certval::{buffer_to_hex, compare_names};
 use der::Encode;
 use sha1::{Digest, Sha1};
-
-use crate::misc_win::vsc_signer::CertContext;
+use x509_cert::certificate::CertificateInner;
 
 use crate::misc_win::csr::get_key_provider_info;
 
@@ -39,6 +40,13 @@ pub fn get_vsc_id_from_serial(hardware_id: &str) -> Result<String> {
 
 pub fn get_vsc_id_and_uuid_from_serial(hardware_id: &str) -> Result<(String, String)> {
     get_vsc_id_and_uuid(&HSTRING::from(hardware_id))
+}
+
+fn is_self_issued_5280(cert: &CertificateInner<Rfc5280>) -> bool {
+    compare_names(
+        cert.tbs_certificate().issuer(),
+        cert.tbs_certificate().subject(),
+    )
 }
 
 /// `list_vscs` returns a list of zero or more [SmartCard] objects.
@@ -233,9 +241,9 @@ pub fn get_device_cred(cn: &str, allow_self_signed: bool) -> Result<CertContext>
                     };
 
                     let cur_cert = cert_context.cert();
-                    let subject = cur_cert.tbs_certificate().subject.to_string();
+                    let subject = cur_cert.tbs_certificate().subject().to_string();
                     if subject.contains(cn) {
-                        if allow_self_signed || !is_self_issued(cur_cert) {
+                        if allow_self_signed || !is_self_issued_5280(cur_cert) {
                             match CertContext::dup(NonNull::new_unchecked(
                                 cur_cert_context as *mut _,
                             )) {

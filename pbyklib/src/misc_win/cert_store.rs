@@ -19,7 +19,7 @@ use windows::Win32::Security::Cryptography::{
 };
 
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use crate::misc::utils::buffer_to_hex;
+use certval::buffer_to_hex;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use sha2::{Digest, Sha256};
 

@@ -13,6 +13,7 @@ extern crate cfg_if;
 use dioxus::desktop::muda::{Menu, PredefinedMenuItem, Submenu};
 
 use clap::{CommandFactory, Parser};
+#[cfg(not(target_os = "windows"))]
 use colored::ColoredString;
 #[cfg(feature = "gui")]
 use dioxus::LaunchBuilder;
@@ -93,6 +94,7 @@ fn sanity_check(args: &PbYkArgs) -> bool {
 }
 
 /// Return a PIN prompt appropriate for the active firmware
+#[cfg(not(target_os = "windows"))]
 fn get_pin_prompt(yubikey: &YubiKey) -> ColoredString {
     match yubikey.version() {
         // Initial firmware versions default to 3DES.
@@ -110,6 +112,29 @@ fn get_pin_prompt(yubikey: &YubiKey) -> ColoredString {
         }
         | Version { major: 6.., .. } => {
             "Enter new PIN; PINs must contain 8 ASCII characters".bold()
+        }
+    }
+}
+
+/// Return a PIN prompt appropriate for the active firmware
+#[cfg(target_os = "windows")]
+fn get_pin_prompt(yubikey: &YubiKey) -> String {
+    match yubikey.version() {
+        // Initial firmware versions default to 3DES.
+        Version { major: ..=4, .. }
+        | Version {
+            major: 5,
+            minor: ..=6,
+            ..
+        } => "Enter new PIN; PINs must contain 6 to 8 ASCII characters".to_string(),
+        // Firmware 5.7.0 and above default to AES-192.
+        Version {
+            major: 5,
+            minor: 7..,
+            ..
+        }
+        | Version { major: 6.., .. } => {
+            "Enter new PIN; PINs must contain 8 ASCII characters".to_string()
         }
     }
 }
@@ -720,7 +745,7 @@ async fn interactive_main() {
                             return;
                         }
                     };
-                    CryptoModule::SmartCard(sc)
+                    (CryptoModule::SmartCard(sc), None)
                 }
                 #[cfg(not(all(target_os = "windows", feature = "vsc")))]
                 {

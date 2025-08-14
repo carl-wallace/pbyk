@@ -23,7 +23,7 @@ use windows::{
 };
 
 use base64ct::{Base64, Encoding};
-use cipher::{BlockDecryptMut, KeyIvInit, generic_array::GenericArray};
+use cipher::{BlockModeDecrypt, KeyIvInit};
 use cms::{
     content_info::ContentInfo,
     enveloped_data::{EnvelopedData, RecipientInfo},
@@ -31,13 +31,13 @@ use cms::{
 use der::{Decode, Encode, asn1::OctetString};
 
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use crate::misc::utils::buffer_to_hex;
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use crate::misc_win::scep::get_vsc_id_from_smartcard;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use crate::misc_win::vsc_state::{read_saved_state_or_default, save_state};
 use certval::PDVCertificate;
 use der::zeroize::Zeroizing;
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use pbykcorelib::misc::utils::buffer_to_hex;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use sha2::{Digest, Sha256};
 use std::sync::LazyLock;
@@ -47,7 +47,6 @@ use crate::misc_win::csr::consume_attested_csr;
 use crate::{
     Error, Result,
     misc::p12::process_p12,
-    misc::utils::{get_as_string, purebred_authorize_request},
     misc_win::{
         csr::{
             consume_csr, get_credential_list, get_key_provider_info, prepare_base64_certs_only_p7,
@@ -57,6 +56,7 @@ use crate::{
         vsc_signer::CertContext,
     },
 };
+use pbykcorelib::misc::utils::{get_as_string, purebred_authorize_request};
 
 //------------------------------------------------------------------------------------
 // Global variable
@@ -469,7 +469,7 @@ pub(crate) async fn verify_and_decrypt_vsc(
     let xml = purebred_authorize_request(content, env).await?;
 
     let enc_ci = match is_ota {
-        true => crate::misc::utils::get_encrypted_payload_content(&xml)?,
+        true => pbykcorelib::misc::utils::get_encrypted_payload_content(&xml)?,
         false => xml.to_vec(),
     };
 
@@ -493,7 +493,7 @@ pub(crate) async fn verify_and_decrypt_vsc(
     let os_iv = OctetString::from_der(&enc_params)?;
     let iv = os_iv.as_bytes();
 
-    let ct = match ed.encrypted_content.encrypted_content {
+    let mut ct = match ed.encrypted_content.encrypted_content {
         Some(ct) => ct.as_bytes().to_vec(),
         None => return Err(Error::Unrecognized),
     };
@@ -507,13 +507,17 @@ pub(crate) async fn verify_and_decrypt_vsc(
             _ => continue,
         };
 
-        let key = GenericArray::from_slice(&key);
-
         /// decryption type
         type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-        let cipher = Aes256CbcDec::new(key, iv.into());
-        if let Ok(pt) = cipher.decrypt_padded_vec_mut::<cipher::block_padding::Pkcs7>(&ct) {
-            return Ok(Zeroizing::new(pt));
+        let cipher = match Aes256CbcDec::new_from_slices(&key, iv.into()) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("Failed to create new Aes256CbcDec instance: {e}. Continuing...");
+                continue;
+            }
+        };
+        if let Ok(pt) = cipher.decrypt_padded::<cipher::block_padding::Pkcs7>(&mut ct) {
+            return Ok(Zeroizing::new(pt.to_vec()));
         }
     }
     Err(Error::Unrecognized)
