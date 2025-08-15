@@ -717,13 +717,13 @@ async fn interactive_main() {
                         return;
                     }
                 };
-                let tmp = get_pb_default(&yubikey);
-                if yubikey.authenticate(&tmp).is_err() {
+                let mgmt_key = get_pb_default(&yubikey);
+                if yubikey.authenticate(&mgmt_key).is_err() {
                     println!("{}: this YubiKey is not using the expected management key. Please reset the device then try again.", "ERROR".bold());
                     return;
                 }
                 require_pin = true;
-                (CryptoModule::YubiKey(yubikey), Some(tmp))
+                (CryptoModule::YubiKey(yubikey), Some(mgmt_key))
             }
             Err(err) => {
                 #[cfg(all(target_os = "windows", feature = "vsc"))]

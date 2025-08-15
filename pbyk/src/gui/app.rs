@@ -344,7 +344,6 @@ pub(crate) fn app(
                         let PB_BASE_URL = match environment.as_str() {
                             #[cfg(feature = "dev")]
                             "DEV" => "https://pb2.redhoundsoftware.net".to_string(),
-                            //"DEV" => "https://carls-mbp-2:8443".to_string(),
                             #[cfg(feature = "om_nipr")]
                             "OM_NIPR" => "https://purebred.c3pki.oandm.disa.mil".to_string(),
                             #[cfg(feature = "om_sipr")]
