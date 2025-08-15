@@ -2,7 +2,7 @@
 resolver = "2"
 
 members = [
-    "pbyk",
+    "pbyk", "pbykcorelib",
     "pbyklib",
 ]
 
@@ -11,3 +11,37 @@ debug = true
 
 [profile.release]
 debug = true
+
+[patch.crates-io]
+# RustCrypto repos
+primefield       = { git = "https://github.com/RustCrypto/elliptic-curves.git" }
+p256             = { git = "https://github.com/RustCrypto/elliptic-curves.git" }
+p384             = { git = "https://github.com/RustCrypto/elliptic-curves.git" }
+p521             = { git = "https://github.com/RustCrypto/elliptic-curves.git" }
+
+cms              = { git = "https://github.com/RustCrypto/formats.git" }
+der              = { git = "https://github.com/RustCrypto/formats.git" }
+der_derive       = { git = "https://github.com/RustCrypto/formats.git" }
+pkcs1            = { git = "https://github.com/RustCrypto/formats.git" }
+spki             = { git = "https://github.com/RustCrypto/formats.git" }
+x509-cert        = { git = "https://github.com/RustCrypto/formats.git" }
+x509-ocsp        = { git = "https://github.com/RustCrypto/formats.git" }
+
+rsa              = { git = "https://github.com/RustCrypto/RSA.git" }
+
+sha1             = { git = "https://github.com/RustCrypto/hashes.git" }
+sha2             = { git = "https://github.com/RustCrypto/hashes.git" }
+
+crypto-bigint = { git = "https://github.com/RustCrypto/crypto-bigint.git" }
+
+aes           = { git = "https://github.com/RustCrypto/block-ciphers.git" }
+
+ecdsa         = { git = "https://github.com/carl-wallace/signatures.git", branch = "aes_mgmt" }
+
+cipher        = { git = "https://github.com/RustCrypto/traits.git" }
+elliptic-curve = { git = "https://github.com/RustCrypto/traits.git" }
+
+# Miscellaneous repos
+curve25519-dalek = { git = "https://github.com/baloo/curve25519-dalek.git", branch = "baloo/rand-0.9" }
+ed25519-dalek    = { git = "https://github.com/baloo/curve25519-dalek.git", branch = "baloo/rand-0.9" }
+

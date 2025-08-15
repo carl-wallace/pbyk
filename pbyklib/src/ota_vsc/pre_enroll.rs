@@ -2,6 +2,7 @@
 
 #![cfg(all(target_os = "windows", feature = "vsc"))]
 
+use crate::Error;
 use log::{debug, info};
 use windows::Devices::SmartCards::SmartCard;
 
@@ -10,12 +11,12 @@ use sha1::Sha1;
 use sha2::Digest;
 
 use crate::{
-    misc::{network::post_body, utils::buffer_to_hex},
+    Result,
     misc_win::utils::generate_self_signed_cert_vsc,
     misc_win::vsc_state::{get_version_and_product, get_vsc_id_and_uuid},
     ota::VscPreenroll,
-    Result,
 };
+use pbykcorelib::misc::{network::post_body, utils::buffer_to_hex};
 
 /// Executes "Phase 0" to prepare a TPM-based virtual smart card (VSC) for enrollment
 ///
@@ -73,7 +74,7 @@ pub async fn pre_enroll(
         Err(e) => return Err(e.into()),
     };
 
-    debug!("Submitting pre-enrollment request");
+    debug!("Submitting pre-enrollment request: {json_pre_enroll}");
     match post_body(
         format!("{base_url}/pb/admin_submit").as_str(),
         json_pre_enroll.as_bytes(),
@@ -82,6 +83,6 @@ pub async fn pre_enroll(
     .await
     {
         Ok(_) => Ok(buffer_to_hex(&Sha1::digest(der_cert))),
-        Err(e) => Err(e),
+        Err(e) => Err(Error::Pbykcorelib(e)),
     }
 }

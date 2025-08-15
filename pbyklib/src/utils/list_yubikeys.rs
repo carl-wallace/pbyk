@@ -8,7 +8,7 @@ use sha1::Digest;
 use sha1::Sha1;
 use x509_cert::Certificate;
 use yubikey::piv::SlotId;
-use yubikey::{reader::Context, Key, Serial, YubiKey};
+use yubikey::{Key, Serial, YubiKey, reader::Context};
 
 pub fn get_pre_enroll_hash_yubikey(serial: &str) -> Result<String> {
     if let Ok(yks) = serial.parse::<u32>() {
@@ -20,7 +20,9 @@ pub fn get_pre_enroll_hash_yubikey(serial: &str) -> Result<String> {
                     return Ok(buffer_to_hex(&Sha1::digest(der_cert)));
                 }
                 Err(_e) => {
-                    error!("Failed to read certificate to calculate pre-enroll. Consider resetting the device and restarting enrollment.");
+                    error!(
+                        "Failed to read certificate to calculate pre-enroll. Consider resetting the device and restarting enrollment."
+                    );
                 }
             }
         }

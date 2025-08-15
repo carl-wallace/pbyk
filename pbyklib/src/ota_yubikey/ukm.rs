@@ -1,14 +1,14 @@
 //! Interacts with Purebred portal to provision fresh PIV and signature credentials and current recovered encryption credential to a YubiKey device
 
 use log::{error, info};
-use yubikey::{piv::SlotId, MgmKey, YubiKey};
+use yubikey::{MgmKeyOps, YubiKey, piv::SlotId};
 
 use crate::{
-    misc::network::get_profile,
+    Result,
     misc_yubikey::utils::{process_payloads, verify_and_decrypt},
     ota::OtaActionInputs,
-    Result,
 };
+use pbykcorelib::misc::network::get_profile;
 
 /// Obtains fresh PIV and signature credentials and current encryption credential using the indicted
 /// YubiKey device using the URL obtained from `ukm_inputs`
@@ -18,11 +18,11 @@ use crate::{
 /// * `ukm_inputs` - structure containing information used to prepare URI to execute UKM action
 /// * `pin` - YubiKey PIN required to provision user-related slots on the given YubiKey device (may be omitted for VSC enrollments)
 /// * `mgmt_key` - YubiKey management key value (may be omitted for VSC enrollments)/// * `env` - identifies the environment in which enrollment is being performed, i.e., DEV, NIPR, SIPR, OM_NIPR, OM_SIPR
-pub async fn ukm(
+pub async fn ukm<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     ukm_inputs: &OtaActionInputs,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
     env: &str,
 ) -> Result<()> {
     info!(

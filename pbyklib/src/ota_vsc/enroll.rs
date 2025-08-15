@@ -16,10 +16,7 @@ use certval::PDVCertificate;
 use crate::misc_win::cert_store::delete_cert_from_store;
 use crate::ota::phase3;
 use crate::{
-    misc::{
-        network::post_body,
-        utils::{get_as_string, get_signed_data},
-    },
+    Error,
     misc_win::{
         csr::get_credential_list,
         scep::process_scep_payload_vsc,
@@ -27,9 +24,12 @@ use crate::{
         vsc_signer::CertContext,
         vsc_state::{get_version_and_product, get_vsc_id_and_uuid},
     },
-    ota::{phase1, OtaActionInputs, Phase2Request, Phase3Request},
+    ota::{OtaActionInputs, Phase2Request, Phase3Request, phase1},
     utils::list_vscs::get_device_cred,
-    Error,
+};
+use pbykcorelib::misc::{
+    network::post_body,
+    utils::{get_as_string, get_signed_data},
 };
 
 //------------------------------------------------------------------------------------
@@ -44,13 +44,14 @@ async fn phase2(
     env: &str,
 ) -> crate::Result<Vec<u8>> {
     let self_signed_cert = signer.cert();
-    let signed_data_pkcs7_der = match get_signed_data(signer, self_signed_cert, phase2_req) {
-        Ok(d) => d,
-        Err(e) => {
-            error!("Failed to generate SignedData for Phase 2 request: {e:?}");
-            return Err(e);
-        }
-    };
+    let signed_data_pkcs7_der =
+        match get_signed_data(signer, self_signed_cert, phase2_req, None, true) {
+            Ok(d) => d,
+            Err(e) => {
+                error!("Failed to generate SignedData for Phase 2 request: {e:?}");
+                return Err(Error::Pbykcorelib(e));
+            }
+        };
 
     let p2resp = post_body(
         url,
@@ -259,7 +260,9 @@ pub async fn enroll(
     let cc = match get_credential_list(Some(ccc)) {
         Ok(cc) => cc,
         Err(e) => {
-            error!("Failed to get credential corresponding to certificate obtained following Phase 2 with: {e:?}");
+            error!(
+                "Failed to get credential corresponding to certificate obtained following Phase 2 with: {e:?}"
+            );
             return Err(e);
         }
     };
@@ -267,7 +270,9 @@ pub async fn enroll(
     let wcc = match cc.first() {
         Some(wcc) => wcc,
         None => {
-            error!("Failed to select credential corresponding to certificate obtained following Phase 2.");
+            error!(
+                "Failed to select credential corresponding to certificate obtained following Phase 2."
+            );
             return Err(Error::Vsc);
         }
     };

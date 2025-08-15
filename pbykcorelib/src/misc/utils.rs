@@ -1,5 +1,6 @@
 //! Utility functions for use within pbyklib
 
+use spki::EncodePublicKey;
 use std::{collections::BTreeMap, io::Cursor, str::FromStr};
 
 use log::error;
@@ -22,7 +23,7 @@ use const_oid::{
     },
     ObjectIdentifier,
 };
-use der::{asn1::OctetString, Any, Decode, Encode, Tag};
+use der::{asn1::OctetString, Any, AnyRef, Decode, Encode, Tag};
 use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier};
 use x509_cert::{
     ext::pkix::{BasicConstraints, SubjectKeyIdentifier},
@@ -31,6 +32,7 @@ use x509_cert::{
 };
 
 use certval::PkiEnvironment;
+use cms::cert::IssuerAndSerialNumber;
 use signature::{Keypair, Signer};
 
 use crate::{misc::pki::validate_cert, Error, Result};
@@ -103,7 +105,7 @@ fn hash_content(sd: &SignedData, content: &[u8]) -> Result<BTreeMap<ObjectIdenti
 /// BasicConstraints is found with isCA set to false or no BasicConstraints is found, and an error
 /// if BasicConstraints is found but cannot be parsed.
 fn is_ca(cert: &Certificate) -> Result<bool> {
-    match &cert.tbs_certificate.extensions {
+    match cert.tbs_certificate().extensions() {
         Some(extensions) => {
             for ext in extensions {
                 if ext.extn_id == ID_CE_BASIC_CONSTRAINTS {
@@ -164,7 +166,7 @@ fn get_candidate_signer_cert(sd: &SignedData) -> Result<(Vec<Certificate>, Certi
 //------------------------------------------------------------------------------------
 /// Accepts a buffer that notionally contains a PList containing a Dictionary with an
 /// EncryptedPayloadContent entry. Returns the contents of entry upon success and an error otherwise
-pub(crate) fn get_encrypted_payload_content(xml: &[u8]) -> Result<Vec<u8>> {
+pub fn get_encrypted_payload_content(xml: &[u8]) -> Result<Vec<u8>> {
     let xml_cursor = Cursor::new(xml);
     let profile = plist::Value::from_reader(xml_cursor).map_err(|_e| Error::Plist)?;
 
@@ -192,7 +194,7 @@ pub(crate) fn get_encrypted_payload_content(xml: &[u8]) -> Result<Vec<u8>> {
 }
 
 /// Takes a buffer and returns a String containing an ASCII hex representation of the buffer's contents
-pub(crate) fn buffer_to_hex(buffer: &[u8]) -> String {
+pub fn buffer_to_hex(buffer: &[u8]) -> String {
     let hex = hex::encode_upper(buffer);
     let r = std::str::from_utf8(hex.as_slice());
     if let Ok(s) = r {
@@ -204,7 +206,7 @@ pub(crate) fn buffer_to_hex(buffer: &[u8]) -> String {
 
 /// Takes an EncapsulatedContentInfo and returned the encapsulated content as a buffer. Do not
 /// log error information before returning.
-pub(crate) fn get_encap_content(eci: &EncapsulatedContentInfo) -> Result<Vec<u8>> {
+pub fn get_encap_content(eci: &EncapsulatedContentInfo) -> Result<Vec<u8>> {
     let encap = match &eci.econtent {
         Some(e) => e,
         None => return Err(Error::ParseError),
@@ -256,7 +258,7 @@ pub async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec
                 &data_to_verify[..],
                 si.signature.as_bytes(),
                 &si.signature_algorithm,
-                &leaf_cert.tbs_certificate.subject_public_key_info,
+                leaf_cert.tbs_certificate().subject_public_key_info(),
             )
             .is_ok()
         {
@@ -273,19 +275,27 @@ pub async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec
 }
 
 /// Create a SKID-based SignerIdentifier from certificate
-pub(crate) fn signer_identifier_from_cert(cert: &Certificate) -> Result<SignerIdentifier> {
-    let skid_bytes = skid_from_cert(cert)?;
-    let os = match OctetString::new(skid_bytes) {
-        Ok(os) => os,
-        Err(e) => return Err(Error::Asn1(e)),
-    };
-    let skid = SubjectKeyIdentifier::from(os);
+pub fn signer_identifier_from_cert(cert: &Certificate, use_skid: bool) -> Result<SignerIdentifier> {
+    if use_skid {
+        let skid_bytes = skid_from_cert(cert)?;
+        let os = match OctetString::new(skid_bytes) {
+            Ok(os) => os,
+            Err(e) => return Err(Error::Asn1(e)),
+        };
+        let skid = SubjectKeyIdentifier::from(os);
 
-    Ok(SignerIdentifier::SubjectKeyIdentifier(skid))
+        Ok(SignerIdentifier::SubjectKeyIdentifier(skid))
+    } else {
+        let ias = IssuerAndSerialNumber {
+            issuer: cert.tbs_certificate().issuer().clone(),
+            serial_number: cert.tbs_certificate().serial_number().clone(),
+        };
+        Ok(SignerIdentifier::IssuerAndSerialNumber(ias))
+    }
 }
 
 /// Create a SKID-based RecipientIdentifier from certificate
-pub(crate) fn recipient_identifier_from_cert(cert: &Certificate) -> Result<RecipientIdentifier> {
+pub fn recipient_identifier_from_cert(cert: &Certificate) -> Result<RecipientIdentifier> {
     let skid_bytes = skid_from_cert(cert)?;
     let os = match OctetString::new(skid_bytes) {
         Ok(os) => os,
@@ -302,25 +312,29 @@ pub fn get_signed_data<S>(
     signer: &S,
     signers_cert: &Certificate,
     data_to_sign: &[u8],
+    encap_type: Option<ObjectIdentifier>,
+    use_skid: bool,
 ) -> Result<Vec<u8>>
 where
     S: Keypair + DynSignatureAlgorithmIdentifier + Signer<rsa::pkcs1v15::Signature>,
+    <S as Keypair>::VerifyingKey: EncodePublicKey,
 {
+    let econtent_type = encap_type.unwrap_or(const_oid::db::rfc5911::ID_DATA);
+
     let content = EncapsulatedContentInfo {
-        econtent_type: const_oid::db::rfc5911::ID_DATA,
+        econtent_type,
         econtent: Some(Any::new(Tag::OctetString, data_to_sign)?),
     };
 
     let digest_algorithm = AlgorithmIdentifierOwned {
         oid: const_oid::db::rfc5912::ID_SHA_256,
-        parameters: None,
+        parameters: Some(Any::from(AnyRef::NULL)),
     };
 
-    let si = signer_identifier_from_cert(signers_cert)?;
+    let si = signer_identifier_from_cert(signers_cert, use_skid)?;
 
     let external_message_digest = None;
     let signer_info_builder_1 = match SignerInfoBuilder::new(
-        signer,
         si,
         digest_algorithm.clone(),
         &content,
@@ -340,7 +354,7 @@ where
         .map_err(|_err| Error::Unrecognized)?
         .add_certificate(CertificateChoices::Certificate(signers_cert.clone()))
         .map_err(|_err| Error::Unrecognized)?
-        .add_signer_info(signer_info_builder_1)
+        .add_signer_info(signer_info_builder_1, signer)
         .map_err(|_err| Error::Unrecognized)?
         .build()
         .map_err(|_err| Error::Unrecognized)?;
@@ -356,8 +370,8 @@ where
 }
 
 /// Extract SKID extension value from certificate or calculate a SKID value from the SubjectPublicKeyInfo
-pub(crate) fn skid_from_cert(cert: &Certificate) -> Result<Vec<u8>> {
-    if let Some(exts) = &cert.tbs_certificate.extensions {
+pub fn skid_from_cert(cert: &Certificate) -> Result<Vec<u8>> {
+    if let Some(exts) = cert.tbs_certificate().extensions() {
         for ext in exts {
             if ext.extn_id == ID_CE_SUBJECT_KEY_IDENTIFIER {
                 match OctetString::from_der(ext.extn_value.as_bytes()) {
@@ -370,7 +384,7 @@ pub(crate) fn skid_from_cert(cert: &Certificate) -> Result<Vec<u8>> {
         }
     }
 
-    let working_spki = &cert.tbs_certificate.subject_public_key_info;
+    let working_spki = cert.tbs_certificate().subject_public_key_info();
     match working_spki.subject_public_key.as_bytes() {
         Some(spki) => Ok(Sha256::digest(spki).to_vec()),
         None => {
@@ -382,7 +396,7 @@ pub(crate) fn skid_from_cert(cert: &Certificate) -> Result<Vec<u8>> {
 
 /// Returns a vector containing distinct `rfc822Name` values read from `SubjectAltName` entries in `dict`.
 /// When no `rfc822Name` values are found, an empty vector is returned.
-pub(crate) fn get_email_addresses(dict: &Dictionary) -> Vec<String> {
+pub fn get_email_addresses(dict: &Dictionary) -> Vec<String> {
     let mut rv: Vec<String> = vec![];
     if let Some(san) = dict.get("SubjectAltName") {
         if let Some(san) = san.as_dictionary() {
@@ -404,7 +418,7 @@ pub(crate) fn get_email_addresses(dict: &Dictionary) -> Vec<String> {
 }
 
 /// Returns a Name prepared using elements in the `Subject` entry in `dict`
-pub(crate) fn get_subject_name(dict: &Dictionary) -> Result<Name> {
+pub fn get_subject_name(dict: &Dictionary) -> Result<Name> {
     let mut dn = vec![];
     if let Some(subject_array) = dict.get("Subject") {
         if let Some(subject_array) = subject_array.as_array() {
@@ -449,7 +463,7 @@ pub(crate) fn get_subject_name(dict: &Dictionary) -> Result<Name> {
 }
 
 /// Retrieves the value associated with the given key from the given dictionary as a String if possible
-pub(crate) fn get_as_string(dict: &Dictionary, key: &str) -> Option<String> {
+pub fn get_as_string(dict: &Dictionary, key: &str) -> Option<String> {
     if let Some(value) = dict.get(key) {
         if let Some(rv) = value.as_string() {
             return Some(rv.to_string());

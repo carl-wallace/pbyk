@@ -3,44 +3,41 @@
 use log::{debug, error, info};
 use plist::Dictionary;
 
-use crate::misc::scep::{
+use pbykcorelib::misc::scep::{
     get_challenge_and_url, post_scep_request, prepare_attributes, prepare_enveloped_data,
 };
 use signature::Signer as OtherSigner;
 
 use cms::{cert::CertificateChoices, content_info::ContentInfo, signed_data::SignedData};
 use der::{
-    asn1::{BitString, SetOfVec},
     Decode, Encode,
+    asn1::{BitString, SetOfVec},
 };
 use spki::SignatureBitStringEncoding;
 use x509_cert::{
+    Certificate,
     attr::Attribute,
     request::{CertReq, CertReqInfo},
     spki::SubjectPublicKeyInfoRef,
-    Certificate,
 };
 use yubikey::{
+    MgmKeyOps, YubiKey,
     certificate::{
-        yubikey_signer::{Rsa2048, YubiRsa},
         CertInfo,
+        yubikey_signer::{Rsa2048, YubiRsa},
     },
     piv::{AlgorithmId, SlotId},
-    MgmKey, YubiKey,
 };
 
 use crate::{
-    misc::{
-        network::get_ca_cert,
-        scep::prepare_scep_signed_data,
-        utils::{get_email_addresses, get_subject_name},
-    },
+    Error, ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE, Result,
     misc_yubikey::{
         utils::{generate_self_signed_cert, get_attestation_p7, verify_and_decrypt},
         yk_signer::YkSigner,
     },
-    Error, Result, ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE,
 };
+use pbykcorelib::misc::utils::{get_email_addresses, get_subject_name};
+use pbykcorelib::misc::{network::get_ca_cert, scep::prepare_scep_signed_data};
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -53,7 +50,7 @@ fn sign_request(
     cert: &Certificate,
     data: &[u8],
 ) -> Result<BitString> {
-    let enc_spki = cert.tbs_certificate.subject_public_key_info.to_der()?;
+    let enc_spki = cert.tbs_certificate().subject_public_key_info().to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
     let signer: yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>> =
         yubikey::certificate::yubikey_signer::Signer::new(yubikey, slot_id, spki_ref)
@@ -75,20 +72,20 @@ fn sign_request(
 }
 
 /// Returns a DER-encoded CertReq containing the provided `attributes` and information from `self_signed_cert`.
-fn prepare_csr(
+fn prepare_csr<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     slot_id: SlotId,
     self_signed_cert: &Certificate,
     attrs: SetOfVec<Attribute>,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
 ) -> Result<Vec<u8>> {
     let cert_req_info = CertReqInfo {
         version: Default::default(),
-        subject: self_signed_cert.tbs_certificate.subject.clone(),
+        subject: self_signed_cert.tbs_certificate().subject().clone(),
         public_key: self_signed_cert
-            .tbs_certificate
-            .subject_public_key_info
+            .tbs_certificate()
+            .subject_public_key_info()
             .clone(),
         attributes: attrs,
     };
@@ -99,7 +96,7 @@ fn prepare_csr(
         error!("Failed to verify PIN in prepare_csr: {e:?}");
         return Err(Error::YubiKey(e));
     }
-    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+    if let Err(e) = yubikey.authenticate(mgmt_key) {
         error!("Failed to authenticate using management key in prepare_csr: {e:?}");
         return Err(Error::YubiKey(e));
     }
@@ -114,7 +111,7 @@ fn prepare_csr(
 
     let cert_req = CertReq {
         info: cert_req_info,
-        algorithm: self_signed_cert.signature_algorithm.clone(),
+        algorithm: self_signed_cert.signature_algorithm().clone(),
         signature: sig,
     };
 
@@ -132,12 +129,12 @@ fn prepare_csr(
 /// found, the Signature slot is used. Otherwise, the Authentication slot is used.
 ///
 /// `scep_instructions` MUST contain `Challenge`, `URL` and `Subject` values.
-pub(crate) async fn process_scep_payload(
+pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     scep_instructions: &Dictionary,
     is_phase2: bool,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
     display: Option<String>,
     env: &str,
 ) -> Result<Vec<u8>> {
@@ -205,11 +202,11 @@ pub(crate) async fn process_scep_payload(
         error!("Failed to verify PIN in process_scep_payload: {e:?}");
         return Err(Error::YubiKey(e));
     }
-    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+    if let Err(e) = yubikey.authenticate(mgmt_key) {
         error!("Failed to authenticate using management key in process_scep_payload: {e:?}");
         return Err(Error::YubiKey(e));
     }
-    let enc_spki = ss.tbs_certificate.subject_public_key_info.to_der()?;
+    let enc_spki = ss.tbs_certificate().subject_public_key_info().to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
 
     let signer: YkSigner<'_, YubiRsa<Rsa2048>> = match YkSigner::new(yubikey, slot_id, spki_ref) {

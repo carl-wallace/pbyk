@@ -10,13 +10,13 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use windows::System::Profile::SystemIdentification;
 use windows::{
-    core::HSTRING,
     Security::Cryptography::{
         BinaryStringEncoding,
         Core::{HashAlgorithmNames, HashAlgorithmProvider},
         CryptographicBuffer,
     },
     System::Profile::AnalyticsInfo,
+    core::HSTRING,
 };
 
 use crate::utils::state::create_app_home;

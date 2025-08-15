@@ -3,23 +3,23 @@
 #![cfg(target_os = "windows")]
 
 use std::{
-    ffi::{c_void, CString},
+    ffi::{CString, c_void},
     ptr::null,
 };
 
 use log::error;
 
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use windows::{core::HSTRING, Security::Cryptography::Certificates::CertificateStores};
+use windows::{Security::Cryptography::Certificates::CertificateStores, core::HSTRING};
 
 use windows::Win32::Security::Cryptography::{
-    CertCloseStore, CertDeleteCertificateFromStore, CertEnumCertificatesInStore, CertOpenStore,
-    CERT_STORE_OPEN_EXISTING_FLAG, CERT_STORE_PROV_SYSTEM_A, PKCS_7_ASN_ENCODING,
-    X509_ASN_ENCODING,
+    CERT_STORE_OPEN_EXISTING_FLAG, CERT_STORE_PROV_SYSTEM_A, CertCloseStore,
+    CertDeleteCertificateFromStore, CertEnumCertificatesInStore, CertOpenStore,
+    PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
 };
 
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use crate::misc::utils::buffer_to_hex;
+use certval::buffer_to_hex;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use sha2::{Digest, Sha256};
 
@@ -57,7 +57,7 @@ pub(crate) fn delete_cert_from_named_store(cert_bytes: &[u8], store_name: &CStri
                     CertEnumCertificatesInStore(cert_store, Some(prev_cert_context));
             }
 
-            let _ = CertCloseStore(cert_store, 0);
+            let _ = CertCloseStore(Some(cert_store), 0);
         }
     }
 }
@@ -113,7 +113,7 @@ pub(crate) async fn delete_cert_hashes_from_named_store(hashes: &[String], store
                     CertEnumCertificatesInStore(cert_store, Some(prev_cert_context));
             }
 
-            let _ = CertCloseStore(cert_store, 0);
+            let _ = CertCloseStore(Some(cert_store), 0);
         }
     }
 

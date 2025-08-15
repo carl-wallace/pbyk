@@ -5,14 +5,19 @@ use std::{
     str::FromStr,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use yubikey::certificate::yubikey_signer;
 
 use log::{error, info};
-use rand_core::{OsRng, RngCore};
+use rand_core::{OsRng, RngCore, TryRngCore};
 
-use cipher::{generic_array::GenericArray, BlockDecryptMut, KeyIvInit};
-use sha1::Sha1;
-use sha2::Digest;
+use cipher::{BlockModeDecrypt, KeyIvInit};
+use sha1::{Digest, Sha1};
 
+use crate::{
+    Error, Result,
+    misc::rsa_utils::decrypt_inner,
+    misc_yubikey::{p12::import_p12, scep::process_scep_payload},
+};
 use cms::{
     content_info::ContentInfo,
     enveloped_data::{EnvelopedData, RecipientInfo},
@@ -21,33 +26,26 @@ use cms::{
 use const_oid::db::rfc4519::COMMON_NAME;
 use der::zeroize::Zeroizing;
 use der::{
+    Decode, Encode, Tag, Tagged,
     asn1::{
         Ia5StringRef, OctetString, PrintableStringRef, TeletexStringRef, UtcTime, Utf8StringRef,
     },
-    Decode, Encode, Tag, Tagged,
+};
+use pbykcorelib::misc::utils::{
+    get_as_string, get_encrypted_payload_content, purebred_authorize_request,
 };
 use x509_cert::{
+    Certificate,
     builder::CertificateBuilder,
     ext::pkix::SubjectKeyIdentifier,
     name::Name,
     serial_number::SerialNumber,
     time::{Time, Validity},
-    Certificate,
 };
+use yubikey::certificate::SelfSigned;
 use yubikey::{
-    certificate::yubikey_signer::{Rsa2048, YubiRsa},
-    piv,
+    Key, MgmKeyOps, PinPolicy, TouchPolicy, Uuid, YubiKey, piv,
     piv::{AlgorithmId, SlotId},
-    Key, MgmKey, PinPolicy, TouchPolicy, Uuid, YubiKey,
-};
-
-use crate::{
-    misc::{
-        rsa_utils::decrypt_inner,
-        utils::{get_as_string, get_encrypted_payload_content, purebred_authorize_request},
-    },
-    misc_yubikey::{p12::import_p12, scep::process_scep_payload},
-    Error, Result,
 };
 
 /// Generates an attestation for the indicated slot and returns a P7 containing that attestation and
@@ -153,8 +151,8 @@ pub(crate) fn get_uuid_from_cert(yubikey: &mut YubiKey) -> Result<String> {
         }
     };
 
-    for n in cert.cert.tbs_certificate.subject.0.iter() {
-        for a in n.0.iter() {
+    for n in cert.cert.tbs_certificate().subject().iter_rdn() {
+        for a in n.iter() {
             if a.oid == COMMON_NAME {
                 let val = match a.value.tag() {
                     Tag::PrintableString => PrintableStringRef::try_from(&a.value)
@@ -169,7 +167,9 @@ pub(crate) fn get_uuid_from_cert(yubikey: &mut YubiKey) -> Result<String> {
                 };
                 if let Some(v) = val {
                     if Uuid::parse_str(v).is_err() {
-                        error!("Value read from common name of certificate read from CardAuthentication slot could not be parsed as a UUID: {v}");
+                        error!(
+                            "Value read from common name of certificate read from CardAuthentication slot could not be parsed as a UUID: {v}"
+                        );
                         return Err(Error::UnexpectedValue);
                     }
                     return Ok(v.to_string());
@@ -182,13 +182,13 @@ pub(crate) fn get_uuid_from_cert(yubikey: &mut YubiKey) -> Result<String> {
 
 /// Generates a self-signed certificate containing a public key corresponding to the given algorithm
 /// and a subject DN set to the provided value using the indicated slot on the provided YubiKey.
-pub(crate) fn generate_self_signed_cert(
+pub(crate) fn generate_self_signed_cert<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     slot: SlotId,
     algorithm: AlgorithmId,
     name: &str,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
 ) -> Result<Certificate> {
     // Generate a new key in the selected slot.
     let public_key = match piv::generate(
@@ -203,7 +203,7 @@ pub(crate) fn generate_self_signed_cert(
     };
 
     let mut serial = [0u8; 20];
-    OsRng.fill_bytes(&mut serial);
+    OsRng.unwrap_err().fill_bytes(&mut serial);
     serial[0] = 0x01;
     let serial = SerialNumber::new(&serial[..]).expect("serial can't be more than 20 bytes long");
 
@@ -221,8 +221,8 @@ pub(crate) fn generate_self_signed_cert(
         )
         .map_err(|_| Error::Unrecognized)?,
     );
-    let validity = Validity {
-        not_before: Time::UtcTime(
+    let validity = Validity::new(
+        Time::UtcTime(
             UtcTime::from_unix_duration(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -231,7 +231,7 @@ pub(crate) fn generate_self_signed_cert(
             .map_err(|_| Error::Unrecognized)?,
         ),
         not_after,
-    };
+    );
     let name = Name::from_str(name)?;
     let spki_buffer = public_key.to_der()?;
     let b = Sha1::digest(spki_buffer);
@@ -242,24 +242,25 @@ pub(crate) fn generate_self_signed_cert(
         error!("Failed to verify PIN in generate_self_signed_cert: {e:?}");
         return Err(Error::YubiKey(e));
     }
-    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+    if let Err(e) = yubikey.authenticate(mgmt_key) {
         error!("Failed to authenticate using management key in generate_self_signed_cert: {e:?}");
         return Err(Error::YubiKey(e));
     }
 
-    let builder = |builder: &mut CertificateBuilder<
-        '_,
-        yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>>,
-    >| {
+    let builder = |builder: &mut CertificateBuilder<SelfSigned>| {
         if let Err(e) = builder.add_extension(&skid) {
-            error!("Failed to add SKID extension to certificate builder when generating self-signed certificate for Yubikey: {e:?}");
+            error!(
+                "Failed to add SKID extension to certificate builder when generating self-signed certificate for Yubikey: {e:?}"
+            );
         }
         Ok(())
     };
 
-    match yubikey::certificate::Certificate::generate_self_signed(
-        yubikey, slot, serial, validity, name, public_key, builder,
-    ) {
+    match yubikey::certificate::Certificate::generate_self_signed::<
+        _,
+        yubikey_signer::YubiRsa<yubikey_signer::Rsa2048>,
+    >(yubikey, slot, serial, validity, name, public_key, builder)
+    {
         Ok(cert) => Ok(cert.cert),
         Err(e) => Err(Error::YubiKey(e)),
     }
@@ -267,20 +268,20 @@ pub(crate) fn generate_self_signed_cert(
 
 /// Verifies a SignedData then decrypts an encapsulated EnvelopedData and returns the encapsulated
 /// contents from it as a buffer.
-pub(crate) async fn verify_and_decrypt(
+pub(crate) async fn verify_and_decrypt<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     slot: SlotId,
     content: &[u8],
     is_ota: bool,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
     env: &str,
 ) -> Result<Zeroizing<Vec<u8>>> {
     if let Err(e) = yubikey.verify_pin(pin) {
         error!("Failed to verify PIN in verify_and_decrypt: {e:?}");
         return Err(Error::YubiKey(e));
     }
-    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+    if let Err(e) = yubikey.authenticate(mgmt_key) {
         error!("Failed to authenticate using management key in verify_and_decrypt: {e:?}");
         return Err(Error::YubiKey(e));
     }
@@ -312,7 +313,7 @@ pub(crate) async fn verify_and_decrypt(
     let os_iv = OctetString::from_der(&enc_params)?;
     let iv = os_iv.as_bytes();
 
-    let ct = match ed.encrypted_content.encrypted_content {
+    let mut ct = match ed.encrypted_content.encrypted_content {
         Some(ct) => ct.as_bytes().to_vec(),
         None => return Err(Error::Unrecognized),
     };
@@ -337,24 +338,28 @@ pub(crate) async fn verify_and_decrypt(
             _ => continue,
         };
 
-        let key = GenericArray::from_slice(&dec_key.1[dec_key.2 as usize..]);
-
         /// decryption type
         type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-        let cipher = Aes256CbcDec::new(key, iv.into());
-        if let Ok(pt) = cipher.decrypt_padded_vec_mut::<cipher::block_padding::Pkcs7>(&ct) {
-            return Ok(Zeroizing::new(pt));
+        let cipher = match Aes256CbcDec::new_from_slices(&dec_key.1[dec_key.2 as usize..], iv) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("Failed to create new Aes256CbcDec instance: {e}. Continuing...");
+                continue;
+            }
+        };
+        if let Ok(pt) = cipher.decrypt_padded::<cipher::block_padding::Pkcs7>(&mut ct) {
+            return Ok(Zeroizing::new(pt.to_vec()));
         }
     }
     Err(Error::Unrecognized)
 }
 
 /// Processes payloads from the presented `xml` generating and import keys using the provided YubiKey
-pub(crate) async fn process_payloads(
+pub(crate) async fn process_payloads<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     xml: &[u8],
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
     env: &str,
     is_recover: bool,
 ) -> Result<()> {
@@ -386,7 +391,9 @@ pub(crate) async fn process_payloads(
                                 Some(pc) => match pc.as_dictionary() {
                                     Some(d) => d,
                                     None => {
-                                        error!("Failed to parse PayloadContent as a dictionary for SCEP payload.");
+                                        error!(
+                                            "Failed to parse PayloadContent as a dictionary for SCEP payload."
+                                        );
                                         return Err(Error::Plist);
                                     }
                                 },
@@ -415,7 +422,9 @@ pub(crate) async fn process_payloads(
                                 Some(pc) => match pc.as_data() {
                                     Some(d) => d,
                                     None => {
-                                        error!("Failed to parse PayloadContent as a data for PKCS #12 payload.");
+                                        error!(
+                                            "Failed to parse PayloadContent as a data for PKCS #12 payload."
+                                        );
                                         return Err(Error::Plist);
                                     }
                                 },
@@ -429,7 +438,9 @@ pub(crate) async fn process_payloads(
                                 Some(pc) => match pc.as_string() {
                                     Some(d) => d,
                                     None => {
-                                        error!("Failed to parse Password as a data for PKCS #12 payload.");
+                                        error!(
+                                            "Failed to parse Password as a data for PKCS #12 payload."
+                                        );
                                         return Err(Error::Plist);
                                     }
                                 },
@@ -449,7 +460,9 @@ pub(crate) async fn process_payloads(
                             )
                             .await
                             {
-                                error!("Failed to process PKCS #12 payload at index {p12_index}: {e:?}.");
+                                error!(
+                                    "Failed to process PKCS #12 payload at index {p12_index}: {e:?}."
+                                );
                                 return Err(e);
                             }
                             p12_index += 1;

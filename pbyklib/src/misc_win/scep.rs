@@ -3,27 +3,25 @@
 use log::{debug, error, info};
 use plist::Dictionary;
 use windows::{
-    core::HSTRING,
     Devices::SmartCards::SmartCard,
     Security::Cryptography::Certificates::{CertificateEnrollmentManager, InstallOptions},
+    core::HSTRING,
 };
 
 use base64ct::{Base64, Encoding};
 use cms::{cert::CertificateChoices, content_info::ContentInfo, signed_data::SignedData};
 use der::{
-    asn1::{BitString, SetOfVec},
     Decode, Encode,
+    asn1::{BitString, SetOfVec},
 };
 use signature::Signer;
 use spki::SignatureBitStringEncoding;
 use x509_cert::{
+    Certificate,
     attr::Attribute,
     request::{CertReq, CertReqInfo},
-    Certificate,
 };
 
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use crate::misc::utils::buffer_to_hex;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use crate::misc_win::vsc_state::{read_saved_state_or_default, save_state};
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
@@ -31,22 +29,26 @@ use crate::utils::get_vsc_id_from_serial;
 use certval::PDVCertificate;
 use der::zeroize::Zeroize;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use pbykcorelib::misc::utils::buffer_to_hex;
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use sha2::{Digest, Sha256};
 
-use crate::misc::scep::post_scep_request;
 use crate::misc_win::cert_store::delete_cert_from_store;
 use crate::{
-    misc::network::get_ca_cert,
-    misc::scep::{
-        get_challenge_and_url, prepare_attributes, prepare_enveloped_data, prepare_scep_signed_data,
-    },
-    misc::utils::{get_email_addresses, get_subject_name},
+    Error, ID_PUREBRED_MICROSOFT_ATTESTATION_ATTRIBUTE, Result,
     misc_win::{
         csr::{get_credential_list, get_key_provider_info, prepare_base64_certs_only_p7},
         utils::{generate_csr, generate_self_signed_cert_vsc, verify_and_decrypt_vsc},
         vsc_signer::CertContext,
     },
-    Error, Result, ID_PUREBRED_MICROSOFT_ATTESTATION_ATTRIBUTE,
+};
+use pbykcorelib::misc::{
+    network::get_ca_cert,
+    scep::{
+        get_challenge_and_url, post_scep_request, prepare_attributes, prepare_enveloped_data,
+        prepare_scep_signed_data,
+    },
+    utils::{get_email_addresses, get_subject_name},
 };
 
 /// Generate signature over presented data using provided YubiKey, slot and public key from `cert`
@@ -94,10 +96,10 @@ fn prepare_scep_request_vsc(
 ) -> Result<Vec<u8>> {
     let cert_req_info = CertReqInfo {
         version: Default::default(),
-        subject: self_signed_cert.tbs_certificate.subject.clone(),
+        subject: self_signed_cert.tbs_certificate().subject().clone(),
         public_key: self_signed_cert
-            .tbs_certificate
-            .subject_public_key_info
+            .tbs_certificate()
+            .subject_public_key_info()
             .clone(),
         attributes: attrs,
     };
@@ -114,7 +116,7 @@ fn prepare_scep_request_vsc(
 
     let cert_req = CertReq {
         info: cert_req_info,
-        algorithm: self_signed_cert.signature_algorithm.clone(),
+        algorithm: self_signed_cert.signature_algorithm().clone(),
         signature: sig,
     };
 
@@ -161,8 +163,8 @@ pub(crate) async fn process_scep_payload_vsc(
             Ok(c) => c,
             Err(e) => {
                 error!(
-                "Failed to generate self-signed certificate for {subject_name} using VSC: {e:?}"
-            );
+                    "Failed to generate self-signed certificate for {subject_name} using VSC: {e:?}"
+                );
                 return Err(e);
             }
         };

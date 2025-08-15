@@ -73,6 +73,9 @@ pub struct UiSignals {
     pub s_error_msg: Signal<String>,
     pub s_success_msg: Signal<String>,
     pub s_reset_msg: Signal<String>,
+    pub s_pin_prompt_hint: Signal<String>,
+    pub s_puk_prompt_hint: Signal<String>,
+    pub s_min_len: Signal<i8>,
 }
 
 impl Display for UiSignals {
@@ -124,7 +127,14 @@ impl Display for UiSignals {
 }
 
 impl UiSignals {
-    pub fn init(app_signals: &AppSignals, is_yubikey: bool, error_msg: Option<String>) -> Self {
+    pub fn init(
+        app_signals: &AppSignals,
+        is_yubikey: bool,
+        error_msg: Option<String>,
+        pin_prompt: String,
+        puk_prompt: String,
+        min_len: i8,
+    ) -> Self {
         let toast = use_signal(ToastManager::default);
 
         let s_disa_icon = use_signal(|| DISA_ICON_BASE64.clone());
@@ -228,6 +238,7 @@ impl UiSignals {
             if is_yubikey {
                 match get_pre_enroll_hash_yubikey(&app_signals.s_serial.read()) {
                     Ok(hash) => {
+                        // todo - this causes a runtime debug message
                         s_hash.set(hash);
                     }
                     Err(_e) => {
@@ -287,6 +298,10 @@ impl UiSignals {
 
         let s_reset_msg = use_signal(String::new);
 
+        let s_pin_prompt_hint = use_signal(|| pin_prompt);
+        let s_puk_prompt_hint = use_signal(|| puk_prompt);
+        let s_min_len = use_signal(|| min_len);
+
         UiSignals {
             toast,
             s_disa_icon,
@@ -327,6 +342,9 @@ impl UiSignals {
             s_error_msg,
             s_success_msg,
             s_reset_msg,
+            s_pin_prompt_hint,
+            s_puk_prompt_hint,
+            s_min_len,
         }
     }
 }

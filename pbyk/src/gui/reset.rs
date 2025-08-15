@@ -5,7 +5,6 @@
 use dioxus::prelude::*;
 use dioxus_toast::{Icon, ToastInfo};
 use log::error;
-
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 use pbyklib::utils::{list_vscs::get_vsc, reset_vsc::reset_vsc};
 
@@ -16,9 +15,10 @@ use crate::gui::utils::parse_reader_from_vsc_display;
 use crate::gui::utils::string_or_default;
 use crate::Phase::PreEnroll;
 use pbyklib::{
+    get_pb_default,
     utils::{get_yubikey, reset_yubikey},
-    PB_MGMT_KEY,
 };
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn reset(
     is_yubikey: bool,
@@ -80,18 +80,11 @@ pub(crate) fn reset(
                     let puk2 = string_or_default(&ev, "puk2", "");
 
                     let serial = string_or_default(&ev, "serial", "");
-                    let serial_u32 = match app_signals.s_serial.read().parse::<u32>() {
-                        Ok(serial_u32) => Some(serial_u32),
-                        Err(_e) => {
-                            // let sm = format!("ERROR: failed to process YubiKey serial number: {e}.");
-                            // error!("{}", sm);
-                            // error_msg_setter(sm.to_string());
-                            None
-                        }
-                    };
+                    let serial_u32 = app_signals.s_serial.read().parse::<u32>().ok();
 
                     async move {
                         if is_yubikey{
+                            let min_len = *ui_signals.s_min_len.read() as usize;
                             if pin1.is_empty() || pin2.is_empty() || puk1.is_empty() || puk2.is_empty() {
                                 ui_signals.s_pin.set( String::new());
                                 ui_signals.s_puk.set( String::new());
@@ -107,16 +100,24 @@ pub(crate) fn reset(
                                 return;
                             }
 
-                            if !pin1.is_ascii() || 6 > pin1.len() || 8 < pin1.len() {
-                                let sm = "PIN values MUST be between 6 and 8 characters long and only contain ASCII values.";
+                            if !pin1.is_ascii() || min_len > pin1.len() || 8 < pin1.len() {
+                                let sm = if min_len != 8 {
+                                    "PIN values MUST be between 6 and 8 characters long and only contain ASCII values."
+                                } else {
+                                    "PIN values MUST be 8 characters long and only contain ASCII values."
+                                };
                                 error!("{}", sm);
                                 ui_signals.s_error_msg.set(sm.to_string());
                                 show_error_dialog!();
                                 return;
                             }
 
-                            if 6 > puk1.len() || 8 < puk1.len()  {
-                                let sm = "PUK values MUST be between 6 and 8 characters long.";
+                            if min_len > puk1.len() || 8 < puk1.len()  {
+                                let sm = if min_len != 8 {
+                                    "PUK values MUST be between 6 and 8 characters long."
+                                } else {
+                                    "PUK values MUST be 8 characters long."
+                                };
                                 error!("{}", sm);
                                 ui_signals.s_error_msg.set(sm.to_string());
                                 show_error_dialog!();
@@ -154,7 +155,8 @@ pub(crate) fn reset(
                                     }
                                 };
 
-                                if let Err(e) = reset_yubikey(&mut yubikey, &pin1, &puk1, &PB_MGMT_KEY.clone()) {
+                                let mgmt_key = get_pb_default(&yubikey);
+                                if let Err(e) = reset_yubikey(&mut yubikey, &pin1, &puk1, &mgmt_key) {
                                     let sm = format!("Failed to reset YubiKey with serial number {yks}: {e}.");
                                     error!("{}", sm);
                                     ui_signals.s_pin.set( String::new());
@@ -226,7 +228,7 @@ pub(crate) fn reset(
                         tr{
                             style: "{ui_signals.s_pin_style}",
                             th{rowspan: "2", div{label {r#for: "pin", "YubiKey PIN"}}}
-                            td{input { r#type: "password", placeholder: "Enter YubiKey PIN (6 to 8 ASCII characters)", name: "pin", value: "{ui_signals.s_pin}", maxlength: "8"}}
+                            td{input { r#type: "password", placeholder: "{ui_signals.s_pin_prompt_hint}", name: "pin", value: "{ui_signals.s_pin}", maxlength: "8"}}
                         }
                         tr{
                             style: "{ui_signals.s_pin_style}",
@@ -235,7 +237,7 @@ pub(crate) fn reset(
                         tr{
                             style: "{ui_signals.s_pin_style}",
                             th{rowspan: "2", div{label {r#for: "puk", "YubiKey PUK"}}}
-                            td{input { r#type: "password", placeholder: "Enter YubiKey PUK (6 to 8 ASCII characters)", name: "puk", value: "{ui_signals.s_pin}", maxlength: "8"}}
+                            td{input { r#type: "password", placeholder: "{ui_signals.s_puk_prompt_hint}", name: "puk", value: "{ui_signals.s_pin}", maxlength: "8"}}
                         }
                         tr{
                             style: "{ui_signals.s_pin_style}",
