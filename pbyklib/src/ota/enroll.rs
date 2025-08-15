@@ -6,7 +6,7 @@ use zeroize::Zeroizing;
 use log::{error, info};
 
 use crate::{
-    Error, PB_MGMT_KEY, Result,
+    Error, Result, get_pb_default,
     ota::{CryptoModule, OtaActionInputs},
 };
 use pbykcorelib::misc::enroll::fetch_phase1;
@@ -116,7 +116,7 @@ pub async fn enroll(
     agent_edipi: &str,
     oai: &OtaActionInputs,
     pin: Option<Zeroizing<String>>,
-    mgmt_key: Option<&MgmKey>,
+    mgmt_key: Option<MgmKey>,
     env: &str,
 ) -> Result<()> {
     match cm {
@@ -134,7 +134,7 @@ pub async fn enroll(
                 agent_edipi,
                 oai,
                 pin.as_bytes(),
-                mgmt_key.unwrap_or(&PB_MGMT_KEY),
+                &mgmt_key.unwrap_or(get_pb_default(yk)),
                 env,
             )
             .await

@@ -21,7 +21,7 @@ use x509_cert::{
     spki::SubjectPublicKeyInfoRef,
 };
 use yubikey::{
-    MgmKey, YubiKey,
+    MgmKeyOps, YubiKey,
     certificate::{
         CertInfo,
         yubikey_signer::{Rsa2048, YubiRsa},
@@ -72,13 +72,13 @@ fn sign_request(
 }
 
 /// Returns a DER-encoded CertReq containing the provided `attributes` and information from `self_signed_cert`.
-fn prepare_csr(
+fn prepare_csr<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     slot_id: SlotId,
     self_signed_cert: &Certificate,
     attrs: SetOfVec<Attribute>,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
 ) -> Result<Vec<u8>> {
     let cert_req_info = CertReqInfo {
         version: Default::default(),
@@ -96,7 +96,7 @@ fn prepare_csr(
         error!("Failed to verify PIN in prepare_csr: {e:?}");
         return Err(Error::YubiKey(e));
     }
-    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+    if let Err(e) = yubikey.authenticate(mgmt_key) {
         error!("Failed to authenticate using management key in prepare_csr: {e:?}");
         return Err(Error::YubiKey(e));
     }
@@ -129,12 +129,12 @@ fn prepare_csr(
 /// found, the Signature slot is used. Otherwise, the Authentication slot is used.
 ///
 /// `scep_instructions` MUST contain `Challenge`, `URL` and `Subject` values.
-pub(crate) async fn process_scep_payload(
+pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     scep_instructions: &Dictionary,
     is_phase2: bool,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
     display: Option<String>,
     env: &str,
 ) -> Result<Vec<u8>> {
@@ -202,7 +202,7 @@ pub(crate) async fn process_scep_payload(
         error!("Failed to verify PIN in process_scep_payload: {e:?}");
         return Err(Error::YubiKey(e));
     }
-    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+    if let Err(e) = yubikey.authenticate(mgmt_key) {
         error!("Failed to authenticate using management key in process_scep_payload: {e:?}");
         return Err(Error::YubiKey(e));
     }

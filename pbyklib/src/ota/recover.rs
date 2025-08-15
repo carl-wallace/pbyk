@@ -8,7 +8,7 @@ use zeroize::Zeroizing;
 use windows::Devices::SmartCards::SmartCard;
 
 use crate::ota::CryptoModule;
-use crate::{Error, PB_MGMT_KEY, Result, ota::OtaActionInputs};
+use crate::{Error, Result, get_pb_default, ota::OtaActionInputs};
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::misc_win::vsc_signer::CertContext;
@@ -28,7 +28,7 @@ pub async fn recover(
     cm: &mut CryptoModule,
     recover_inputs: &OtaActionInputs,
     pin: Option<Zeroizing<String>>,
-    mgmt_key: Option<&MgmKey>,
+    mgmt_key: Option<MgmKey>,
     env: &str,
 ) -> Result<()> {
     match cm {
@@ -45,7 +45,7 @@ pub async fn recover(
                 yk,
                 recover_inputs,
                 pin.as_bytes(),
-                mgmt_key.unwrap_or(&PB_MGMT_KEY),
+                &mgmt_key.unwrap_or(get_pb_default(yk)),
                 env,
             )
             .await

@@ -23,30 +23,32 @@ use x509_cert::{
 };
 
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use crate::misc::utils::buffer_to_hex;
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use crate::misc_win::vsc_state::{read_saved_state_or_default, save_state};
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use crate::utils::get_vsc_id_from_serial;
 use certval::PDVCertificate;
 use der::zeroize::Zeroize;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use pbykcorelib::misc::utils::buffer_to_hex;
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use sha2::{Digest, Sha256};
 
-use crate::misc::scep::post_scep_request;
 use crate::misc_win::cert_store::delete_cert_from_store;
 use crate::{
     Error, ID_PUREBRED_MICROSOFT_ATTESTATION_ATTRIBUTE, Result,
-    misc::network::get_ca_cert,
-    misc::scep::{
-        get_challenge_and_url, prepare_attributes, prepare_enveloped_data, prepare_scep_signed_data,
-    },
-    misc::utils::{get_email_addresses, get_subject_name},
     misc_win::{
         csr::{get_credential_list, get_key_provider_info, prepare_base64_certs_only_p7},
         utils::{generate_csr, generate_self_signed_cert_vsc, verify_and_decrypt_vsc},
         vsc_signer::CertContext,
     },
+};
+use pbykcorelib::misc::{
+    network::get_ca_cert,
+    scep::{
+        get_challenge_and_url, post_scep_request, prepare_attributes, prepare_enveloped_data,
+        prepare_scep_signed_data,
+    },
+    utils::{get_email_addresses, get_subject_name},
 };
 
 /// Generate signature over presented data using provided YubiKey, slot and public key from `cert`
@@ -94,10 +96,10 @@ fn prepare_scep_request_vsc(
 ) -> Result<Vec<u8>> {
     let cert_req_info = CertReqInfo {
         version: Default::default(),
-        subject: self_signed_cert.tbs_certificate().subject.clone(),
+        subject: self_signed_cert.tbs_certificate().subject().clone(),
         public_key: self_signed_cert
-            .tbs_certificate
-            .subject_public_key_info
+            .tbs_certificate()
+            .subject_public_key_info()
             .clone(),
         attributes: attrs,
     };
@@ -114,7 +116,7 @@ fn prepare_scep_request_vsc(
 
     let cert_req = CertReq {
         info: cert_req_info,
-        algorithm: self_signed_cert.signature_algorithm.clone(),
+        algorithm: self_signed_cert.signature_algorithm().clone(),
         signature: sig,
     };
 

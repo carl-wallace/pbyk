@@ -44,7 +44,7 @@ use x509_cert::{
 };
 use yubikey::certificate::SelfSigned;
 use yubikey::{
-    Key, MgmKey, PinPolicy, TouchPolicy, Uuid, YubiKey, piv,
+    Key, MgmKeyOps, PinPolicy, TouchPolicy, Uuid, YubiKey, piv,
     piv::{AlgorithmId, SlotId},
 };
 
@@ -182,13 +182,13 @@ pub(crate) fn get_uuid_from_cert(yubikey: &mut YubiKey) -> Result<String> {
 
 /// Generates a self-signed certificate containing a public key corresponding to the given algorithm
 /// and a subject DN set to the provided value using the indicated slot on the provided YubiKey.
-pub(crate) fn generate_self_signed_cert(
+pub(crate) fn generate_self_signed_cert<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     slot: SlotId,
     algorithm: AlgorithmId,
     name: &str,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
 ) -> Result<Certificate> {
     // Generate a new key in the selected slot.
     let public_key = match piv::generate(
@@ -242,7 +242,7 @@ pub(crate) fn generate_self_signed_cert(
         error!("Failed to verify PIN in generate_self_signed_cert: {e:?}");
         return Err(Error::YubiKey(e));
     }
-    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+    if let Err(e) = yubikey.authenticate(mgmt_key) {
         error!("Failed to authenticate using management key in generate_self_signed_cert: {e:?}");
         return Err(Error::YubiKey(e));
     }
@@ -268,20 +268,20 @@ pub(crate) fn generate_self_signed_cert(
 
 /// Verifies a SignedData then decrypts an encapsulated EnvelopedData and returns the encapsulated
 /// contents from it as a buffer.
-pub(crate) async fn verify_and_decrypt(
+pub(crate) async fn verify_and_decrypt<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     slot: SlotId,
     content: &[u8],
     is_ota: bool,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
     env: &str,
 ) -> Result<Zeroizing<Vec<u8>>> {
     if let Err(e) = yubikey.verify_pin(pin) {
         error!("Failed to verify PIN in verify_and_decrypt: {e:?}");
         return Err(Error::YubiKey(e));
     }
-    if let Err(e) = yubikey.authenticate(mgmt_key.clone()) {
+    if let Err(e) = yubikey.authenticate(mgmt_key) {
         error!("Failed to authenticate using management key in verify_and_decrypt: {e:?}");
         return Err(Error::YubiKey(e));
     }
@@ -355,11 +355,11 @@ pub(crate) async fn verify_and_decrypt(
 }
 
 /// Processes payloads from the presented `xml` generating and import keys using the provided YubiKey
-pub(crate) async fn process_payloads(
+pub(crate) async fn process_payloads<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     xml: &[u8],
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
     env: &str,
     is_recover: bool,
 ) -> Result<()> {

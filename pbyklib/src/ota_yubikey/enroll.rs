@@ -9,7 +9,7 @@ use der::{Decode, Encode};
 use spki::SubjectPublicKeyInfoRef;
 use x509_cert::Certificate;
 use yubikey::certificate::yubikey_signer::{Rsa2048, YubiRsa};
-use yubikey::{MgmKey, YubiKey, piv::SlotId::CardAuthentication};
+use yubikey::{MgmKeyOps, YubiKey, piv::SlotId::CardAuthentication};
 
 use pbykcorelib::misc::network::post_body;
 use pbykcorelib::misc::utils::{get_as_string, get_signed_data};
@@ -28,16 +28,25 @@ use crate::{
 };
 
 /// Execute the phase 2 portion of the OTA protocol as part of Purebred enrollment
-async fn phase2(
+async fn phase2<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     phase2_req: &[u8],
     self_signed_cert: &Certificate,
     url: &str,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
     env: &str,
 ) -> Result<Vec<u8>> {
     info!("Executing Phase 2");
+
+    if let Err(e) = yubikey.verify_pin(pin) {
+        error!("Failed to verify PIN in prepare_csr: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
+    if let Err(e) = yubikey.authenticate(mgmt_key) {
+        error!("Failed to authenticate using management key in prepare_csr: {e:?}");
+        return Err(Error::YubiKey(e));
+    }
 
     let enc_spki = self_signed_cert
         .tbs_certificate()
@@ -199,12 +208,12 @@ async fn phase2(
 /// * `pin` - YubiKey PIN required to provision user-related slots on the given YubiKey device (may be omitted for VSC enrollments)
 /// * `mgmt_key` - YubiKey management key value (may be omitted for VSC enrollments)
 /// * `env` - identifies the environment in which enrollment is being performed, i.e., DEV, NIPR, SIPR, OM_NIPR, OM_SIPR
-pub async fn enroll(
+pub async fn enroll<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     agent_edipi: &str,
     oai: &OtaActionInputs,
     pin: &[u8],
-    mgmt_key: &MgmKey,
+    mgmt_key: &K,
     env: &str,
 ) -> Result<()> {
     info!(

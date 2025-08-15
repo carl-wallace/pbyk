@@ -13,6 +13,8 @@ extern crate cfg_if;
 use dioxus::desktop::muda::{Menu, PredefinedMenuItem, Submenu};
 
 use clap::{CommandFactory, Parser};
+#[cfg(not(target_os = "windows"))]
+use colored::ColoredString;
 #[cfg(feature = "gui")]
 use dioxus::LaunchBuilder;
 #[cfg(feature = "gui")]
@@ -28,11 +30,12 @@ use colored::Colorize;
 use dioxus_desktop::tao::window::Icon;
 
 use pbyklib::{
+    get_min_pin_size, get_pb_default,
     ota::{enroll, pre_enroll, recover, ukm, OtaActionInputs},
     utils::{
         get_yubikey, list_yubikeys, num_yubikeys, portal_status_check, reset_yubikey, scep_check,
     },
-    Error, PB_MGMT_KEY,
+    Error,
 };
 
 mod args;
@@ -61,6 +64,7 @@ use log::error;
 use log::debug;
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 use pbyklib::utils::reset_vsc::reset_vsc;
+use yubikey::{Version, YubiKey};
 
 /// Confirms provided arguments include at least one Action, Diagnostic or Utility argument
 fn sanity_check(args: &PbYkArgs) -> bool {
@@ -86,6 +90,52 @@ fn sanity_check(args: &PbYkArgs) -> bool {
         false
     } else {
         true
+    }
+}
+
+/// Return a PIN prompt appropriate for the active firmware
+#[cfg(not(target_os = "windows"))]
+fn get_pin_prompt(yubikey: &YubiKey) -> ColoredString {
+    match yubikey.version() {
+        // Initial firmware versions default to 3DES.
+        Version { major: ..=4, .. }
+        | Version {
+            major: 5,
+            minor: ..=6,
+            ..
+        } => "Enter new PIN; PINs must contain 6 to 8 ASCII characters".bold(),
+        // Firmware 5.7.0 and above default to AES-192.
+        Version {
+            major: 5,
+            minor: 7..,
+            ..
+        }
+        | Version { major: 6.., .. } => {
+            "Enter new PIN; PINs must contain 8 ASCII characters".bold()
+        }
+    }
+}
+
+/// Return a PIN prompt appropriate for the active firmware
+#[cfg(target_os = "windows")]
+fn get_pin_prompt(yubikey: &YubiKey) -> String {
+    match yubikey.version() {
+        // Initial firmware versions default to 3DES.
+        Version { major: ..=4, .. }
+        | Version {
+            major: 5,
+            minor: ..=6,
+            ..
+        } => "Enter new PIN; PINs must contain 6 to 8 ASCII characters".to_string(),
+        // Firmware 5.7.0 and above default to AES-192.
+        Version {
+            major: 5,
+            minor: 7..,
+            ..
+        }
+        | Version { major: 6.., .. } => {
+            "Enter new PIN; PINs must contain 8 ASCII characters".to_string()
+        }
     }
 }
 
@@ -437,6 +487,8 @@ async fn interactive_main() {
                         }
                     };
 
+                    let min_pin_len = get_min_pin_size(&yubikey);
+
                     println!(
                         "Starting reset of YubiKey with serial number {}. Use Ctrl+C to cancel.",
                         yubikey.serial()
@@ -446,12 +498,7 @@ async fn interactive_main() {
                     let pin = loop {
                         let pin = Zeroizing::new(
                             rpassword::prompt_password(
-                                format!(
-                                    "{}: ",
-                                    "Enter new PIN; PINs must contain 6 to 8 ASCII characters"
-                                        .bold()
-                                )
-                                .to_string(),
+                                format!("{}: ", get_pin_prompt(&yubikey)).to_string(),
                             )
                             .unwrap(), // allow panic for IO errors here
                         );
@@ -463,8 +510,11 @@ async fn interactive_main() {
                         );
                         if pin != pin2 {
                             println!("{}: PINs do not match", "ERROR".bold());
-                        } else if pin.len() < 6 {
-                            println!("{}: PIN is not at least 6 characters long", "ERROR".bold());
+                        } else if pin.len() < min_pin_len as usize {
+                            println!(
+                                "{}: PIN is not at least {min_pin_len} characters long",
+                                "ERROR".bold()
+                            );
                         } else if pin.len() > 8 {
                             println!("{}: PIN is longer than 8 characters long", "ERROR".bold());
                         } else if !pin.is_ascii() {
@@ -499,7 +549,8 @@ async fn interactive_main() {
                     // let pin = "123456".to_string();
                     // let puk = "12345678".to_string();
 
-                    if let Err(e) = reset_yubikey(&mut yubikey, &pin, &puk, &PB_MGMT_KEY) {
+                    let mgmt_key = get_pb_default(&yubikey);
+                    if let Err(e) = reset_yubikey(&mut yubikey, &pin, &puk, &mgmt_key) {
                         println!("{}: reset failed with: {e}", "ERROR".bold());
                     }
                     return;
@@ -655,7 +706,8 @@ async fn interactive_main() {
     // ----------------------------------------------------------------------------------
     #[allow(unused_assignments)]
     let mut require_pin = false;
-    let mut cm = match &args.serial {
+
+    let (mut cm, mgmt_key) = match &args.serial {
         Some(serial) => match serial.parse::<u32>() {
             Ok(s) => {
                 let mut yubikey = match get_yubikey(Some(Serial(s))) {
@@ -665,13 +717,13 @@ async fn interactive_main() {
                         return;
                     }
                 };
-
-                if yubikey.authenticate(PB_MGMT_KEY.clone()).is_err() {
+                let mgmt_key = get_pb_default(&yubikey);
+                if yubikey.authenticate(&mgmt_key).is_err() {
                     println!("{}: this YubiKey is not using the expected management key. Please reset the device then try again.", "ERROR".bold());
                     return;
                 }
                 require_pin = true;
-                CryptoModule::YubiKey(yubikey)
+                (CryptoModule::YubiKey(yubikey), Some(mgmt_key))
             }
             Err(err) => {
                 #[cfg(all(target_os = "windows", feature = "vsc"))]
@@ -693,7 +745,7 @@ async fn interactive_main() {
                             return;
                         }
                     };
-                    CryptoModule::SmartCard(sc)
+                    (CryptoModule::SmartCard(sc), None)
                 }
                 #[cfg(not(all(target_os = "windows", feature = "vsc")))]
                 {
@@ -740,8 +792,6 @@ async fn interactive_main() {
     // comment out above loop and uncomment below to run in debugger
     // let pin = "123456";
 
-    let mgmt_key = PB_MGMT_KEY.clone();
-
     if let Some(pre_enroll_otp) = args.pre_enroll_otp {
         match pre_enroll(
             &mut cm,
@@ -749,7 +799,7 @@ async fn interactive_main() {
             &pre_enroll_otp,
             &pb_base_url,
             pin,
-            Some(&mgmt_key),
+            mgmt_key,
         )
         .await
         {
@@ -784,7 +834,7 @@ async fn interactive_main() {
             &args.agent_edipi.unwrap().to_string(), // allow unwrap where clap enforces presence
             &oai,
             pin,
-            Some(&mgmt_key),
+            mgmt_key,
             &env,
         )
         .await
@@ -815,7 +865,7 @@ async fn interactive_main() {
             &pb_base_url,
             &app,
         );
-        match ukm(&mut cm, &oai, pin, Some(&mgmt_key), &env).await {
+        match ukm(&mut cm, &oai, pin, mgmt_key, &env).await {
             Ok(_) => {
                 println!("UKM completed successfully");
             }
@@ -842,7 +892,7 @@ async fn interactive_main() {
             &pb_base_url,
             &app,
         );
-        match recover(&mut cm, &oai, pin, Some(&mgmt_key), &env).await {
+        match recover(&mut cm, &oai, pin, mgmt_key, &env).await {
             Ok(_) => {
                 println!("Recover completed successfully");
             }
