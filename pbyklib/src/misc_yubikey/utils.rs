@@ -13,6 +13,8 @@ use rand_core::{OsRng, RngCore, TryRngCore};
 use cipher::{BlockModeDecrypt, KeyIvInit};
 use sha1::{Digest, Sha1};
 
+use crate::ota_yubikey::enroll::get_rsa_key_size;
+use crate::utils::get_cert_from_slot;
 use crate::{
     Error, Result,
     misc::rsa_utils::decrypt_inner,
@@ -256,11 +258,32 @@ pub(crate) fn generate_self_signed_cert<K: MgmKeyOps>(
         Ok(())
     };
 
-    match yubikey::certificate::Certificate::generate_self_signed::<
-        _,
-        yubikey_signer::YubiRsa<yubikey_signer::Rsa2048>,
-    >(yubikey, slot, serial, validity, name, public_key, builder)
-    {
+    let result = match algorithm {
+        AlgorithmId::Rsa2048 => {
+            yubikey::certificate::Certificate::generate_self_signed::<
+                _,
+                yubikey_signer::YubiRsa<yubikey_signer::Rsa2048>,
+            >(yubikey, slot, serial, validity, name, public_key, builder)
+        }
+        AlgorithmId::Rsa3072 => {
+            yubikey::certificate::Certificate::generate_self_signed::<
+                _,
+                yubikey_signer::YubiRsa<yubikey_signer::Rsa3072>,
+            >(yubikey, slot, serial, validity, name, public_key, builder)
+        }
+        AlgorithmId::Rsa4096 => {
+            yubikey::certificate::Certificate::generate_self_signed::<
+                _,
+                yubikey_signer::YubiRsa<yubikey_signer::Rsa4096>,
+            >(yubikey, slot, serial, validity, name, public_key, builder)
+        }
+        _ => {
+            error!("Unsupported algorithm: {algorithm:?}");
+            return Err(Error::Unrecognized);
+        }
+    };
+
+    match result {
         Ok(cert) => Ok(cert.cert),
         Err(e) => Err(Error::YubiKey(e)),
     }
@@ -276,6 +299,7 @@ pub(crate) async fn verify_and_decrypt<K: MgmKeyOps>(
     pin: &[u8],
     mgmt_key: &K,
     env: &str,
+    alg: AlgorithmId,
 ) -> Result<Zeroizing<Vec<u8>>> {
     if let Err(e) = yubikey.verify_pin(pin) {
         error!("Failed to verify PIN in verify_and_decrypt: {e:?}");
@@ -321,12 +345,7 @@ pub(crate) async fn verify_and_decrypt<K: MgmKeyOps>(
     for ri in ed.recip_infos.0.iter() {
         let dec_key = match ri {
             RecipientInfo::Ktri(ktri) => {
-                let dk = match piv::decrypt_data(
-                    yubikey,
-                    ktri.enc_key.as_bytes(),
-                    AlgorithmId::Rsa2048,
-                    slot,
-                ) {
+                let dk = match piv::decrypt_data(yubikey, ktri.enc_key.as_bytes(), alg, slot) {
                     Ok(dk) => dk,
                     Err(_e) => continue,
                 };
@@ -479,4 +498,26 @@ pub(crate) async fn process_payloads<K: MgmKeyOps>(
         }
     }
     Ok(())
+}
+
+pub(crate) fn get_card_auth_alg(yubikey: &mut YubiKey) -> Result<AlgorithmId> {
+    match get_cert_from_slot(yubikey, SlotId::CardAuthentication) {
+        Ok(c) => {
+            let enc_spki = c.tbs_certificate().subject_public_key_info().to_der()?;
+            let alg_id = match get_rsa_key_size(&enc_spki)? {
+                2048 => AlgorithmId::Rsa2048,
+                3072 => AlgorithmId::Rsa3072,
+                4096 => AlgorithmId::Rsa4096,
+                _ => {
+                    error!("Failed to read RSA key size from CardAuthentication slot");
+                    return Err(Error::Unrecognized);
+                }
+            };
+            Ok(alg_id)
+        }
+        Err(e) => {
+            error!("Failed to get certificate from CardAuthentication slot: {e:?}");
+            Err(Error::NotFound)
+        }
+    }
 }

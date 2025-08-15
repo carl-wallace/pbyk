@@ -301,12 +301,12 @@ pub(crate) async fn generate_self_signed_cert_vsc(
     };
     let der_cert = fake_cert.to_der()?;
     let b64_cert = Base64::encode_string(&der_cert);
-    debug!("Freshly generated fake certificate in generate_self_signed_cert_vsc: {b64_fake_cert_as_p7}");
+    debug!(
+        "Freshly generated fake certificate in generate_self_signed_cert_vsc: {b64_fake_cert_as_p7}"
+    );
     if let Err(e) = CertificateEnrollmentManager::UserCertificateEnrollmentManager()?
-        .InstallCertificateAsync(
-            &HSTRING::from(b64_cert),
-            InstallOptions::DeleteExpired,
-        )?.get()
+        .InstallCertificateAsync(&HSTRING::from(b64_cert), InstallOptions::DeleteExpired)?
+        .get()
     {
         error!("Failed to install fake certificate in generate_self_signed_cert_vsc: {e:?}");
         return Err(Error::Unrecognized);

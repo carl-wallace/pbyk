@@ -1,18 +1,21 @@
 //! Executes OTA protocol in support of Purebred enrollment of a YubiKey device
 
 use std::io::Cursor;
+use yubikey::certificate::yubikey_signer::RsaLength;
 
 use log::{error, info};
 use plist::Value;
 
 use der::{Decode, Encode};
-use spki::SubjectPublicKeyInfoRef;
-use x509_cert::Certificate;
-use yubikey::certificate::yubikey_signer::{Rsa2048, YubiRsa};
-use yubikey::{MgmKeyOps, YubiKey, piv::SlotId::CardAuthentication};
-
 use pbykcorelib::misc::network::post_body;
 use pbykcorelib::misc::utils::{get_as_string, get_signed_data};
+use rsa::RsaPublicKey;
+use rsa::traits::PublicKeyParts;
+use spki::{DecodePublicKey, SubjectPublicKeyInfoRef};
+use x509_cert::Certificate;
+use yubikey::certificate::yubikey_signer::{Rsa2048, Rsa3072, Rsa4096, YubiRsa};
+use yubikey::piv::AlgorithmId;
+use yubikey::{MgmKeyOps, YubiKey, piv::SlotId::CardAuthentication};
 
 use crate::misc_yubikey::yk_signer::YkSigner;
 use crate::ota::phase3;
@@ -26,6 +29,25 @@ use crate::{
     ota::{OtaActionInputs, Phase2Request, Phase3Request, phase1},
     utils::get_cert_from_slot,
 };
+
+fn sign_phase2<'y, RL: RsaLength>(
+    yubikey: &mut YubiKey,
+    phase2_req: &[u8],
+    self_signed_cert: &Certificate,
+    spki_ref: SubjectPublicKeyInfoRef<'y>,
+) -> Result<Vec<u8>> {
+    let signer: yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<RL>> =
+        yubikey::certificate::yubikey_signer::Signer::new(yubikey, CardAuthentication, spki_ref)
+            .map_err(|_| Error::Unrecognized)?;
+
+    match get_signed_data(&signer, self_signed_cert, phase2_req, None, true) {
+        Ok(d) => Ok(d),
+        Err(e) => {
+            error!("Failed to generate SignedData for Phase 2 request: {e:?}");
+            return Err(Error::Pbykcorelib(e));
+        }
+    }
+}
 
 /// Execute the phase 2 portion of the OTA protocol as part of Purebred enrollment
 async fn phase2<K: MgmKeyOps>(
@@ -54,18 +76,33 @@ async fn phase2<K: MgmKeyOps>(
         .to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
 
-    let signer: yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>> =
-        yubikey::certificate::yubikey_signer::Signer::new(yubikey, CardAuthentication, spki_ref)
-            .map_err(|_| Error::Unrecognized)?;
+    let rsa_key = match RsaPublicKey::from_public_key_der(&enc_spki) {
+        Ok(rsa_key) => rsa_key,
+        Err(e) => {
+            error!("Failed to parse public key as an RsaPublicKey: {e}");
+            return Err(Error::BadInput);
+        }
+    };
 
-    let signed_data_pkcs7_der =
-        match get_signed_data(&signer, self_signed_cert, phase2_req, None, true) {
-            Ok(d) => d,
-            Err(e) => {
-                error!("Failed to generate SignedData for Phase 2 request: {e:?}");
-                return Err(Error::Pbykcorelib(e));
-            }
-        };
+    let key_size = rsa_key.n_bits_precision();
+    let (signed_data_pkcs7_der, alg) = match key_size {
+        2048 => (
+            sign_phase2::<Rsa2048>(yubikey, phase2_req, self_signed_cert, spki_ref)?,
+            AlgorithmId::Rsa2048,
+        ),
+        3072 => (
+            sign_phase2::<Rsa3072>(yubikey, phase2_req, self_signed_cert, spki_ref)?,
+            AlgorithmId::Rsa3072,
+        ),
+        4096 => (
+            sign_phase2::<Rsa4096>(yubikey, phase2_req, self_signed_cert, spki_ref)?,
+            AlgorithmId::Rsa4096,
+        ),
+        _ => {
+            error!("Unsupported RSA key size: {key_size}");
+            return Err(Error::BadInput);
+        }
+    };
 
     let p2resp = post_body(
         url,
@@ -82,6 +119,7 @@ async fn phase2<K: MgmKeyOps>(
         pin,
         mgmt_key,
         env,
+        alg,
     )
     .await?;
 
@@ -284,7 +322,38 @@ pub async fn enroll<K: MgmKeyOps>(
         .to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
 
-    let signer: YkSigner<'_, YubiRsa<Rsa2048>> =
+    let key_size = get_rsa_key_size(&enc_spki)?;
+    match key_size {
+        2048 => sign_phase3::<Rsa2048>(yubikey, &p3_xml, &new_cert, spki_ref, &p1_resp_url).await,
+        3072 => sign_phase3::<Rsa3072>(yubikey, &p3_xml, &new_cert, spki_ref, &p1_resp_url).await,
+        4096 => sign_phase3::<Rsa4096>(yubikey, &p3_xml, &new_cert, spki_ref, &p1_resp_url).await,
+        _ => {
+            error!("Unsupported RSA key size: {key_size}");
+            return Err(Error::BadInput);
+        }
+    }
+}
+
+pub fn get_rsa_key_size(enc_spki: &[u8]) -> Result<u32> {
+    let rsa_key = match RsaPublicKey::from_public_key_der(enc_spki) {
+        Ok(rsa_key) => rsa_key,
+        Err(e) => {
+            error!("Failed to parse public key as an RsaPublicKey: {e}");
+            return Err(Error::BadInput);
+        }
+    };
+
+    Ok(rsa_key.n_bits_precision())
+}
+
+async fn sign_phase3<'y, RL: RsaLength>(
+    yubikey: &mut YubiKey,
+    p3_xml: &[u8],
+    new_cert: &Certificate,
+    spki_ref: SubjectPublicKeyInfoRef<'y>,
+    p1_resp_url: &str,
+) -> Result<()> {
+    let signer: YkSigner<'_, YubiRsa<RL>> =
         YkSigner::new(yubikey, CardAuthentication, spki_ref).map_err(|_| Error::Unrecognized)?;
 
     phase3(&signer, &p3_xml, &new_cert, &p1_resp_url).await

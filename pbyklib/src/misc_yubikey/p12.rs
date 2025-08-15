@@ -4,7 +4,7 @@ use log::{error, info};
 use rsa::pkcs1::RsaPrivateKey;
 
 use const_oid::db::rfc5912::{ID_CE_KEY_USAGE, ID_CE_SUBJECT_ALT_NAME};
-use der::Decode;
+use der::{Decode, Encode};
 use x509_cert::{
     Certificate,
     ext::pkix::{KeyUsage, KeyUsages, SubjectAltName, name::GeneralName},
@@ -17,6 +17,7 @@ use yubikey::{
 
 use crate::Error::BadInput;
 use crate::misc::p12::process_p12;
+use crate::ota_yubikey::enroll::get_rsa_key_size;
 use crate::{Error, Result};
 
 //------------------------------------------------------------------------------------
@@ -168,10 +169,26 @@ pub(crate) async fn import_p12(
             return Err(Error::ParseError);
         }
     };
+
+    let enc_spki = cert
+        .cert
+        .tbs_certificate()
+        .subject_public_key_info()
+        .to_der()?;
+    let alg_id = match get_rsa_key_size(&enc_spki)? {
+        2048 => AlgorithmId::Rsa2048,
+        3072 => AlgorithmId::Rsa3072,
+        4096 => AlgorithmId::Rsa4096,
+        _ => {
+            error!("Failed to read RSA key size from CardAuthentication slot");
+            return Err(Error::Unrecognized);
+        }
+    };
+
     if let Err(e) = import_rsa_key(
         yubikey,
         slot,
-        AlgorithmId::Rsa2048,
+        alg_id,
         rkd,
         TouchPolicy::Default,
         PinPolicy::Default,

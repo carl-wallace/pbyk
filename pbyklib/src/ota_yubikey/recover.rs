@@ -1,14 +1,14 @@
 //! Interacts with Purebred portal to recover escrowed keys to a YubiKey device
 
-use log::{error, info};
-use yubikey::{MgmKeyOps, YubiKey, piv::SlotId};
-
+use crate::misc_yubikey::utils::get_card_auth_alg;
 use crate::{
     Result,
     misc_yubikey::utils::{process_payloads, verify_and_decrypt},
     ota::OtaActionInputs,
 };
+use log::{error, info};
 use pbykcorelib::misc::network::get_profile;
+use yubikey::{MgmKeyOps, YubiKey, piv::SlotId};
 
 /// Recovers keys for storage on the indicated YubiKey device using the URL obtained from `recover_inputs`
 ///
@@ -30,6 +30,7 @@ pub async fn recover<K: MgmKeyOps>(
         recover_inputs.serial
     );
 
+    let alg = get_card_auth_alg(yubikey)?;
     let profile = get_profile(&recover_inputs.to_recover_url()).await?;
     let dec = verify_and_decrypt(
         yubikey,
@@ -39,6 +40,7 @@ pub async fn recover<K: MgmKeyOps>(
         pin,
         mgmt_key,
         env,
+        alg,
     )
     .await?;
     match process_payloads(yubikey, &dec, pin, mgmt_key, env, true).await {

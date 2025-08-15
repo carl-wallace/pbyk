@@ -417,6 +417,17 @@ pub fn get_email_addresses(dict: &Dictionary) -> Vec<String> {
     rv
 }
 
+/// Returns an RSA key size. Defaults to 2048.
+pub fn get_key_size(dict: &Dictionary) -> i32 {
+    let mut retval = 2048;
+    if let Some(san) = dict.get("Keysize") {
+        if let Some(size) = san.as_signed_integer() {
+            retval = size as i32;
+        }
+    }
+    retval
+}
+
 /// Returns a Name prepared using elements in the `Subject` entry in `dict`
 pub fn get_subject_name(dict: &Dictionary) -> Result<Name> {
     let mut dn = vec![];
