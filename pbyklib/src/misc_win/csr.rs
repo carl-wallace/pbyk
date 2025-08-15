@@ -3,31 +3,22 @@
 #![cfg(all(target_os = "windows", feature = "vsc"))]
 
 use core::ffi::c_void;
-use der::ErrorKind;
-use spki::SubjectPublicKeyInfoRef;
-use std::ptr::NonNull;
-use std::vec;
-use std::{ffi::CString, ptr::null, time::Duration};
-use x509_cert::TbsCertificate;
-use x509_cert::builder::profile::BuilderProfile;
-use x509_cert::ext::AsExtension;
-use x509_cert::ext::Extension;
-use x509_cert::ext::pkix::AuthorityKeyIdentifier;
-use x509_cert::ext::pkix::KeyUsage;
-use x509_cert::ext::pkix::KeyUsages;
-use x509_cert::ext::pkix::SubjectAltName;
-use x509_cert::ext::pkix::SubjectKeyIdentifier;
-use x509_cert::ext::pkix::name::GeneralName;
-use x509_cert::ext::pkix::name::GeneralNames;
-use x509_cert::ext::pkix::name::HardwareModuleName;
-use x509_cert::name::Name;
+use std::{
+    ffi::CString,
+    ptr::{NonNull, null},
+    time::Duration,
+    vec,
+};
 
 use log::error;
-use windows::Win32::Security::Cryptography::{
-    CERT_CONTEXT, CERT_KEY_PROV_INFO_PROP_ID, CERT_STORE_OPEN_EXISTING_FLAG,
-    CERT_STORE_PROV_SYSTEM_A, CRYPT_KEY_PROV_INFO, CertCloseStore, CertEnumCertificatesInStore,
-    CertGetCertificateContextProperty, CertOpenStore, CryptMemAlloc, CryptMemFree,
-    PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
+use windows::{
+    Win32::Security::Cryptography::{
+        CERT_CONTEXT, CERT_KEY_PROV_INFO_PROP_ID, CERT_STORE_OPEN_EXISTING_FLAG,
+        CERT_STORE_PROV_SYSTEM_A, CRYPT_KEY_PROV_INFO, CertCloseStore, CertEnumCertificatesInStore,
+        CertGetCertificateContextProperty, CertOpenStore, CryptMemAlloc, CryptMemFree,
+        PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
+    },
+    core::HSTRING,
 };
 
 use rsa::{pkcs1::DecodeRsaPrivateKey, pkcs1v15::SigningKey};
@@ -35,10 +26,19 @@ use sha2::Sha256;
 
 use base64ct::{Base64, Encoding};
 use cms::{
-    builder::SignedDataBuilder, cert::CertificateChoices, signed_data::EncapsulatedContentInfo,
+    builder::SignedDataBuilder,
+    cert::CertificateChoices,
+    content_info::ContentInfo,
+    signed_data::{EncapsulatedContentInfo, SignedData},
 };
-use const_oid::db::rfc5912::{ID_CCT_PKI_DATA, ID_CE_SUBJECT_KEY_IDENTIFIER};
-use der::{Choice, Decode, Encode, Sequence, asn1::OctetString};
+use const_oid::db::{
+    rfc5911::ID_SIGNED_DATA,
+    rfc5912::{ID_CCT_PKI_DATA, ID_CE_SUBJECT_KEY_IDENTIFIER},
+};
+use der::{
+    Choice, Decode, Encode, Sequence,
+    asn1::{Int, OctetString},
+};
 use x509_cert::{
     Certificate,
     builder::{Builder, CertificateBuilder},
@@ -47,116 +47,13 @@ use x509_cert::{
     time::Validity,
 };
 
-use crate::misc_win::csr::TaggedRequest::Tcr;
-use crate::misc_win::vsc_signer::CertContext;
-use crate::{CERT_SYSTEM_STORE_CURRENT_USER, Error, Result};
 use certval::{ExtensionProcessing, PDVCertificate, PDVExtension};
-use cms::content_info::ContentInfo;
-use cms::signed_data::SignedData;
-use const_oid::db::rfc5911::ID_SIGNED_DATA;
-use der::asn1::Int;
 use pbykcorelib::misc::utils::get_encap_content;
-use windows::core::HSTRING;
 
-pub struct PurebredDevId {
-    /// issuer   Name,
-    /// represents the name signing the certificate
-    pub issuer: Name,
-
-    subject: Name,
-
-    subject_alt_name: Option<GeneralNames>,
-}
-
-impl PurebredDevId {
-    /// Create a new DevID
-    ///
-    /// Spec: 802.1AR Section 8.10.4 subjectAltName
-    /// Also documented in
-    /// <https://trustedcomputinggroup.org/wp-content/uploads/TPM-2p0-Keys-for-Device-Identity-and-Attestation_v1_r12_pub10082021.pdf#page=58>
-    pub fn new(issuer: Name, subject: Name, alt_names: Option<GeneralNames>) -> Result<Self> {
-        // If alt_name is present it is required to include `HardwareModuleName`
-        // HardwareModuleName is der-encoded in an OtherName field of GeneralNames.
-        if let Some(ref alt_names) = alt_names {
-            // TODO: do we need to validate the SAN more than that? check for duplicates?
-            let mut found = false;
-            for gn in alt_names {
-                match gn {
-                    GeneralName::OtherName(on)
-                        if HardwareModuleName::from_other_name(on)?.is_some() =>
-                    {
-                        found = true;
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-
-            if !found {
-                return Err(der::Error::from(ErrorKind::Failed).into());
-            }
-        }
-
-        Ok(Self {
-            issuer,
-            subject,
-            subject_alt_name: alt_names,
-        })
-    }
-}
-impl BuilderProfile for PurebredDevId {
-    fn get_issuer(&self, _subject: &Name) -> Name {
-        self.issuer.clone()
-    }
-
-    fn get_subject(&self) -> Name {
-        self.subject.clone()
-    }
-
-    fn build_extensions(
-        &self,
-        spk: SubjectPublicKeyInfoRef<'_>,
-        issuer_spk: SubjectPublicKeyInfoRef<'_>,
-        tbs: &TbsCertificate,
-    ) -> std::result::Result<Vec<Extension>, x509_cert::builder::Error> {
-        let mut extensions: vec::Vec<Extension> = vec::Vec::new();
-
-        // # Table 8-2 - DevID certificate and intermediate certificate extensions
-
-        let ski = SubjectKeyIdentifier::try_from(spk)?;
-
-        // ## authorityKeyIdentifier MUST
-        // Section 8.10.1
-        extensions.push(
-            AuthorityKeyIdentifier::try_from(issuer_spk.clone())?
-                .to_extension(&tbs.subject(), &extensions)?,
-        );
-
-        // ## subjectKeyIdentifier NOT RECOMMENDED
-
-        // ## keyUsage SHOULD
-        // Section 8.10.3
-        //
-        // NOTE(baloo):
-        //   IEEE spec allows for keyEncipherment but that would be used for TLS1.2 RSA and RSA_PSK
-        //   (IE: non-DH) session scheme.
-        //   In the mean time, when used with TPMs, the [TCG] will only allow for `digitalSignature`:
-        //   Use of digitalSignature (only) is RECOMMENDED. Refer to section 3.8.
-        //
-        // [TCG]: https://trustedcomputinggroup.org/wp-content/uploads/TPM-2p0-Keys-for-Device-Identity-and-Attestation_v1_r12_pub10082021.pdf#page=57
-        let key_usage = KeyUsages::DigitalSignature.into();
-        extensions.push(KeyUsage(key_usage).to_extension(&tbs.subject(), &extensions)?);
-
-        // ## subjectAltName SHOULD
-        // 8.10.4
-        if let Some(san) = &self.subject_alt_name {
-            extensions.push(SubjectAltName(san.clone()).to_extension(&tbs.subject(), &extensions)?);
-        }
-
-        extensions.push(ski.to_extension(&tbs.subject(), &extensions)?);
-        Ok(extensions)
-    }
-}
+use crate::{
+    CERT_SYSTEM_STORE_CURRENT_USER, Error, Result,
+    misc_win::{csr::TaggedRequest::Tcr, profiles::PurebredDevCert, vsc_signer::CertContext},
+};
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -203,22 +100,14 @@ fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
 ///   allow use a private key before a CA-issued certificate has been issued
 /// * `signer` - [CertContext] object that (presumably) wraps a `CERT_CONTEXT` that references the `Certificate` in `cert`
 pub(crate) fn resign_as_self(cert: &Certificate, signer: &CertContext) -> Result<Certificate> {
-    // let profile = Profile::Leaf {
-    //     issuer: cert.tbs_certificate().subject().clone(),
-    //     enable_key_agreement: false,
-    //     enable_key_encipherment: true,
-    //     include_subject_key_identifier: true,
-    // };
-
-    let profile = PurebredDevId::new(
+    let profile = PurebredDevCert::new(
         cert.tbs_certificate().subject().clone(),
         cert.tbs_certificate().subject().clone(),
-        None,
     )?;
     let builder = CertificateBuilder::new(
         profile,
         cert.tbs_certificate().serial_number().clone(),
-        cert.tbs_certificate().validity().clone(),
+        *cert.tbs_certificate().validity(),
         cert.tbs_certificate().subject_public_key_info().clone(),
     )?;
 
@@ -336,17 +225,10 @@ async fn consume_parsed_csr(csr: &CertReq) -> Result<(String, Certificate)> {
     let issuer_cert = Certificate::from_der(issuer_cert_bytes)?;
 
     // generate fake certificate with a ~10 year validity period
-    let profile = PurebredDevId::new(
+    let profile = PurebredDevCert::new(
         issuer_cert.tbs_certificate().issuer().clone(),
         csr.info.subject.clone(),
-        None,
     )?;
-    // let profile = Profile::Leaf {
-    //     issuer: issuer_cert.tbs_certificate().issuer().clone(),
-    //     enable_key_agreement: false,
-    //     enable_key_encipherment: true,
-    //     include_subject_key_identifier: true,
-    // };
 
     let builder = CertificateBuilder::new(
         profile,
@@ -462,7 +344,7 @@ pub(crate) fn get_credential_list(target_cert: Option<PDVCertificate>) -> Result
             };
             prev_cert_context = CertEnumCertificatesInStore(cert_store, Some(prev_cert_context));
         }
-        if let Err(e) = CertCloseStore(cert_store, 0) {
+        if let Err(e) = CertCloseStore(Some(cert_store), 0) {
             error!("CertCloseStore failed with {e:?}. Ignoring and continuing...");
         }
     }

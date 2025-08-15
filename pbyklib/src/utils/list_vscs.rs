@@ -1,13 +1,39 @@
 #![cfg(all(target_os = "windows", feature = "vsc"))]
 
-use log::{debug, error};
-use windows::core::HSTRING;
-use x509_cert::certificate::Rfc5280;
+use core::ffi::c_void;
+use std::{
+    ffi::CString,
+    ptr::{NonNull, null},
+};
 
-use crate::misc_win::vsc_state::{get_vsc_id, get_vsc_id_and_uuid};
-use crate::{CERT_SYSTEM_STORE_CURRENT_USER, Error, Result};
-use windows::Devices::Enumeration::DeviceInformation;
-use windows::Devices::SmartCards::{SmartCard, SmartCardReader, SmartCardReaderKind};
+use log::{debug, error};
+use windows::{
+    Devices::{
+        Enumeration::DeviceInformation,
+        SmartCards::{SmartCard, SmartCardReader, SmartCardReaderKind},
+    },
+    Win32::Security::Cryptography::{
+        CERT_STORE_OPEN_EXISTING_FLAG, CERT_STORE_PROV_SYSTEM_A, CertCloseStore,
+        CertEnumCertificatesInStore, CertOpenStore, PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
+    },
+    core::HSTRING,
+};
+
+use sha1::{Digest, Sha1};
+
+use der::Encode;
+use x509_cert::certificate::{CertificateInner, Rfc5280};
+
+use certval::{buffer_to_hex, compare_names};
+
+use crate::{
+    CERT_SYSTEM_STORE_CURRENT_USER, Error, Result,
+    misc_win::{
+        csr::get_key_provider_info,
+        vsc_signer::CertContext,
+        vsc_state::{get_vsc_id, get_vsc_id_and_uuid},
+    },
+};
 
 // #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 // use windows::{
@@ -17,31 +43,17 @@ use windows::Devices::SmartCards::{SmartCard, SmartCardReader, SmartCardReaderKi
 //     Security::Cryptography::CryptographicBuffer,
 // };
 
-use core::ffi::c_void;
-use std::ptr::NonNull;
-use std::{ffi::CString, ptr::null};
-
-use windows::Win32::Security::Cryptography::{
-    CERT_STORE_OPEN_EXISTING_FLAG, CERT_STORE_PROV_SYSTEM_A, CertCloseStore,
-    CertEnumCertificatesInStore, CertOpenStore, PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
-};
-
-use crate::misc_win::vsc_signer::CertContext;
-use certval::{buffer_to_hex, compare_names};
-use der::Encode;
-use sha1::{Digest, Sha1};
-use x509_cert::certificate::CertificateInner;
-
-use crate::misc_win::csr::get_key_provider_info;
-
+/// Calculates the VSC ID for the given hardware_id.
 pub fn get_vsc_id_from_serial(hardware_id: &str) -> Result<String> {
     get_vsc_id(&HSTRING::from(hardware_id))
 }
 
+/// Calculates the VSC ID for the given hardware_id and gets the associated UUID.
 pub fn get_vsc_id_and_uuid_from_serial(hardware_id: &str) -> Result<(String, String)> {
     get_vsc_id_and_uuid(&HSTRING::from(hardware_id))
 }
 
+/// Checks self-issued status of Certificates that conform to Rfc5280 profile.
 fn is_self_issued_5280(cert: &CertificateInner<Rfc5280>) -> bool {
     compare_names(
         cert.tbs_certificate().issuer(),
@@ -267,7 +279,7 @@ pub fn get_device_cred(cn: &str, allow_self_signed: bool) -> Result<CertContext>
             }
             cur_cert_context = CertEnumCertificatesInStore(cert_store, Some(cur_cert_context));
         }
-        if let Err(e) = CertCloseStore(cert_store, 0) {
+        if let Err(e) = CertCloseStore(Some(cert_store), 0) {
             error!("CertCloseStore failed with {e:?}. Ignoring and continuing...");
         }
     }

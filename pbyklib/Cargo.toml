@@ -56,7 +56,7 @@ pb_pki = {git="https://github.com/carl-wallace/pb_pki.git", branch = "updates"}
 log4rs = "1.3.0"
 
 [target.'cfg(windows)'.dependencies]
-windows = {version = "0.58.0", features = [
+windows = {version = "0.61.3", features = [
     "Devices_Enumeration", "Devices_SmartCards", "Foundation_Collections", 
     "Security_Cryptography", "Security_Cryptography_Certificates", "Security_Cryptography_Core", "Security_ExchangeActiveSyncProvisioning",
     "Storage_Streams", "System_Profile",
