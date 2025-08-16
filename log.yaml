@@ -36,7 +36,7 @@ loggers:
   certval:
     level: error
   yubikey:
-    level: info
+    level: debug
   pbyklib:
     level: debug
   pbyk:
