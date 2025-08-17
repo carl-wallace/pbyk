@@ -15,6 +15,7 @@ use crate::{
         utils::{generate_self_signed_cert, get_attestation_p7, verify_and_decrypt},
         yk_signer::YkSigner,
     },
+    supports_larger_rsa_keys,
 };
 use cms::{cert::CertificateChoices, content_info::ContentInfo, signed_data::SignedData};
 use der::{
@@ -58,12 +59,11 @@ fn sign_request(
         2048 => sign_request_rsa::<Rsa2048>(yubikey, slot_id, data, spki_ref),
         3072 => sign_request_rsa::<Rsa3072>(yubikey, slot_id, data, spki_ref),
         4096 => sign_request_rsa::<Rsa4096>(yubikey, slot_id, data, spki_ref),
-        _ => {
-            return Err(Error::BadInput);
-        }
+        _ => Err(Error::BadInput),
     }
 }
 
+/// Signs request using a template to determine signer type, i.e., 2048, 3072 or 4096.
 fn sign_request_rsa<'y, RL: RsaLength>(
     yubikey: &mut YubiKey,
     slot_id: SlotId,
@@ -173,7 +173,11 @@ pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
     let (challenge, url) = get_challenge_and_url(scep_instructions)?;
     let email_addresses = get_email_addresses(scep_instructions);
     let subject_name = get_subject_name(scep_instructions)?;
-    let key_size = get_key_size(scep_instructions);
+    let key_size = if supports_larger_rsa_keys(yubikey) {
+        get_key_size(scep_instructions)
+    } else {
+        2048
+    };
     let alg = match key_size {
         2048 => AlgorithmId::Rsa2048,
         3072 => AlgorithmId::Rsa3072,

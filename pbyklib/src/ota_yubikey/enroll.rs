@@ -30,6 +30,7 @@ use crate::{
     utils::get_cert_from_slot,
 };
 
+/// Signs Phase 2 request using a template to determine signer type, i.e., 2048, 3072 or 4096.
 fn sign_phase2<'y, RL: RsaLength>(
     yubikey: &mut YubiKey,
     phase2_req: &[u8],
@@ -44,7 +45,7 @@ fn sign_phase2<'y, RL: RsaLength>(
         Ok(d) => Ok(d),
         Err(e) => {
             error!("Failed to generate SignedData for Phase 2 request: {e:?}");
-            return Err(Error::Pbykcorelib(e));
+            Err(Error::Pbykcorelib(e))
         }
     }
 }
@@ -329,11 +330,12 @@ pub async fn enroll<K: MgmKeyOps>(
         4096 => sign_phase3::<Rsa4096>(yubikey, &p3_xml, &new_cert, spki_ref, &p1_resp_url).await,
         _ => {
             error!("Unsupported RSA key size: {key_size}");
-            return Err(Error::BadInput);
+            Err(Error::BadInput)
         }
     }
 }
 
+/// Returns the RSA key size for the given encoded SubjectPublicKeyInfo.
 pub fn get_rsa_key_size(enc_spki: &[u8]) -> Result<u32> {
     let rsa_key = match RsaPublicKey::from_public_key_der(enc_spki) {
         Ok(rsa_key) => rsa_key,
@@ -346,6 +348,20 @@ pub fn get_rsa_key_size(enc_spki: &[u8]) -> Result<u32> {
     Ok(rsa_key.n_bits_precision())
 }
 
+/// Returns an AlgorithmId consistent with the RSA key size for the given encoded SubjectPublicKeyInfo.
+pub fn get_rsa_algorithm(enc_spki: &[u8]) -> Result<AlgorithmId> {
+    match get_rsa_key_size(enc_spki)? {
+        2048 => Ok(AlgorithmId::Rsa2048),
+        3072 => Ok(AlgorithmId::Rsa3072),
+        4096 => Ok(AlgorithmId::Rsa4096),
+        _ => {
+            error!("Failed to read RSA key size in get_rsa_algorithm");
+            Err(Error::Unrecognized)
+        }
+    }
+}
+
+/// Signs Phase 3 request using a template to determine signer type, i.e., 2048, 3072 or 4096.
 async fn sign_phase3<'y, RL: RsaLength>(
     yubikey: &mut YubiKey,
     p3_xml: &[u8],
@@ -356,5 +372,5 @@ async fn sign_phase3<'y, RL: RsaLength>(
     let signer: YkSigner<'_, YubiRsa<RL>> =
         YkSigner::new(yubikey, CardAuthentication, spki_ref).map_err(|_| Error::Unrecognized)?;
 
-    phase3(&signer, &p3_xml, &new_cert, &p1_resp_url).await
+    phase3(&signer, p3_xml, new_cert, p1_resp_url).await
 }

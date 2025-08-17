@@ -1,5 +1,6 @@
 //! Supports importing PKCS12 objects into a YubiKey
 
+use crate::ota_yubikey::enroll::get_rsa_algorithm;
 use log::{error, info};
 use rsa::pkcs1::RsaPrivateKey;
 
@@ -12,13 +13,10 @@ use x509_cert::{
 use yubikey::{
     PinPolicy, TouchPolicy, YubiKey,
     certificate::CertInfo,
-    piv::{AlgorithmId, RetiredSlotId, RsaKeyData, SlotId, SlotId::KeyManagement, import_rsa_key},
+    piv::{RetiredSlotId, RsaKeyData, SlotId, SlotId::KeyManagement, import_rsa_key},
 };
 
-use crate::Error::BadInput;
-use crate::misc::p12::process_p12;
-use crate::ota_yubikey::enroll::get_rsa_key_size;
-use crate::{Error, Result};
+use crate::{Error, Result, misc::p12::process_p12};
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -34,7 +32,7 @@ fn get_slot_from_sig_or_auth_cert(cert: &Certificate) -> Result<SlotId> {
         error!(
             "Certificate did not contain KeyUsage with DigitalSignature so SlotId could not be determined"
         );
-        return Err(BadInput);
+        return Err(Error::BadInput);
     }
 
     match san_has_other_name(cert) {
@@ -133,7 +131,7 @@ pub(crate) async fn import_p12(
 
     let der_key = match der_key {
         Some(dk) => dk,
-        None => return Err(BadInput),
+        None => return Err(Error::BadInput),
     };
 
     let slot = match slot_id {
@@ -175,15 +173,7 @@ pub(crate) async fn import_p12(
         .tbs_certificate()
         .subject_public_key_info()
         .to_der()?;
-    let alg_id = match get_rsa_key_size(&enc_spki)? {
-        2048 => AlgorithmId::Rsa2048,
-        3072 => AlgorithmId::Rsa3072,
-        4096 => AlgorithmId::Rsa4096,
-        _ => {
-            error!("Failed to read RSA key size from CardAuthentication slot");
-            return Err(Error::Unrecognized);
-        }
-    };
+    let alg_id = get_rsa_algorithm(&enc_spki)?;
 
     if let Err(e) = import_rsa_key(
         yubikey,
@@ -197,6 +187,7 @@ pub(crate) async fn import_p12(
             "Failed to import RSA key from PKCS #12 object into slot {slot}: {:?}",
             e
         );
+        //todo - throttle - firmware-based warning
         return Err(Error::YubiKey(e));
     }
 

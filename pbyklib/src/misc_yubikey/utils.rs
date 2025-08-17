@@ -13,7 +13,7 @@ use rand_core::{OsRng, RngCore, TryRngCore};
 use cipher::{BlockModeDecrypt, KeyIvInit};
 use sha1::{Digest, Sha1};
 
-use crate::ota_yubikey::enroll::get_rsa_key_size;
+use crate::ota_yubikey::enroll::get_rsa_algorithm;
 use crate::utils::get_cert_from_slot;
 use crate::{
     Error, Result,
@@ -291,6 +291,7 @@ pub(crate) fn generate_self_signed_cert<K: MgmKeyOps>(
 
 /// Verifies a SignedData then decrypts an encapsulated EnvelopedData and returns the encapsulated
 /// contents from it as a buffer.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn verify_and_decrypt<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     slot: SlotId,
@@ -500,20 +501,12 @@ pub(crate) async fn process_payloads<K: MgmKeyOps>(
     Ok(())
 }
 
+/// Determines the algorithm associated with the card authentication slow, i.e., RSA 2048, 3072 or 4096.
 pub(crate) fn get_card_auth_alg(yubikey: &mut YubiKey) -> Result<AlgorithmId> {
     match get_cert_from_slot(yubikey, SlotId::CardAuthentication) {
         Ok(c) => {
             let enc_spki = c.tbs_certificate().subject_public_key_info().to_der()?;
-            let alg_id = match get_rsa_key_size(&enc_spki)? {
-                2048 => AlgorithmId::Rsa2048,
-                3072 => AlgorithmId::Rsa3072,
-                4096 => AlgorithmId::Rsa4096,
-                _ => {
-                    error!("Failed to read RSA key size from CardAuthentication slot");
-                    return Err(Error::Unrecognized);
-                }
-            };
-            Ok(alg_id)
+            get_rsa_algorithm(&enc_spki)
         }
         Err(e) => {
             error!("Failed to get certificate from CardAuthentication slot: {e:?}");
