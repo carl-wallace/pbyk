@@ -1,6 +1,6 @@
 //! Supports importing PKCS12 objects into a YubiKey
 
-use crate::ota_yubikey::enroll::get_rsa_algorithm;
+use crate::ota_yubikey::enroll::{get_rsa_algorithm, get_rsa_key_size};
 use log::{error, info};
 use rsa::pkcs1::RsaPrivateKey;
 
@@ -16,7 +16,7 @@ use yubikey::{
     piv::{RetiredSlotId, RsaKeyData, SlotId, SlotId::KeyManagement, import_rsa_key},
 };
 
-use crate::{Error, Result, misc::p12::process_p12};
+use crate::{Error, Result, misc::p12::process_p12, supports_larger_rsa_keys};
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -183,10 +183,20 @@ pub(crate) async fn import_p12(
         TouchPolicy::Default,
         PinPolicy::Default,
     ) {
-        error!(
-            "Failed to import RSA key from PKCS #12 object into slot {slot}: {:?}",
-            e
-        );
+        if let Ok(key_size) = get_rsa_key_size(&enc_spki)
+            && !supports_larger_rsa_keys(yubikey)
+            && key_size > 2048
+        {
+            error!(
+                "Failed to import RSA key from PKCS #12 object into slot {slot}: {:?}. This YubiKey does not support {key_size}-bit keys.",
+                e
+            );
+        } else {
+            error!(
+                "Failed to import RSA key from PKCS #12 object into slot {slot}: {:?}",
+                e
+            );
+        }
         //todo - throttle - firmware-based warning
         return Err(Error::YubiKey(e));
     }
