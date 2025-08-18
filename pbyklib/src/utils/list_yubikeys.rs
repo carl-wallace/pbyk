@@ -1,14 +1,17 @@
 //! Supports listing available YubiKeys and selecting a YubiKey by serial number
 
-use crate::{Error, Result};
-use certval::buffer_to_hex;
-use der::Encode;
 use log::error;
-use sha1::Digest;
-use sha1::Sha1;
+
+use sha1::{Digest, Sha1};
+
+use der::Encode;
 use x509_cert::Certificate;
-use yubikey::piv::SlotId;
-use yubikey::{Key, Serial, YubiKey, reader::Context};
+
+use yubikey::{Key, Serial, YubiKey, piv::SlotId, reader::Context};
+
+use certval::buffer_to_hex;
+
+use crate::{Error, Result};
 
 pub fn get_pre_enroll_hash_yubikey(serial: &str) -> Result<String> {
     if let Ok(yks) = serial.parse::<u32>() {

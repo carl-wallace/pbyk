@@ -3,27 +3,13 @@
 use log::{debug, error, info};
 use plist::Dictionary;
 
-use pbykcorelib::misc::scep::{
-    get_challenge_and_url, post_scep_request, prepare_attributes, prepare_enveloped_data,
-};
 use signature::Signer as OtherSigner;
 
-use crate::ota_yubikey::enroll::get_rsa_key_size;
-use crate::{
-    Error, ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE, Result,
-    misc_yubikey::{
-        utils::{generate_self_signed_cert, get_attestation_p7, verify_and_decrypt},
-        yk_signer::YkSigner,
-    },
-    supports_larger_rsa_keys,
-};
 use cms::{cert::CertificateChoices, content_info::ContentInfo, signed_data::SignedData};
 use der::{
     Decode, Encode,
     asn1::{BitString, SetOfVec},
 };
-use pbykcorelib::misc::utils::{get_email_addresses, get_key_size, get_subject_name};
-use pbykcorelib::misc::{network::get_ca_cert, scep::prepare_scep_signed_data};
 use spki::SignatureBitStringEncoding;
 use x509_cert::{
     Certificate,
@@ -31,14 +17,33 @@ use x509_cert::{
     request::{CertReq, CertReqInfo},
     spki::SubjectPublicKeyInfoRef,
 };
-use yubikey::certificate::yubikey_signer::{Rsa3072, Rsa4096, RsaLength};
+
 use yubikey::{
     MgmKeyOps, YubiKey,
     certificate::{
         CertInfo,
-        yubikey_signer::{Rsa2048, YubiRsa},
+        yubikey_signer::{Rsa2048, Rsa3072, Rsa4096, RsaLength, YubiRsa},
     },
     piv::{AlgorithmId, SlotId},
+};
+
+use pbykcorelib::misc::{
+    network::get_ca_cert,
+    scep::{
+        get_challenge_and_url, post_scep_request, prepare_attributes, prepare_enveloped_data,
+        prepare_scep_signed_data,
+    },
+    utils::{get_email_addresses, get_key_size, get_subject_name},
+};
+
+use crate::{
+    Error, ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE, Result,
+    misc_yubikey::{
+        utils::{generate_self_signed_cert, get_attestation_p7, verify_and_decrypt},
+        yk_signer::YkSigner,
+    },
+    ota_yubikey::enroll::get_rsa_key_size,
+    supports_larger_rsa_keys,
 };
 
 //------------------------------------------------------------------------------------

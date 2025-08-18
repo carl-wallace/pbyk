@@ -1,32 +1,35 @@
 //! Executes OTA protocol in support of Purebred enrollment of a YubiKey device
 
 use std::io::Cursor;
-use yubikey::certificate::yubikey_signer::RsaLength;
 
 use log::{error, info};
 use plist::Value;
 
 use der::{Decode, Encode};
-use pbykcorelib::misc::network::post_body;
-use pbykcorelib::misc::utils::{get_as_string, get_signed_data};
-use rsa::RsaPublicKey;
-use rsa::traits::PublicKeyParts;
+use rsa::{RsaPublicKey, traits::PublicKeyParts};
 use spki::{DecodePublicKey, SubjectPublicKeyInfoRef};
 use x509_cert::Certificate;
-use yubikey::certificate::yubikey_signer::{Rsa2048, Rsa3072, Rsa4096, YubiRsa};
-use yubikey::piv::AlgorithmId;
-use yubikey::{MgmKeyOps, YubiKey, piv::SlotId::CardAuthentication};
 
-use crate::misc_yubikey::yk_signer::YkSigner;
-use crate::ota::phase3;
+use yubikey::{
+    MgmKeyOps, YubiKey,
+    certificate::yubikey_signer::{Rsa2048, Rsa3072, Rsa4096, RsaLength, YubiRsa},
+    piv::{AlgorithmId, SlotId::CardAuthentication},
+};
+
+use pbykcorelib::misc::{
+    network::post_body,
+    utils::{get_as_string, get_signed_data},
+};
+
 use crate::{
     Error, Result,
     misc_yubikey::{
         p12::import_p12,
         scep::process_scep_payload,
         utils::{get_uuid_from_cert, verify_and_decrypt},
+        yk_signer::YkSigner,
     },
-    ota::{OtaActionInputs, Phase2Request, Phase3Request, phase1},
+    ota::{OtaActionInputs, Phase2Request, Phase3Request, phase1, phase3},
     utils::get_cert_from_slot,
 };
 

@@ -7,8 +7,10 @@ use zeroize::Zeroizing;
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::ota::get_device_cred_from_smartcard;
 
-use crate::ota::CryptoModule;
-use crate::{Error, Result, get_pb_default, ota::OtaActionInputs};
+use crate::{
+    Error, Result, get_pb_default,
+    ota::{CryptoModule, OtaActionInputs},
+};
 
 /// Obtains fresh PIV and signature credentials and current encryption credential using the indicted
 /// YubiKey device using the URL obtained from `ukm_inputs`

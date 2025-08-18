@@ -5,7 +5,6 @@ use std::{
     str::FromStr,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use yubikey::certificate::yubikey_signer;
 
 use log::{error, info};
 use rand_core::{OsRng, RngCore, TryRngCore};
@@ -13,13 +12,6 @@ use rand_core::{OsRng, RngCore, TryRngCore};
 use cipher::{BlockModeDecrypt, KeyIvInit};
 use sha1::{Digest, Sha1};
 
-use crate::ota_yubikey::enroll::get_rsa_algorithm;
-use crate::utils::get_cert_from_slot;
-use crate::{
-    Error, Result,
-    misc::rsa_utils::decrypt_inner,
-    misc_yubikey::{p12::import_p12, scep::process_scep_payload},
-};
 use cms::{
     content_info::ContentInfo,
     enveloped_data::{EnvelopedData, RecipientInfo},
@@ -33,9 +25,6 @@ use der::{
         Ia5StringRef, OctetString, PrintableStringRef, TeletexStringRef, UtcTime, Utf8StringRef,
     },
 };
-use pbykcorelib::misc::utils::{
-    get_as_string, get_encrypted_payload_content, purebred_authorize_request,
-};
 use x509_cert::{
     Certificate,
     builder::CertificateBuilder,
@@ -44,10 +33,24 @@ use x509_cert::{
     serial_number::SerialNumber,
     time::{Time, Validity},
 };
-use yubikey::certificate::SelfSigned;
+
 use yubikey::{
-    Key, MgmKeyOps, PinPolicy, TouchPolicy, Uuid, YubiKey, piv,
+    Key, MgmKeyOps, PinPolicy, TouchPolicy, Uuid, YubiKey,
+    certificate::{SelfSigned, yubikey_signer},
+    piv,
     piv::{AlgorithmId, SlotId},
+};
+
+use pbykcorelib::misc::utils::{
+    get_as_string, get_encrypted_payload_content, purebred_authorize_request,
+};
+
+use crate::{
+    Error, Result,
+    misc::rsa_utils::decrypt_inner,
+    misc_yubikey::{p12::import_p12, scep::process_scep_payload},
+    ota_yubikey::enroll::get_rsa_algorithm,
+    utils::get_cert_from_slot,
 };
 
 /// Generates an attestation for the indicated slot and returns a P7 containing that attestation and

@@ -1,6 +1,5 @@
 //! Supports importing PKCS12 objects into a YubiKey
 
-use crate::ota_yubikey::enroll::{get_rsa_algorithm, get_rsa_key_size};
 use log::{error, info};
 use rsa::pkcs1::RsaPrivateKey;
 
@@ -10,13 +9,19 @@ use x509_cert::{
     Certificate,
     ext::pkix::{KeyUsage, KeyUsages, SubjectAltName, name::GeneralName},
 };
+
 use yubikey::{
     PinPolicy, TouchPolicy, YubiKey,
     certificate::CertInfo,
     piv::{RetiredSlotId, RsaKeyData, SlotId, SlotId::KeyManagement, import_rsa_key},
 };
 
-use crate::{Error, Result, misc::p12::process_p12, supports_larger_rsa_keys};
+use crate::{
+    Error, Result,
+    misc::p12::process_p12,
+    ota_yubikey::enroll::{get_rsa_algorithm, get_rsa_key_size},
+    supports_larger_rsa_keys,
+};
 
 //------------------------------------------------------------------------------------
 // Local methods

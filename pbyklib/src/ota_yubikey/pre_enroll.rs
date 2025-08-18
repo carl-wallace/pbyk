@@ -12,13 +12,13 @@ use yubikey::{
     piv::{AlgorithmId, SlotId},
 };
 
+use pbykcorelib::misc::{network::post_body, utils::buffer_to_hex};
+
 use crate::{
     Error, Result,
     misc_yubikey::utils::{generate_self_signed_cert, get_attestation_p7},
     ota::Preenroll,
 };
-use pbykcorelib::misc::network::post_body;
-use pbykcorelib::misc::utils::buffer_to_hex;
 
 /// Executes "Phase 0" to prepare a YubiKey for enrollment
 ///

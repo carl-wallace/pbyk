@@ -1,14 +1,15 @@
 //! Interacts with Purebred portal to recover escrowed keys to a YubiKey device
 
-use crate::misc_yubikey::utils::get_card_auth_alg;
+use log::{error, info};
+use yubikey::{MgmKeyOps, YubiKey, piv::SlotId};
+
+use pbykcorelib::misc::network::get_profile;
+
 use crate::{
     Result,
-    misc_yubikey::utils::{process_payloads, verify_and_decrypt},
+    misc_yubikey::utils::{get_card_auth_alg, process_payloads, verify_and_decrypt},
     ota::OtaActionInputs,
 };
-use log::{error, info};
-use pbykcorelib::misc::network::get_profile;
-use yubikey::{MgmKeyOps, YubiKey, piv::SlotId};
 
 /// Recovers keys for storage on the indicated YubiKey device using the URL obtained from `recover_inputs`
 ///

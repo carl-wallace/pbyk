@@ -134,10 +134,12 @@ impl From<cms::builder::Error> for Error {
     }
 }
 
-use const_oid::ObjectIdentifier;
 use std::sync::LazyLock;
 
+use const_oid::ObjectIdentifier;
+
 use yubikey::{MgmAlgorithmId, MgmKey, Version, YubiKey};
+
 /// Default management key for YubiKey devices enrolled with Purebred
 ///
 /// The value used by Purebred is a slight modification (020203040506070801020304050607080102030405060708) to
@@ -189,6 +191,8 @@ pub fn supports_larger_rsa_keys(yubikey: &YubiKey) -> bool {
         | Version { major: 6.., .. } => true,
     }
 }
+
+/// Gets the minimum PIN size based on firmware version
 pub fn get_min_pin_size(yubikey: &YubiKey) -> i8 {
     match yubikey.version() {
         // Initial firmware versions default to 3DES.
