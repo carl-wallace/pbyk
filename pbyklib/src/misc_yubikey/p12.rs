@@ -197,7 +197,6 @@ pub(crate) async fn import_p12(
                 e
             );
         }
-        //todo - throttle - firmware-based warning
         return Err(Error::YubiKey(e));
     }
 
