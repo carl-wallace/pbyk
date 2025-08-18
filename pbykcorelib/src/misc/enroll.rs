@@ -1,9 +1,14 @@
-use crate::misc::network::post_no_body;
-use crate::misc::utils::purebred_authorize_request;
-use crate::{Error, Result};
+//! Supports Purebred enrollment
+
+use std::io::Cursor;
+
 use log::error;
 use plist::Value;
-use std::io::Cursor;
+
+use crate::{
+    misc::{network::post_no_body, utils::purebred_authorize_request},
+    Error, Result,
+};
 
 /// Retrieves Phase 1 response, verifies it and returns result as a plist::Value.
 pub async fn fetch_phase1(url: &str, env: &str) -> Result<Value> {

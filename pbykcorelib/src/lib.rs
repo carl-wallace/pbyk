@@ -67,9 +67,11 @@ impl From<serde_json::Error> for Error {
     }
 }
 
-use const_oid::ObjectIdentifier;
-use reqwest::StatusCode;
 use std::sync::LazyLock;
+
+use reqwest::StatusCode;
+
+use const_oid::ObjectIdentifier;
 
 /// `pkcs-9-at-challengePassword` from [RFC 2985 Section 5.4.1]
 ///

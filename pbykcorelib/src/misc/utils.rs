@@ -1,6 +1,5 @@
 //! Utility functions for use within pbyklib
 
-use spki::EncodePublicKey;
 use std::{collections::BTreeMap, io::Cursor, str::FromStr};
 
 use log::error;
@@ -8,10 +7,11 @@ use plist::Dictionary;
 use subtle_encoding::hex;
 
 use sha2::{Digest, Sha256, Sha384, Sha512};
+use signature::{Keypair, Signer};
 
 use cms::{
     builder::{SignedDataBuilder, SignerInfoBuilder},
-    cert::CertificateChoices,
+    cert::{CertificateChoices, IssuerAndSerialNumber},
     content_info::ContentInfo,
     enveloped_data::RecipientIdentifier,
     signed_data::{EncapsulatedContentInfo, SignedData, SignerIdentifier, SignerInfo},
@@ -24,7 +24,7 @@ use const_oid::{
     ObjectIdentifier,
 };
 use der::{asn1::OctetString, Any, AnyRef, Decode, Encode, Tag};
-use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier};
+use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier, EncodePublicKey};
 use x509_cert::{
     ext::pkix::{BasicConstraints, SubjectKeyIdentifier},
     name::Name,
@@ -32,8 +32,6 @@ use x509_cert::{
 };
 
 use certval::PkiEnvironment;
-use cms::cert::IssuerAndSerialNumber;
-use signature::{Keypair, Signer};
 
 use crate::{misc::pki::validate_cert, Error, Result};
 
