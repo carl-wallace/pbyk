@@ -3,13 +3,9 @@
 
 #![cfg(all(target_os = "windows", feature = "vsc"))]
 
-use crate::Error;
-use der::Decode;
-use std::cmp::Ordering;
-use std::{ffi::c_void, ptr::NonNull};
+use std::{cmp::Ordering, ffi::c_void, ptr::NonNull};
 
 use log::{debug, error};
-use rsa::RsaPublicKey;
 use windows::{
     Win32::Security::Cryptography::{
         BCRYPT_PAD_PKCS1, BCRYPT_PKCS1_PADDING_INFO, BCRYPT_SHA256_ALGORITHM, CERT_CONTEXT,
@@ -20,14 +16,17 @@ use windows::{
     core::PCWSTR,
 };
 
+use rsa::RsaPublicKey;
 use sha2::{Digest, Sha256};
 use signature::{Keypair, Signer};
+
+use der::Decode;
 use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier};
 use x509_cert::Certificate;
 
-use crate::Error::BadInput;
-use crate::{Result, misc_win::csr::get_key_provider_info};
 use pbykcorelib::misc::scep::get_rsa_key_from_cert;
+
+use crate::{Error, Result, misc_win::csr::get_key_provider_info};
 
 /// Wrapper for pointers to [CERT_CONTEXT](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/struct.CERT_CONTEXT.html)
 /// objects to ensure memory is freed when no longer used, to allow for thread safety, and to provide [Signer](https://docs.rs/signature/latest/signature/trait.Signer.html)
@@ -121,7 +120,7 @@ impl CertContext {
                 CertDuplicateCertificateContext(Some(cert_to_dup.as_ptr() as *const CERT_CONTEXT));
             if dup_cert.is_null() {
                 error!("Failed to duplicate CERT_CONTEXT");
-                return Err(BadInput);
+                return Err(Error::BadInput);
             }
             let der_cert = std::slice::from_raw_parts(
                 (*dup_cert).pbCertEncoded,

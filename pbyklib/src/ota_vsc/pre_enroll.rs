@@ -2,21 +2,20 @@
 
 #![cfg(all(target_os = "windows", feature = "vsc"))]
 
-use crate::Error;
 use log::{debug, info};
 use windows::Devices::SmartCards::SmartCard;
 
 use base64ct::{Base64, Encoding};
-use sha1::Sha1;
-use sha2::Digest;
+use sha1::{Digest, Sha1};
+
+use pbykcorelib::misc::{network::post_body, utils::buffer_to_hex};
 
 use crate::{
-    Result,
+    Error, Result,
     misc_win::utils::generate_self_signed_cert_vsc,
     misc_win::vsc_state::{get_version_and_product, get_vsc_id_and_uuid},
     ota::VscPreenroll,
 };
-use pbykcorelib::misc::{network::post_body, utils::buffer_to_hex};
 
 /// Executes "Phase 0" to prepare a TPM-based virtual smart card (VSC) for enrollment
 ///
