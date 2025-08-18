@@ -152,6 +152,9 @@ fn prepare_csr<K: MgmKeyOps>(
 /// found, the Signature slot is used. Otherwise, the Authentication slot is used.
 ///
 /// `scep_instructions` MUST contain `Challenge`, `URL` and `Subject` values.
+///
+/// SCEP payloads may contain `Keysize` values. Where a provided key size is not supported by the
+/// target YubiKey, a default key size of 2048 bits is used.
 pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     scep_instructions: &Dictionary,

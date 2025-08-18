@@ -1,6 +1,9 @@
+#![doc = include_str!("../README.md")]
+#![warn(clippy::missing_docs_in_private_items)]
+
 pub mod misc;
 
-/// Result type for pbyklib
+/// Result type for pbykcorelib
 pub type Result<T> = core::result::Result<T, Error>;
 
 /// Error values for pbyklib
