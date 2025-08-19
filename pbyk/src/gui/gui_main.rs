@@ -13,9 +13,8 @@ use pbyklib::utils::list_vscs::{
 use yubikey::{Version, YubiKey};
 
 use pbyklib::{
-    get_pb_default,
+    Error, Result, get_pb_default,
     utils::list_yubikeys::{get_yubikey, list_yubikeys},
-    Error, Result,
 };
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
@@ -92,7 +91,7 @@ pub(crate) enum Phase {
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 pub(crate) fn hide_console_window() {
     use winapi::um::wincon::GetConsoleWindow;
-    use winapi::um::winuser::{ShowWindow, SW_HIDE};
+    use winapi::um::winuser::{SW_HIDE, ShowWindow};
 
     let window = unsafe { GetConsoleWindow() };
     // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow
@@ -139,7 +138,9 @@ async fn get_serials(serials: &mut Vec<String>) -> Result<String> {
                                     }
                                 }
                                 Err(e) => {
-                                    error!("Failed to determine VSC ID for {name_str}: {e:?}. Continuing...");
+                                    error!(
+                                        "Failed to determine VSC ID for {name_str}: {e:?}. Continuing..."
+                                    );
                                 }
                             };
                         }
@@ -239,7 +240,10 @@ pub(crate) fn GuiMain() -> Element {
                 }
                 Err(e) => {
                     error!("Failed to connect to YubiKey with serial {str_serial} with: {e}");
-                    startup_fatal_error_val = format!("Failed to connect to YubiKey with serial {str_serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e);
+                    startup_fatal_error_val = format!(
+                        "Failed to connect to YubiKey with serial {str_serial} with: {}. Close the app, make sure one YubiKey is available then try again.",
+                        e
+                    );
                     None
                 }
             };
@@ -254,7 +258,9 @@ pub(crate) fn GuiMain() -> Element {
                         phase = determine_phase(&mut yubikey);
                     }
                     Err(e) => {
-                        let err = format!("The YubiKey with serial number {str_serial} is not using the expected management key. Please reset the device then try again.");
+                        let err = format!(
+                            "The YubiKey with serial number {str_serial} is not using the expected management key. Please reset the device then try again."
+                        );
                         error!("{err}: {e:?}");
                         do_reset = true;
                         error_msg = Some(err);
@@ -268,7 +274,10 @@ pub(crate) fn GuiMain() -> Element {
                     Ok(p) => phase = p,
                     Err(e) => {
                         error!("Failed to connect to YubiKey with serial {str_serial} with: {e:?}");
-                        startup_fatal_error_val = format!("Failed to connect to YubiKey with serial {str_serial} with: {:?}. Close the app, make sure one YubiKey is available then try again.", e);
+                        startup_fatal_error_val = format!(
+                            "Failed to connect to YubiKey with serial {str_serial} with: {:?}. Close the app, make sure one YubiKey is available then try again.",
+                            e
+                        );
                     }
                 }
             }

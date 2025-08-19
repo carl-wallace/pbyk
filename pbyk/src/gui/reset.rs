@@ -8,12 +8,12 @@ use log::error;
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 use pbyklib::utils::{list_vscs::get_vsc, reset_vsc::reset_vsc};
 
+use crate::Phase::PreEnroll;
 use crate::gui::app_signals::AppSignals;
 use crate::gui::ui_signals::UiSignals;
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 use crate::gui::utils::parse_reader_from_vsc_display;
 use crate::gui::utils::string_or_default;
-use crate::Phase::PreEnroll;
 use pbyklib::{
     get_pb_default,
     utils::{get_yubikey, reset_yubikey},

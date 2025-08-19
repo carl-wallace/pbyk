@@ -80,15 +80,7 @@ async fn phase2<K: MgmKeyOps>(
         .to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
 
-    let rsa_key = match RsaPublicKey::from_public_key_der(&enc_spki) {
-        Ok(rsa_key) => rsa_key,
-        Err(e) => {
-            error!("Failed to parse public key as an RsaPublicKey: {e}");
-            return Err(Error::BadInput);
-        }
-    };
-
-    let key_size = rsa_key.n_bits_precision();
+    let key_size = get_rsa_key_size(&enc_spki)?;
     let (signed_data_pkcs7_der, alg) = match key_size {
         2048 => (
             sign_phase2::<Rsa2048>(yubikey, phase2_req, self_signed_cert, spki_ref)?,

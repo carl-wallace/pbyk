@@ -1,6 +1,6 @@
 //! Program arguments
 
-use clap::{error::ErrorKind, Parser, ValueEnum};
+use clap::{Parser, ValueEnum, error::ErrorKind};
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 

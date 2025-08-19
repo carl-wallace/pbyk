@@ -318,23 +318,23 @@ pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
     let bytes = ci.content.to_der()?;
     let sd = SignedData::from_der(bytes.as_slice())?;
 
-    if let Some(certs) = sd.certificates {
-        if let Some(cert_choice) = certs.0.iter().next() {
-            return match cert_choice {
-                CertificateChoices::Certificate(c) => {
-                    let enc_cert = c.to_der()?;
-                    let yc = yubikey::certificate::Certificate { cert: c.clone() };
-                    let _ = yc.write(yubikey, slot_id, CertInfo::Uncompressed);
-                    Ok(enc_cert)
-                }
-                _ => {
-                    error!("Unexpected CertificateChoice in SCEP response");
-                    Err(Error::Unrecognized)
-                }
-            };
+    if let Some(certs) = sd.certificates
+        && let Some(cert_choice) = certs.0.iter().next()
+    {
+        match cert_choice {
+            CertificateChoices::Certificate(c) => {
+                let enc_cert = c.to_der()?;
+                let yc = yubikey::certificate::Certificate { cert: c.clone() };
+                let _ = yc.write(yubikey, slot_id, CertInfo::Uncompressed);
+                Ok(enc_cert)
+            }
+            _ => {
+                error!("Unexpected CertificateChoice in SCEP response");
+                Err(Error::Unrecognized)
+            }
         }
+    } else {
+        error!("CertificateChoice not found in SCEP response");
+        Err(Error::Unrecognized)
     }
-
-    error!("CertificateChoice not found in SCEP response");
-    Err(Error::Unrecognized)
 }

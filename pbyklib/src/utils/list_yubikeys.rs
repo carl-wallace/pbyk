@@ -49,10 +49,10 @@ pub fn get_cert_from_slot(yubikey: &mut YubiKey, slot_id: SlotId) -> Result<Cert
         }
     };
     for key in keys {
-        if key.slot() == slot_id {
-            if let Some(cert) = Some(key.certificate().clone()) {
-                return Ok(cert.cert);
-            }
+        if key.slot() == slot_id
+            && let Some(cert) = Some(key.certificate().clone())
+        {
+            return Ok(cert.cert);
         }
     }
     Err(Error::BadInput)

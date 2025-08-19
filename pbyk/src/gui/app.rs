@@ -17,8 +17,8 @@ use zeroize::Zeroizing;
 use pbyklib::{
     get_pb_default,
     ota::{
-        data::OtaActionInputs, enroll::enroll, pre_enroll::pre_enroll, recover::recover, ukm::ukm,
-        CryptoModule,
+        CryptoModule, data::OtaActionInputs, enroll::enroll, pre_enroll::pre_enroll,
+        recover::recover, ukm::ukm,
     },
     utils::list_yubikeys::get_yubikey,
 };

@@ -6,8 +6,8 @@ use log::error;
 use plist::Value;
 
 use crate::{
-    misc::{network::post_no_body, utils::purebred_authorize_request},
     Error, Result,
+    misc::{network::post_no_body, utils::purebred_authorize_request},
 };
 
 /// Retrieves Phase 1 response, verifies it and returns result as a plist::Value.

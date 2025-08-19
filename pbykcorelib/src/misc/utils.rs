@@ -17,23 +17,23 @@ use cms::{
     signed_data::{EncapsulatedContentInfo, SignedData, SignerIdentifier, SignerInfo},
 };
 use const_oid::{
+    ObjectIdentifier,
     db::{
         rfc5280::ID_CE_SUBJECT_KEY_IDENTIFIER, rfc5911::ID_MESSAGE_DIGEST,
         rfc5912::ID_CE_BASIC_CONSTRAINTS,
     },
-    ObjectIdentifier,
 };
-use der::{asn1::OctetString, Any, AnyRef, Decode, Encode, Tag};
+use der::{Any, AnyRef, Decode, Encode, Tag, asn1::OctetString};
 use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier, EncodePublicKey};
 use x509_cert::{
+    Certificate,
     ext::pkix::{BasicConstraints, SubjectKeyIdentifier},
     name::Name,
-    Certificate,
 };
 
 use certval::PkiEnvironment;
 
-use crate::{misc::pki::validate_cert, Error, Result};
+use crate::{Error, Result, misc::pki::validate_cert};
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -375,7 +375,9 @@ pub fn skid_from_cert(cert: &Certificate) -> Result<Vec<u8>> {
                 match OctetString::from_der(ext.extn_value.as_bytes()) {
                     Ok(b) => return Ok(b.as_bytes().to_vec()),
                     Err(e) => {
-                        error!("Failed to parse SKID extension: {e:?}. Ignoring error and will use calculated value.");
+                        error!(
+                            "Failed to parse SKID extension: {e:?}. Ignoring error and will use calculated value."
+                        );
                     }
                 }
             }
@@ -396,18 +398,16 @@ pub fn skid_from_cert(cert: &Certificate) -> Result<Vec<u8>> {
 /// When no `rfc822Name` values are found, an empty vector is returned.
 pub fn get_email_addresses(dict: &Dictionary) -> Vec<String> {
     let mut rv: Vec<String> = vec![];
-    if let Some(san) = dict.get("SubjectAltName") {
-        if let Some(san) = san.as_dictionary() {
-            if let Some(rfc822_names) = san.get("rfc822Name") {
-                if let Some(rfc822_names) = rfc822_names.as_array() {
-                    for email in rfc822_names {
-                        if let Some(s) = email.as_string() {
-                            let c = s.to_string();
-                            if !rv.contains(&c) {
-                                rv.push(c);
-                            }
-                        }
-                    }
+    if let Some(san) = dict.get("SubjectAltName")
+        && let Some(san) = san.as_dictionary()
+        && let Some(rfc822_names) = san.get("rfc822Name")
+        && let Some(rfc822_names) = rfc822_names.as_array()
+    {
+        for email in rfc822_names {
+            if let Some(s) = email.as_string() {
+                let c = s.to_string();
+                if !rv.contains(&c) {
+                    rv.push(c);
                 }
             }
         }
@@ -415,13 +415,13 @@ pub fn get_email_addresses(dict: &Dictionary) -> Vec<String> {
     rv
 }
 
-/// Returns an RSA key size. Defaults to 2048.
+/// Returns "Keysize" value read from provided dictionary. Defaults to 2048 if key is not found.
 pub fn get_key_size(dict: &Dictionary) -> i32 {
     let mut retval = 2048;
-    if let Some(san) = dict.get("Keysize") {
-        if let Some(size) = san.as_signed_integer() {
-            retval = size as i32;
-        }
+    if let Some(san) = dict.get("Keysize")
+        && let Some(size) = san.as_signed_integer()
+    {
+        retval = size as i32;
     }
     retval
 }
@@ -435,18 +435,18 @@ pub fn get_subject_name(dict: &Dictionary) -> Result<Name> {
                 if let Some(rdns) = elem.as_array() {
                     let mut rdn_vec = vec![];
                     for rdn in rdns {
-                        if let Some(type_and_val) = rdn.as_array() {
-                            if 2 == type_and_val.len() {
-                                let rdn_type = match type_and_val[0].as_string() {
-                                    Some(t) => t,
-                                    None => return Err(Error::Plist),
-                                };
-                                let rdn_value = match type_and_val[1].as_string() {
-                                    Some(t) => t,
-                                    None => return Err(Error::Plist),
-                                };
-                                rdn_vec.push(format!("{rdn_type}={rdn_value}"));
-                            }
+                        if let Some(type_and_val) = rdn.as_array()
+                            && 2 == type_and_val.len()
+                        {
+                            let rdn_type = match type_and_val[0].as_string() {
+                                Some(t) => t,
+                                None => return Err(Error::Plist),
+                            };
+                            let rdn_value = match type_and_val[1].as_string() {
+                                Some(t) => t,
+                                None => return Err(Error::Plist),
+                            };
+                            rdn_vec.push(format!("{rdn_type}={rdn_value}"));
                         }
                     }
                     dn.push(rdn_vec.join("+"))
@@ -473,10 +473,11 @@ pub fn get_subject_name(dict: &Dictionary) -> Result<Name> {
 
 /// Retrieves the value associated with the given key from the given dictionary as a String if possible
 pub fn get_as_string(dict: &Dictionary, key: &str) -> Option<String> {
-    if let Some(value) = dict.get(key) {
-        if let Some(rv) = value.as_string() {
-            return Some(rv.to_string());
-        }
+    if let Some(value) = dict.get(key)
+        && let Some(rv) = value.as_string()
+    {
+        Some(rv.to_string())
+    } else {
+        None
     }
-    None
 }

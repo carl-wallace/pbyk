@@ -405,98 +405,93 @@ pub(crate) async fn process_payloads<K: MgmKeyOps>(
     let mut p12_index = 0;
     let mut recovered_index = 0;
     for payload in payloads {
-        if let Some(dict) = payload.as_dictionary() {
-            if let Some(payload_type) = dict.get("PayloadType") {
-                match payload_type.as_string() {
-                    Some(t) => {
-                        if "com.apple.security.scep" == t {
-                            let payload_content = match dict.get("PayloadContent") {
-                                Some(pc) => match pc.as_dictionary() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!(
-                                            "Failed to parse PayloadContent as a dictionary for SCEP payload."
-                                        );
-                                        return Err(Error::Plist);
-                                    }
-                                },
+        if let Some(dict) = payload.as_dictionary()
+            && let Some(payload_type) = dict.get("PayloadType")
+        {
+            match payload_type.as_string() {
+                Some(t) => {
+                    if "com.apple.security.scep" == t {
+                        let payload_content = match dict.get("PayloadContent") {
+                            Some(pc) => match pc.as_dictionary() {
+                                Some(d) => d,
                                 None => {
-                                    error!("SCEP payload missing PayloadContent.");
+                                    error!(
+                                        "Failed to parse PayloadContent as a dictionary for SCEP payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
-
-                            if let Err(e) = process_scep_payload(
-                                yubikey,
-                                payload_content,
-                                false,
-                                pin,
-                                mgmt_key,
-                                get_as_string(dict, "PayloadDisplayName"),
-                                env,
-                            )
-                            .await
-                            {
-                                error!("Failed to process SCEP payload: {e:?}.");
-                                return Err(e);
+                            },
+                            None => {
+                                error!("SCEP payload missing PayloadContent.");
+                                return Err(Error::Plist);
                             }
-                        } else if "com.apple.security.pkcs12" == t {
-                            let payload_content = match dict.get("PayloadContent") {
-                                Some(pc) => match pc.as_data() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!(
-                                            "Failed to parse PayloadContent as a data for PKCS #12 payload."
-                                        );
-                                        return Err(Error::Plist);
-                                    }
-                                },
+                        };
+
+                        if let Err(e) = process_scep_payload(
+                            yubikey,
+                            payload_content,
+                            false,
+                            pin,
+                            mgmt_key,
+                            get_as_string(dict, "PayloadDisplayName"),
+                            env,
+                        )
+                        .await
+                        {
+                            error!("Failed to process SCEP payload: {e:?}.");
+                            return Err(e);
+                        }
+                    } else if "com.apple.security.pkcs12" == t {
+                        let payload_content = match dict.get("PayloadContent") {
+                            Some(pc) => match pc.as_data() {
+                                Some(d) => d,
                                 None => {
-                                    error!("PKCS #12 payload missing PayloadContent.");
+                                    error!(
+                                        "Failed to parse PayloadContent as a data for PKCS #12 payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
+                            },
+                            None => {
+                                error!("PKCS #12 payload missing PayloadContent.");
+                                return Err(Error::Plist);
+                            }
+                        };
 
-                            let password = match dict.get("Password") {
-                                Some(pc) => match pc.as_string() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!(
-                                            "Failed to parse Password as a data for PKCS #12 payload."
-                                        );
-                                        return Err(Error::Plist);
-                                    }
-                                },
+                        let password = match dict.get("Password") {
+                            Some(pc) => match pc.as_string() {
+                                Some(d) => d,
                                 None => {
-                                    error!("PKCS #12 payload missing Password.");
+                                    error!(
+                                        "Failed to parse Password as a data for PKCS #12 payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
+                            },
+                            None => {
+                                error!("PKCS #12 payload missing Password.");
+                                return Err(Error::Plist);
+                            }
+                        };
 
-                            info!("Processing PKCS #12 payload with index {p12_index}");
-                            if let Err(e) = import_p12(
-                                yubikey,
-                                payload_content,
-                                password,
-                                recovered_index,
-                                None,
-                            )
-                            .await
-                            {
-                                error!(
-                                    "Failed to process PKCS #12 payload at index {p12_index}: {e:?}."
-                                );
-                                return Err(e);
-                            }
-                            p12_index += 1;
-                            if is_recover {
-                                recovered_index += 1;
-                            }
+                        info!("Processing PKCS #12 payload with index {p12_index}");
+                        if let Err(e) =
+                            import_p12(yubikey, payload_content, password, recovered_index, None)
+                                .await
+                        {
+                            error!(
+                                "Failed to process PKCS #12 payload at index {p12_index}: {e:?}."
+                            );
+                            return Err(e);
+                        }
+                        p12_index += 1;
+                        if is_recover {
+                            recovered_index += 1;
                         }
                     }
-                    None => {
-                        continue;
-                    }
+                }
+                None => {
+                    continue;
                 }
             }
         }

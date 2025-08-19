@@ -1,6 +1,6 @@
 //! Provide certification path building and validation support
 
-use log::{debug, error, info, log_enabled, trace, Level::Trace};
+use log::{Level::Trace, debug, error, info, log_enabled, trace};
 
 use base64ct::{Base64, Encoding};
 use der::Encode;

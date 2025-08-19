@@ -1,7 +1,7 @@
 //! Networking-related utility functions
 
 use log::error;
-use reqwest::{header::CONTENT_TYPE, Response};
+use reqwest::{Response, header::CONTENT_TYPE};
 
 use cms::{cert::CertificateChoices, content_info::ContentInfo, signed_data::SignedData};
 use der::{Decode, Encode};
@@ -23,10 +23,10 @@ fn get_first_cert_from_signed_data(enc_ci: &[u8]) -> Result<x509_cert::Certifica
                 Ok(sd) => {
                     for c in sd.certificates.iter() {
                         for a in c.0.iter() {
-                            if let CertificateChoices::Certificate(c) = a {
-                                if c.tbs_certificate().subject() != c.tbs_certificate().issuer() {
-                                    return Ok(c.clone());
-                                }
+                            if let CertificateChoices::Certificate(c) = a
+                                && c.tbs_certificate().subject() != c.tbs_certificate().issuer()
+                            {
+                                return Ok(c.clone());
                             }
                         }
                     }
@@ -62,7 +62,9 @@ fn check_response(response: &Response, uri: &str) -> Result<()> {
         );
         return Err(Error::Forbidden);
     } else if status == 409 {
-        error!("Received failure response ({status}) from {uri}. Have a Purebred Agent reset the device on the portal then re-enroll.",);
+        error!(
+            "Received failure response ({status}) from {uri}. Have a Purebred Agent reset the device on the portal then re-enroll.",
+        );
         return Err(Error::UnexpectedDeviceState);
     } else if status != 200 {
         error!("Request to {uri} failed with {:?}", status);
@@ -95,10 +97,14 @@ pub async fn get_profile(url: &str) -> Result<Vec<u8>> {
         Ok(response) => {
             let status = response.status();
             if status == 403 {
-                error!("Received failure response ({status}) from {url}. Make sure the OTP value is valid.",);
+                error!(
+                    "Received failure response ({status}) from {url}. Make sure the OTP value is valid.",
+                );
                 Err(Error::Forbidden)
             } else if status == 409 {
-                error!("Received failure response ({status}) from {url}. Have a Purebred Agent reset the device on the portal then re-enroll.",);
+                error!(
+                    "Received failure response ({status}) from {url}. Have a Purebred Agent reset the device on the portal then re-enroll.",
+                );
                 Err(Error::UnexpectedDeviceState)
             } else if status != 200 {
                 error!(
