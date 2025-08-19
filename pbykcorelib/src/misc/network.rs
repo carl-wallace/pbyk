@@ -15,8 +15,29 @@ pub static TIMEOUT: u64 = 60;
 //------------------------------------------------------------------------------------
 // Local methods
 //------------------------------------------------------------------------------------
+/// Checks the HTTP status of a response, generates an appropriate log message and returns an error if necessary.
+fn check_response(response: &Response, uri: &str) -> Result<()> {
+    let status = response.status();
+    if status == 403 {
+        error!(
+            "Received failure response ({status}) from {uri}. Make sure the OTP value is valid.",
+        );
+        return Err(Error::Forbidden);
+    } else if status == 409 {
+        error!("Received failure response ({status}) from {uri}. Have a Purebred Agent reset the device on the portal then re-enroll.",);
+        return Err(Error::UnexpectedDeviceState);
+    } else if status != 200 {
+        error!("Request to {uri} failed with {:?}", status);
+        return Err(Error::Http(status));
+    }
+    Ok(())
+}
+
+//------------------------------------------------------------------------------------
+// Public methods
+//------------------------------------------------------------------------------------
 /// Takes an encoded ContentInfo and returns the first Certificate read from SignedData payload
-fn get_first_cert_from_signed_data(enc_ci: &[u8]) -> Result<x509_cert::Certificate> {
+pub fn get_first_cert_from_signed_data(enc_ci: &[u8]) -> Result<x509_cert::Certificate> {
     match ContentInfo::from_der(enc_ci) {
         Ok(ci) => match ci.content.to_der() {
             Ok(content) => match SignedData::from_der(content.as_slice()) {
@@ -53,29 +74,6 @@ fn get_first_cert_from_signed_data(enc_ci: &[u8]) -> Result<x509_cert::Certifica
     }
 }
 
-/// Checks the HTTP status of a response, generates an appropriate log message and returns an error if necessary.
-fn check_response(response: &Response, uri: &str) -> Result<()> {
-    let status = response.status();
-    if status == 403 {
-        error!(
-            "Received failure response ({status}) from {uri}. Make sure the OTP value is valid.",
-        );
-        return Err(Error::Forbidden);
-    } else if status == 409 {
-        error!(
-            "Received failure response ({status}) from {uri}. Have a Purebred Agent reset the device on the portal then re-enroll.",
-        );
-        return Err(Error::UnexpectedDeviceState);
-    } else if status != 200 {
-        error!("Request to {uri} failed with {:?}", status);
-        return Err(Error::Http(status));
-    }
-    Ok(())
-}
-
-//------------------------------------------------------------------------------------
-// Public methods
-//------------------------------------------------------------------------------------
 /// Returns Content-Type header value from Response or an empty string
 pub fn get_content_type(response: &Response) -> String {
     match response.headers().get("Content-Type") {

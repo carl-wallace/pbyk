@@ -63,6 +63,18 @@ use pbykcorelib::misc::utils::buffer_to_hex;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use sha2::{Digest, Sha256};
 
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use crate::misc_win::scep::get_vsc_id_from_smartcard;
+
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use crate::misc_win::vsc_state::{read_saved_state_or_default, save_state};
+
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use pbykcorelib::misc::utils::buffer_to_hex;
+
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use sha2::{Digest, Sha256};
+
 //------------------------------------------------------------------------------------
 // Global variable
 //------------------------------------------------------------------------------------
