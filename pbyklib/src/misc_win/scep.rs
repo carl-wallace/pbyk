@@ -231,55 +231,51 @@ pub(crate) async fn process_scep_payload_vsc(
     let mut win_state = read_saved_state_or_default();
     #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
     let reader = get_vsc_id_from_smartcard(sc);
-    if let Some(certs) = sd.certificates {
-        if let Some(cert_choice) = certs.0.iter().next() {
-            match cert_choice {
-                CertificateChoices::Certificate(c) => {
-                    let enc_cert = c.to_der()?;
+    if let Some(certs) = sd.certificates
+        && let Some(cert_choice) = certs.0.iter().next()
+    {
+        match cert_choice {
+            CertificateChoices::Certificate(c) => {
+                let enc_cert = c.to_der()?;
 
-                    #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-                    if !reader.is_empty() {
-                        let hash = Sha256::digest(&enc_cert);
-                        let hex_hash = buffer_to_hex(&hash);
-                        win_state.add_cert_hash_for_reader(&reader, &hex_hash);
-                        let _ = save_state(&win_state);
-                    }
-
-                    let container_name = get_key_provider_info(cred)?.get_container_name()?;
-
-                    // generate a CSR so we can try to install again
-                    let _csr_to_discard = generate_csr(
-                        &subject_name.to_string(),
-                        sc,
-                        false,
-                        Some(container_name.clone()),
-                        &friendly_name,
-                    )
-                    .await?;
-
-                    let ss_p7 = prepare_base64_certs_only_p7(c)?;
-                    if let Err(e) =
-                        CertificateEnrollmentManager::UserCertificateEnrollmentManager()?
-                            .InstallCertificateAsync(
-                                &HSTRING::from(ss_p7),
-                                InstallOptions::DeleteExpired,
-                            )?
-                            .get()
-                    {
-                        error!(
-                            "Failed to install self-signed certificate in generate_self_signed_cert: {e:?}"
-                        );
-                        return Err(Error::Unrecognized);
-                    }
-
-                    delete_cert_from_store(&self_signed_bytes);
-
-                    return Ok(enc_cert);
+                #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+                if !reader.is_empty() {
+                    let hash = Sha256::digest(&enc_cert);
+                    let hex_hash = buffer_to_hex(&hash);
+                    win_state.add_cert_hash_for_reader(&reader, &hex_hash);
+                    let _ = save_state(&win_state);
                 }
-                _ => {
-                    error!("Unexpected CertificateChoice in SCEP response");
+
+                let container_name = get_key_provider_info(cred)?.get_container_name()?;
+
+                // generate a CSR so we can try to install again
+                let _csr_to_discard = generate_csr(
+                    &subject_name.to_string(),
+                    sc,
+                    false,
+                    Some(container_name.clone()),
+                    &friendly_name,
+                )
+                .await?;
+
+                let ss_p7 = prepare_base64_certs_only_p7(c)?;
+                if let Err(e) = CertificateEnrollmentManager::UserCertificateEnrollmentManager()?
+                    .InstallCertificateAsync(&HSTRING::from(ss_p7), InstallOptions::DeleteExpired)?
+                    .get()
+                {
+                    error!(
+                        "Failed to install self-signed certificate in generate_self_signed_cert: {e:?}"
+                    );
                     return Err(Error::Unrecognized);
                 }
+
+                delete_cert_from_store(&self_signed_bytes);
+
+                return Ok(enc_cert);
+            }
+            _ => {
+                error!("Unexpected CertificateChoice in SCEP response");
+                return Err(Error::Unrecognized);
             }
         }
     }

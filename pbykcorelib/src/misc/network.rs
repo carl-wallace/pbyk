@@ -24,7 +24,9 @@ fn check_response(response: &Response, uri: &str) -> Result<()> {
         );
         return Err(Error::Forbidden);
     } else if status == 409 {
-        error!("Received failure response ({status}) from {uri}. Have a Purebred Agent reset the device on the portal then re-enroll.",);
+        error!(
+            "Received failure response ({status}) from {uri}. Have a Purebred Agent reset the device on the portal then re-enroll.",
+        );
         return Err(Error::UnexpectedDeviceState);
     } else if status != 200 {
         error!("Request to {uri} failed with {:?}", status);

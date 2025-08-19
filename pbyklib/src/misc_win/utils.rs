@@ -63,18 +63,6 @@ use pbykcorelib::misc::utils::buffer_to_hex;
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use sha2::{Digest, Sha256};
 
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use crate::misc_win::scep::get_vsc_id_from_smartcard;
-
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use crate::misc_win::vsc_state::{read_saved_state_or_default, save_state};
-
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use pbykcorelib::misc::utils::buffer_to_hex;
-
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use sha2::{Digest, Sha256};
-
 //------------------------------------------------------------------------------------
 // Global variable
 //------------------------------------------------------------------------------------
@@ -344,13 +332,13 @@ pub(crate) async fn generate_self_signed_cert_vsc(
             let reader = get_vsc_id_from_smartcard(sc);
 
             #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-            if !reader.is_empty() {
-                if let Ok(der_cert) = self_signed.to_der() {
-                    let hash = Sha256::digest(der_cert);
-                    let hex_hash = buffer_to_hex(&hash);
-                    win_state.add_cert_hash_for_reader(&reader, &hex_hash);
-                    let _ = save_state(&win_state);
-                }
+            if !reader.is_empty()
+                && let Ok(der_cert) = self_signed.to_der()
+            {
+                let hash = Sha256::digest(der_cert);
+                let hex_hash = buffer_to_hex(&hash);
+                win_state.add_cert_hash_for_reader(&reader, &hex_hash);
+                let _ = save_state(&win_state);
             }
 
             let container_name = get_key_provider_info(cred)?.get_container_name()?;
@@ -568,102 +556,102 @@ pub(crate) async fn process_payloads_vsc(
     let mut p12_index = 0;
     let mut recovered_index = 0;
     for payload in payloads {
-        if let Some(dict) = payload.as_dictionary() {
-            if let Some(payload_type) = dict.get("PayloadType") {
-                match payload_type.as_string() {
-                    Some(t) => {
-                        if "com.apple.security.scep" == t {
-                            let payload_content = match dict.get("PayloadContent") {
-                                Some(pc) => match pc.as_dictionary() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!(
-                                            "Failed to parse PayloadContent as a dictionary for SCEP payload."
-                                        );
-                                        return Err(Error::Plist);
-                                    }
-                                },
+        if let Some(dict) = payload.as_dictionary()
+            && let Some(payload_type) = dict.get("PayloadType")
+        {
+            match payload_type.as_string() {
+                Some(t) => {
+                    if "com.apple.security.scep" == t {
+                        let payload_content = match dict.get("PayloadContent") {
+                            Some(pc) => match pc.as_dictionary() {
+                                Some(d) => d,
                                 None => {
-                                    error!("SCEP payload missing PayloadContent.");
+                                    error!(
+                                        "Failed to parse PayloadContent as a dictionary for SCEP payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
-
-                            if let Err(e) = process_scep_payload_vsc(
-                                smartcard,
-                                payload_content,
-                                get_as_string(dict, "PayloadDisplayName"),
-                                env,
-                            )
-                            .await
-                            {
-                                error!("Failed to process SCEP payload: {e:?}.");
-                                return Err(e);
+                            },
+                            None => {
+                                error!("SCEP payload missing PayloadContent.");
+                                return Err(Error::Plist);
                             }
-                        } else if "com.apple.security.pkcs12" == t {
-                            let payload_content = match dict.get("PayloadContent") {
-                                Some(pc) => match pc.as_data() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!(
-                                            "Failed to parse PayloadContent as a data for PKCS #12 payload."
-                                        );
-                                        return Err(Error::Plist);
-                                    }
-                                },
+                        };
+
+                        if let Err(e) = process_scep_payload_vsc(
+                            smartcard,
+                            payload_content,
+                            get_as_string(dict, "PayloadDisplayName"),
+                            env,
+                        )
+                        .await
+                        {
+                            error!("Failed to process SCEP payload: {e:?}.");
+                            return Err(e);
+                        }
+                    } else if "com.apple.security.pkcs12" == t {
+                        let payload_content = match dict.get("PayloadContent") {
+                            Some(pc) => match pc.as_data() {
+                                Some(d) => d,
                                 None => {
-                                    error!("PKCS #12 payload missing PayloadContent.");
+                                    error!(
+                                        "Failed to parse PayloadContent as a data for PKCS #12 payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
+                            },
+                            None => {
+                                error!("PKCS #12 payload missing PayloadContent.");
+                                return Err(Error::Plist);
+                            }
+                        };
 
-                            let password = match dict.get("Password") {
-                                Some(pc) => match pc.as_string() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!(
-                                            "Failed to parse Password as a data for PKCS #12 payload."
-                                        );
-                                        return Err(Error::Plist);
-                                    }
-                                },
+                        let password = match dict.get("Password") {
+                            Some(pc) => match pc.as_string() {
+                                Some(d) => d,
                                 None => {
-                                    error!("PKCS #12 payload missing Password.");
+                                    error!(
+                                        "Failed to parse Password as a data for PKCS #12 payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
-                            let friendly_name = match dict.get("DisplayName") {
-                                Some(pc) => match pc.as_string() {
-                                    Some(d) => d.to_string(),
-                                    None => {
-                                        error!(
-                                            "Failed to parse Password as a data for PKCS #12 payload."
-                                        );
-                                        return Err(Error::Plist);
-                                    }
-                                },
-                                None => format!("PKCS #12 #{recovered_index}"),
-                            };
+                            },
+                            None => {
+                                error!("PKCS #12 payload missing Password.");
+                                return Err(Error::Plist);
+                            }
+                        };
+                        let friendly_name = match dict.get("DisplayName") {
+                            Some(pc) => match pc.as_string() {
+                                Some(d) => d.to_string(),
+                                None => {
+                                    error!(
+                                        "Failed to parse Password as a data for PKCS #12 payload."
+                                    );
+                                    return Err(Error::Plist);
+                                }
+                            },
+                            None => format!("PKCS #12 #{recovered_index}"),
+                        };
 
-                            info!("Processing PKCS #12 payload with index {p12_index}");
-                            if let Err(e) =
-                                import_p12_vsc(smartcard, payload_content, password, &friendly_name)
-                                    .await
-                            {
-                                error!(
-                                    "Failed to process PKCS #12 payload at index {p12_index}: {e:?}."
-                                );
-                                return Err(e);
-                            }
-                            p12_index += 1;
-                            if is_recover {
-                                recovered_index += 1;
-                            }
+                        info!("Processing PKCS #12 payload with index {p12_index}");
+                        if let Err(e) =
+                            import_p12_vsc(smartcard, payload_content, password, &friendly_name)
+                                .await
+                        {
+                            error!(
+                                "Failed to process PKCS #12 payload at index {p12_index}: {e:?}."
+                            );
+                            return Err(e);
+                        }
+                        p12_index += 1;
+                        if is_recover {
+                            recovered_index += 1;
                         }
                     }
-                    None => {
-                        continue;
-                    }
+                }
+                None => {
+                    continue;
                 }
             }
         }
