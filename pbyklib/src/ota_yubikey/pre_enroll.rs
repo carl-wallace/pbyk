@@ -68,15 +68,6 @@ pub async fn pre_enroll<K: MgmKeyOps>(
         )?,
     };
 
-    // let self_signed_cert = generate_self_signed_cert(
-    //     yubikey,
-    //     SlotId::CardAuthentication,
-    //     AlgorithmId::Rsa2048,
-    //     format!("cn={uuid},c=US").as_str(),
-    //     pin,
-    //     mgmt_key,
-    // )?;
-
     debug!(
         "Generating attestation for self-signed certificate in {} slot",
         SlotId::CardAuthentication
