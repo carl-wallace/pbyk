@@ -1,10 +1,13 @@
 //! Supports extracting keys and certificates from PKCS #12 objects
 
-use crate::{Error, Result};
-use der::zeroize::Zeroizing;
+use std::sync::Once;
+
 use log::error;
 use openssl::pkcs12::Pkcs12;
-use std::sync::Once;
+
+use der::zeroize::Zeroizing;
+
+use crate::{Error, Result};
 
 /// Guard to ensure openssl::init is called just once
 static INIT: Once = Once::new();

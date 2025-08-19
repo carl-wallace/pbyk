@@ -13,23 +13,23 @@ use x509_cert::Certificate;
 
 use certval::PDVCertificate;
 
-use crate::misc_win::cert_store::delete_cert_from_store;
-use crate::ota::phase3;
+use pbykcorelib::misc::{
+    network::post_body,
+    utils::{get_as_string, get_signed_data},
+};
+
 use crate::{
     Error,
     misc_win::{
+        cert_store::delete_cert_from_store,
         csr::get_credential_list,
         scep::process_scep_payload_vsc,
         utils::{import_p12_vsc, verify_and_decrypt_vsc},
         vsc_signer::CertContext,
         vsc_state::{get_version_and_product, get_vsc_id_and_uuid},
     },
-    ota::{OtaActionInputs, Phase2Request, Phase3Request, phase1},
+    ota::{OtaActionInputs, Phase2Request, Phase3Request, phase1, phase3},
     utils::list_vscs::get_device_cred,
-};
-use pbykcorelib::misc::{
-    network::post_body,
-    utils::{get_as_string, get_signed_data},
 };
 
 //------------------------------------------------------------------------------------

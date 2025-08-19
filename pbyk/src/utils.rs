@@ -56,12 +56,17 @@ pub(crate) fn configure_logging(args: &PbYkArgs) {
                 if let Err(e) = handle {
                     println!(
                         "{}: failed to configure logging for stdout with {:?}. Continuing without logging.",
-                        "ERROR".bold(), e
+                        "ERROR".bold(),
+                        e
                     );
                 }
             }
             Err(e) => {
-                println!("{}: failed to prepare default logging configuration with {:?}. Continuing without logging", "ERROR".bold(), e);
+                println!(
+                    "{}: failed to prepare default logging configuration with {:?}. Continuing without logging",
+                    "ERROR".bold(),
+                    e
+                );
             }
         }
     }

@@ -3,9 +3,6 @@
 use log::{debug, error, info};
 use plist::Dictionary;
 
-use pbykcorelib::misc::scep::{
-    get_challenge_and_url, post_scep_request, prepare_attributes, prepare_enveloped_data,
-};
 use signature::Signer as OtherSigner;
 
 use cms::{cert::CertificateChoices, content_info::ContentInfo, signed_data::SignedData};
@@ -20,13 +17,23 @@ use x509_cert::{
     request::{CertReq, CertReqInfo},
     spki::SubjectPublicKeyInfoRef,
 };
+
 use yubikey::{
     MgmKeyOps, YubiKey,
     certificate::{
         CertInfo,
-        yubikey_signer::{Rsa2048, YubiRsa},
+        yubikey_signer::{Rsa2048, Rsa3072, Rsa4096, RsaLength, YubiRsa},
     },
     piv::{AlgorithmId, SlotId},
+};
+
+use pbykcorelib::misc::{
+    network::get_ca_cert,
+    scep::{
+        get_challenge_and_url, post_scep_request, prepare_attributes, prepare_enveloped_data,
+        prepare_scep_signed_data,
+    },
+    utils::{get_email_addresses, get_key_size, get_subject_name},
 };
 
 use crate::{
@@ -35,9 +42,9 @@ use crate::{
         utils::{generate_self_signed_cert, get_attestation_p7, verify_and_decrypt},
         yk_signer::YkSigner,
     },
+    ota_yubikey::enroll::get_rsa_key_size,
+    supports_larger_rsa_keys,
 };
-use pbykcorelib::misc::utils::{get_email_addresses, get_subject_name};
-use pbykcorelib::misc::{network::get_ca_cert, scep::prepare_scep_signed_data};
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -52,7 +59,23 @@ fn sign_request(
 ) -> Result<BitString> {
     let enc_spki = cert.tbs_certificate().subject_public_key_info().to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
-    let signer: yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<Rsa2048>> =
+    let key_size = get_rsa_key_size(&enc_spki)?;
+    match key_size {
+        2048 => sign_request_rsa::<Rsa2048>(yubikey, slot_id, data, spki_ref),
+        3072 => sign_request_rsa::<Rsa3072>(yubikey, slot_id, data, spki_ref),
+        4096 => sign_request_rsa::<Rsa4096>(yubikey, slot_id, data, spki_ref),
+        _ => Err(Error::BadInput),
+    }
+}
+
+/// Signs request using a template to determine signer type, i.e., 2048, 3072 or 4096.
+fn sign_request_rsa<'y, RL: RsaLength>(
+    yubikey: &mut YubiKey,
+    slot_id: SlotId,
+    data: &[u8],
+    spki_ref: SubjectPublicKeyInfoRef<'y>,
+) -> Result<BitString> {
+    let signer: yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<RL>> =
         yubikey::certificate::yubikey_signer::Signer::new(yubikey, slot_id, spki_ref)
             .map_err(|_| Error::Unrecognized)?;
 
@@ -129,6 +152,9 @@ fn prepare_csr<K: MgmKeyOps>(
 /// found, the Signature slot is used. Otherwise, the Authentication slot is used.
 ///
 /// `scep_instructions` MUST contain `Challenge`, `URL` and `Subject` values.
+///
+/// SCEP payloads may contain `Keysize` values. Where a provided key size is not supported by the
+/// target YubiKey, a default key size of 2048 bits is used.
 pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     scep_instructions: &Dictionary,
@@ -155,6 +181,20 @@ pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
     let (challenge, url) = get_challenge_and_url(scep_instructions)?;
     let email_addresses = get_email_addresses(scep_instructions);
     let subject_name = get_subject_name(scep_instructions)?;
+    let key_size = if supports_larger_rsa_keys(yubikey) {
+        get_key_size(scep_instructions)
+    } else {
+        2048
+    };
+    let alg = match key_size {
+        2048 => AlgorithmId::Rsa2048,
+        3072 => AlgorithmId::Rsa3072,
+        4096 => AlgorithmId::Rsa4096,
+        _ => {
+            error!("Unrecognized key size {key_size}, Using Rsa2048 as default.");
+            AlgorithmId::Rsa2048
+        }
+    };
 
     let slot_id = match is_phase2 {
         true => SlotId::CardAuthentication,
@@ -170,7 +210,7 @@ pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
     let ss = match generate_self_signed_cert(
         yubikey,
         slot_id,
-        AlgorithmId::Rsa2048,
+        alg,
         &subject_name.to_string(),
         pin,
         mgmt_key,
@@ -209,15 +249,48 @@ pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
     let enc_spki = ss.tbs_certificate().subject_public_key_info().to_der()?;
     let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
 
-    let signer: YkSigner<'_, YubiRsa<Rsa2048>> = match YkSigner::new(yubikey, slot_id, spki_ref) {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Failed to created YubiKey signer: {e:?}");
-            return Err(Error::YubiKey(e));
+    let signed_data_pkcs7_der = match key_size {
+        2048 => {
+            let signer: YkSigner<'_, YubiRsa<Rsa2048>> =
+                match YkSigner::new(yubikey, slot_id, spki_ref) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        error!("Failed to created YubiKey signer: {e:?}");
+                        return Err(Error::YubiKey(e));
+                    }
+                };
+
+            prepare_scep_signed_data(&signer, ss, &enc_ed)?
+        }
+        3072 => {
+            let signer: YkSigner<'_, YubiRsa<Rsa3072>> =
+                match YkSigner::new(yubikey, slot_id, spki_ref) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        error!("Failed to created YubiKey signer: {e:?}");
+                        return Err(Error::YubiKey(e));
+                    }
+                };
+
+            prepare_scep_signed_data(&signer, ss, &enc_ed)?
+        }
+        4096 => {
+            let signer: YkSigner<'_, YubiRsa<Rsa4096>> =
+                match YkSigner::new(yubikey, slot_id, spki_ref) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        error!("Failed to created YubiKey signer: {e:?}");
+                        return Err(Error::YubiKey(e));
+                    }
+                };
+
+            prepare_scep_signed_data(&signer, ss, &enc_ed)?
+        }
+        _ => {
+            error!("Unexpected RSA key size");
+            return Err(Error::Unrecognized);
         }
     };
-
-    let signed_data_pkcs7_der = prepare_scep_signed_data(&signer, ss, &enc_ed)?;
 
     debug!("Submitting SCEP request to {pki_op_url}");
     let result = post_scep_request(&pki_op_url, &signed_data_pkcs7_der).await?;
@@ -229,6 +302,7 @@ pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
         pin,
         mgmt_key,
         env,
+        alg,
     )
     .await?;
 
@@ -244,23 +318,23 @@ pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
     let bytes = ci.content.to_der()?;
     let sd = SignedData::from_der(bytes.as_slice())?;
 
-    if let Some(certs) = sd.certificates {
-        if let Some(cert_choice) = certs.0.iter().next() {
-            return match cert_choice {
-                CertificateChoices::Certificate(c) => {
-                    let enc_cert = c.to_der()?;
-                    let yc = yubikey::certificate::Certificate { cert: c.clone() };
-                    let _ = yc.write(yubikey, slot_id, CertInfo::Uncompressed);
-                    Ok(enc_cert)
-                }
-                _ => {
-                    error!("Unexpected CertificateChoice in SCEP response");
-                    Err(Error::Unrecognized)
-                }
-            };
+    if let Some(certs) = sd.certificates
+        && let Some(cert_choice) = certs.0.iter().next()
+    {
+        match cert_choice {
+            CertificateChoices::Certificate(c) => {
+                let enc_cert = c.to_der()?;
+                let yc = yubikey::certificate::Certificate { cert: c.clone() };
+                let _ = yc.write(yubikey, slot_id, CertInfo::Uncompressed);
+                Ok(enc_cert)
+            }
+            _ => {
+                error!("Unexpected CertificateChoice in SCEP response");
+                Err(Error::Unrecognized)
+            }
         }
+    } else {
+        error!("CertificateChoice not found in SCEP response");
+        Err(Error::Unrecognized)
     }
-
-    error!("CertificateChoice not found in SCEP response");
-    Err(Error::Unrecognized)
 }

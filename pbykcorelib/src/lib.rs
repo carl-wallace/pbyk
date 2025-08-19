@@ -1,6 +1,9 @@
+#![doc = include_str!("../README.md")]
+#![warn(clippy::missing_docs_in_private_items)]
+
 pub mod misc;
 
-/// Result type for pbyklib
+/// Result type for pbykcorelib
 pub type Result<T> = core::result::Result<T, Error>;
 
 /// Error values for pbyklib
@@ -67,9 +70,11 @@ impl From<serde_json::Error> for Error {
     }
 }
 
-use const_oid::ObjectIdentifier;
-use reqwest::StatusCode;
 use std::sync::LazyLock;
+
+use reqwest::StatusCode;
+
+use const_oid::ObjectIdentifier;
 
 /// `pkcs-9-at-challengePassword` from [RFC 2985 Section 5.4.1]
 ///

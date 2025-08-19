@@ -1,8 +1,8 @@
 [package]
 name = "pbyklib"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
-rust-version = "1.85.0"
+rust-version = "1.88.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -31,7 +31,6 @@ sha1 = {version = "0.11.0-rc.0", default-features = false}
 sha2 = "0.11.0-rc.0"
 signature = { version = "3.0.0-rc.2", features = ["digest", "alloc"]}
 
-hex-literal = "1.0.0"
 home = "0.5.11"
 log = "0.4.27"
 plist = "1.7.1"
@@ -40,7 +39,6 @@ reqwest = {version = "0.12.22", features = ["rustls-tls", "multipart", "blocking
 serde = { version = "1.0.219", default-features = false, features = ["derive"] }
 serde_json = "1.0.140"
 subtle = { version = "2.6.1", default-features = false }
-subtle-encoding = "0.5.1"
 tokio = { version = "1.46.1", features = ["full", "time", "rt-multi-thread"]}
 uuid = { version = "1.17.0", features = ["v4"] }
 # the yubikey fork features a length check needed when pbyk is run in presence of some middleware. use fork until upstream is updated with length check added to form.
@@ -53,6 +51,7 @@ openssl = {version = "0.10.73", features = ["vendored"]}
 pb_pki = {git="https://github.com/carl-wallace/pb_pki.git", branch = "updates"}
 
 [dev-dependencies]
+hex-literal = "1.0.0"
 log4rs = "1.3.0"
 
 [target.'cfg(windows)'.dependencies]

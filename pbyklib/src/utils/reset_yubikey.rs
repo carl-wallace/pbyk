@@ -14,22 +14,24 @@ use crate::misc_win::yubikey::cleanup_capi_yubikey;
 /// A script was provided in the user's guide the provided a list of actions that could be taken with the yubico-piv-tool to
 /// effect the necessary changes. Those actions were as follows:
 ///
-///```text
-///   yubico-piv-tool -a verify-pin -P 32165498
-///   yubico-piv-tool -a verify-pin -P 32165498
-///   yubico-piv-tool -a verify-pin -P 32165498
-///   yubico-piv-tool -a change-puk -P 12345679 -N 32165498
-///   yubico-piv-tool -a change-puk -P 12345679 -N 32165498
-///   yubico-piv-tool -a change-puk -P 12345679 -N 32165498
-///   yubico-piv-tool -a reset
-///   yubico-piv-tool -a set-chuid
-///   yubico-piv-tool -a set-ccc
-///   yubico-piv-tool -a set-mgm-key -n 020203040506070801020304050607080102030405060708
-///   yubico-piv-tool -a change-puk -P 12345678 -N 12345678
-///   yubico-piv-tool -a change-pin -P 123456 -N 77777777
-///```
+/// ```bash
+/// yubico-piv-tool -a verify-pin -P 32165498
+/// yubico-piv-tool -a verify-pin -P 32165498
+/// yubico-piv-tool -a verify-pin -P 32165498
+/// yubico-piv-tool -a change-puk -P 12345679 -N 32165498
+/// yubico-piv-tool -a change-puk -P 12345679 -N 32165498
+/// yubico-piv-tool -a change-puk -P 12345679 -N 32165498
+/// yubico-piv-tool -a reset
+/// yubico-piv-tool -a set-chuid
+/// yubico-piv-tool -a set-ccc
+/// yubico-piv-tool -a set-mgm-key -n 020203040506070801020304050607080102030405060708
+/// yubico-piv-tool -a change-puk -P 12345678 -N 08182025
+/// yubico-piv-tool -a change-pin -P 123456 -N 08182025
+/// ```
 ///
-/// The reset_yubikey function is intended to perform the equivalent steps.
+/// The reset_yubikey function is intended to perform the equivalent steps. In the steps above, where
+/// AES management keys are desired or required, add `-m AES192` to the end of the `set-mgm-key`
+/// command above. The `reset_yubikey` function will automatically use `AES192` where supported.
 ///
 /// The caller is assumed to have enforced PIN and PUK requirements. If either the PIN or PUK fails
 /// to satisfy requirements (as describe here, for example: <https://docs.yubico.com/yesdk/users-manual/application-piv/pin-puk-mgmt-key.html>)

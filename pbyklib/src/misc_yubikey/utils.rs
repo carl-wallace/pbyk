@@ -5,7 +5,6 @@ use std::{
     str::FromStr,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use yubikey::certificate::yubikey_signer;
 
 use log::{error, info};
 use rand_core::{OsRng, RngCore, TryRngCore};
@@ -13,11 +12,6 @@ use rand_core::{OsRng, RngCore, TryRngCore};
 use cipher::{BlockModeDecrypt, KeyIvInit};
 use sha1::{Digest, Sha1};
 
-use crate::{
-    Error, Result,
-    misc::rsa_utils::decrypt_inner,
-    misc_yubikey::{p12::import_p12, scep::process_scep_payload},
-};
 use cms::{
     content_info::ContentInfo,
     enveloped_data::{EnvelopedData, RecipientInfo},
@@ -31,9 +25,6 @@ use der::{
         Ia5StringRef, OctetString, PrintableStringRef, TeletexStringRef, UtcTime, Utf8StringRef,
     },
 };
-use pbykcorelib::misc::utils::{
-    get_as_string, get_encrypted_payload_content, purebred_authorize_request,
-};
 use x509_cert::{
     Certificate,
     builder::CertificateBuilder,
@@ -42,10 +33,24 @@ use x509_cert::{
     serial_number::SerialNumber,
     time::{Time, Validity},
 };
-use yubikey::certificate::SelfSigned;
+
 use yubikey::{
-    Key, MgmKeyOps, PinPolicy, TouchPolicy, Uuid, YubiKey, piv,
+    Key, MgmKeyOps, PinPolicy, TouchPolicy, Uuid, YubiKey,
+    certificate::{SelfSigned, yubikey_signer},
+    piv,
     piv::{AlgorithmId, SlotId},
+};
+
+use pbykcorelib::misc::utils::{
+    get_as_string, get_encrypted_payload_content, purebred_authorize_request,
+};
+
+use crate::{
+    Error, Result,
+    misc::rsa_utils::decrypt_inner,
+    misc_yubikey::{p12::import_p12, scep::process_scep_payload},
+    ota_yubikey::enroll::get_rsa_algorithm,
+    utils::get_cert_from_slot,
 };
 
 /// Generates an attestation for the indicated slot and returns a P7 containing that attestation and
@@ -256,11 +261,32 @@ pub(crate) fn generate_self_signed_cert<K: MgmKeyOps>(
         Ok(())
     };
 
-    match yubikey::certificate::Certificate::generate_self_signed::<
-        _,
-        yubikey_signer::YubiRsa<yubikey_signer::Rsa2048>,
-    >(yubikey, slot, serial, validity, name, public_key, builder)
-    {
+    let result = match algorithm {
+        AlgorithmId::Rsa2048 => {
+            yubikey::certificate::Certificate::generate_self_signed::<
+                _,
+                yubikey_signer::YubiRsa<yubikey_signer::Rsa2048>,
+            >(yubikey, slot, serial, validity, name, public_key, builder)
+        }
+        AlgorithmId::Rsa3072 => {
+            yubikey::certificate::Certificate::generate_self_signed::<
+                _,
+                yubikey_signer::YubiRsa<yubikey_signer::Rsa3072>,
+            >(yubikey, slot, serial, validity, name, public_key, builder)
+        }
+        AlgorithmId::Rsa4096 => {
+            yubikey::certificate::Certificate::generate_self_signed::<
+                _,
+                yubikey_signer::YubiRsa<yubikey_signer::Rsa4096>,
+            >(yubikey, slot, serial, validity, name, public_key, builder)
+        }
+        _ => {
+            error!("Unsupported algorithm: {algorithm:?}");
+            return Err(Error::Unrecognized);
+        }
+    };
+
+    match result {
         Ok(cert) => Ok(cert.cert),
         Err(e) => Err(Error::YubiKey(e)),
     }
@@ -268,6 +294,7 @@ pub(crate) fn generate_self_signed_cert<K: MgmKeyOps>(
 
 /// Verifies a SignedData then decrypts an encapsulated EnvelopedData and returns the encapsulated
 /// contents from it as a buffer.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn verify_and_decrypt<K: MgmKeyOps>(
     yubikey: &mut YubiKey,
     slot: SlotId,
@@ -276,6 +303,7 @@ pub(crate) async fn verify_and_decrypt<K: MgmKeyOps>(
     pin: &[u8],
     mgmt_key: &K,
     env: &str,
+    alg: AlgorithmId,
 ) -> Result<Zeroizing<Vec<u8>>> {
     if let Err(e) = yubikey.verify_pin(pin) {
         error!("Failed to verify PIN in verify_and_decrypt: {e:?}");
@@ -321,12 +349,7 @@ pub(crate) async fn verify_and_decrypt<K: MgmKeyOps>(
     for ri in ed.recip_infos.0.iter() {
         let dec_key = match ri {
             RecipientInfo::Ktri(ktri) => {
-                let dk = match piv::decrypt_data(
-                    yubikey,
-                    ktri.enc_key.as_bytes(),
-                    AlgorithmId::Rsa2048,
-                    slot,
-                ) {
+                let dk = match piv::decrypt_data(yubikey, ktri.enc_key.as_bytes(), alg, slot) {
                     Ok(dk) => dk,
                     Err(_e) => continue,
                 };
@@ -382,101 +405,110 @@ pub(crate) async fn process_payloads<K: MgmKeyOps>(
     let mut p12_index = 0;
     let mut recovered_index = 0;
     for payload in payloads {
-        if let Some(dict) = payload.as_dictionary() {
-            if let Some(payload_type) = dict.get("PayloadType") {
-                match payload_type.as_string() {
-                    Some(t) => {
-                        if "com.apple.security.scep" == t {
-                            let payload_content = match dict.get("PayloadContent") {
-                                Some(pc) => match pc.as_dictionary() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!(
-                                            "Failed to parse PayloadContent as a dictionary for SCEP payload."
-                                        );
-                                        return Err(Error::Plist);
-                                    }
-                                },
+        if let Some(dict) = payload.as_dictionary()
+            && let Some(payload_type) = dict.get("PayloadType")
+        {
+            match payload_type.as_string() {
+                Some(t) => {
+                    if "com.apple.security.scep" == t {
+                        let payload_content = match dict.get("PayloadContent") {
+                            Some(pc) => match pc.as_dictionary() {
+                                Some(d) => d,
                                 None => {
-                                    error!("SCEP payload missing PayloadContent.");
+                                    error!(
+                                        "Failed to parse PayloadContent as a dictionary for SCEP payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
-
-                            if let Err(e) = process_scep_payload(
-                                yubikey,
-                                payload_content,
-                                false,
-                                pin,
-                                mgmt_key,
-                                get_as_string(dict, "PayloadDisplayName"),
-                                env,
-                            )
-                            .await
-                            {
-                                error!("Failed to process SCEP payload: {e:?}.");
-                                return Err(e);
+                            },
+                            None => {
+                                error!("SCEP payload missing PayloadContent.");
+                                return Err(Error::Plist);
                             }
-                        } else if "com.apple.security.pkcs12" == t {
-                            let payload_content = match dict.get("PayloadContent") {
-                                Some(pc) => match pc.as_data() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!(
-                                            "Failed to parse PayloadContent as a data for PKCS #12 payload."
-                                        );
-                                        return Err(Error::Plist);
-                                    }
-                                },
+                        };
+
+                        if let Err(e) = process_scep_payload(
+                            yubikey,
+                            payload_content,
+                            false,
+                            pin,
+                            mgmt_key,
+                            get_as_string(dict, "PayloadDisplayName"),
+                            env,
+                        )
+                        .await
+                        {
+                            error!("Failed to process SCEP payload: {e:?}.");
+                            return Err(e);
+                        }
+                    } else if "com.apple.security.pkcs12" == t {
+                        let payload_content = match dict.get("PayloadContent") {
+                            Some(pc) => match pc.as_data() {
+                                Some(d) => d,
                                 None => {
-                                    error!("PKCS #12 payload missing PayloadContent.");
+                                    error!(
+                                        "Failed to parse PayloadContent as a data for PKCS #12 payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
+                            },
+                            None => {
+                                error!("PKCS #12 payload missing PayloadContent.");
+                                return Err(Error::Plist);
+                            }
+                        };
 
-                            let password = match dict.get("Password") {
-                                Some(pc) => match pc.as_string() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!(
-                                            "Failed to parse Password as a data for PKCS #12 payload."
-                                        );
-                                        return Err(Error::Plist);
-                                    }
-                                },
+                        let password = match dict.get("Password") {
+                            Some(pc) => match pc.as_string() {
+                                Some(d) => d,
                                 None => {
-                                    error!("PKCS #12 payload missing Password.");
+                                    error!(
+                                        "Failed to parse Password as a data for PKCS #12 payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
+                            },
+                            None => {
+                                error!("PKCS #12 payload missing Password.");
+                                return Err(Error::Plist);
+                            }
+                        };
 
-                            info!("Processing PKCS #12 payload with index {p12_index}");
-                            if let Err(e) = import_p12(
-                                yubikey,
-                                payload_content,
-                                password,
-                                recovered_index,
-                                None,
-                            )
-                            .await
-                            {
-                                error!(
-                                    "Failed to process PKCS #12 payload at index {p12_index}: {e:?}."
-                                );
-                                return Err(e);
-                            }
-                            p12_index += 1;
-                            if is_recover {
-                                recovered_index += 1;
-                            }
+                        info!("Processing PKCS #12 payload with index {p12_index}");
+                        if let Err(e) =
+                            import_p12(yubikey, payload_content, password, recovered_index, None)
+                                .await
+                        {
+                            error!(
+                                "Failed to process PKCS #12 payload at index {p12_index}: {e:?}."
+                            );
+                            return Err(e);
+                        }
+                        p12_index += 1;
+                        if is_recover {
+                            recovered_index += 1;
                         }
                     }
-                    None => {
-                        continue;
-                    }
+                }
+                None => {
+                    continue;
                 }
             }
         }
     }
     Ok(())
+}
+
+/// Determines the algorithm associated with the card authentication slow, i.e., RSA 2048, 3072 or 4096.
+pub(crate) fn get_card_auth_alg(yubikey: &mut YubiKey) -> Result<AlgorithmId> {
+    match get_cert_from_slot(yubikey, SlotId::CardAuthentication) {
+        Ok(c) => {
+            let enc_spki = c.tbs_certificate().subject_public_key_info().to_der()?;
+            get_rsa_algorithm(&enc_spki)
+        }
+        Err(e) => {
+            error!("Failed to get certificate from CardAuthentication slot: {e:?}");
+            Err(Error::NotFound)
+        }
+    }
 }

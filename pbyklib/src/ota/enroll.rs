@@ -1,21 +1,22 @@
 //! Executes OTA protocol in support of Purebred enrollment
 
+use log::{error, info};
+
 use spki::EncodePublicKey;
 use zeroize::Zeroizing;
 
-use log::{error, info};
+use signature::{Keypair, Signer};
+use spki::DynSignatureAlgorithmIdentifier;
+use x509_cert::Certificate;
+
+use yubikey::MgmKey;
+
+use pbykcorelib::misc::{enroll::fetch_phase1, network::post_body, utils::get_signed_data};
 
 use crate::{
     Error, Result, get_pb_default,
     ota::{CryptoModule, OtaActionInputs},
 };
-use pbykcorelib::misc::enroll::fetch_phase1;
-use pbykcorelib::misc::network::post_body;
-use pbykcorelib::misc::utils::get_signed_data;
-use signature::{Keypair, Signer};
-use spki::DynSignatureAlgorithmIdentifier;
-use x509_cert::Certificate;
-use yubikey::MgmKey;
 
 //------------------------------------------------------------------------------------
 // Public methods

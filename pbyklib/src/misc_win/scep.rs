@@ -8,13 +8,15 @@ use windows::{
     core::HSTRING,
 };
 
+use signature::Signer;
+
 use base64ct::{Base64, Encoding};
 use cms::{cert::CertificateChoices, content_info::ContentInfo, signed_data::SignedData};
 use der::{
     Decode, Encode,
     asn1::{BitString, SetOfVec},
+    zeroize::Zeroize,
 };
-use signature::Signer;
 use spki::SignatureBitStringEncoding;
 use x509_cert::{
     Certificate,
@@ -22,14 +24,17 @@ use x509_cert::{
     request::{CertReq, CertReqInfo},
 };
 
+use certval::PDVCertificate;
+
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use crate::misc_win::vsc_state::{read_saved_state_or_default, save_state};
+
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use crate::utils::get_vsc_id_from_serial;
-use certval::PDVCertificate;
-use der::zeroize::Zeroize;
+
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use pbykcorelib::misc::utils::buffer_to_hex;
+
 #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
 use sha2::{Digest, Sha256};
 

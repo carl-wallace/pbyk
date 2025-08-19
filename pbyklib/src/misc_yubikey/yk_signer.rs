@@ -11,6 +11,7 @@ use log::error;
 
 use signature::Keypair;
 use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier, SubjectPublicKeyInfoRef};
+
 use yubikey::{
     YubiKey,
     certificate::yubikey_signer::KeyType,

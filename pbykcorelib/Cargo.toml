@@ -1,7 +1,8 @@
 [package]
 name = "pbykcorelib"
-version = "0.1.1"
-edition = "2021"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.88.0"
 
 [dependencies]
 base64ct = { version="1.8.0", features = ["alloc"] }
@@ -14,7 +15,6 @@ x509-cert = "0.3.0-rc.0"
 # certval has not yet been released, hence use of private branch
 certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std", "rsa"], branch = "c7"}
 
-cipher = { version = "0.5.0-rc.0", features = ["alloc", "block-padding", "rand_core"] }
 rsa = { version = "0.10.0-rc.1", features = ["sha2"] }
 sha2 = "0.11.0-rc.0"
 signature = { version = "3.0.0-rc.2", features = ["digest", "alloc"]}
@@ -22,7 +22,6 @@ signature = { version = "3.0.0-rc.2", features = ["digest", "alloc"]}
 log = "0.4.27"
 plist = "1.7.1"
 reqwest = {version = "0.12.22", features = ["rustls-tls", "multipart", "blocking"]}
-serde = { version = "1.0.219", default-features = false, features = ["derive"] }
 serde_json = "1.0.140"
 subtle-encoding = "0.5.1"
 

@@ -4,20 +4,24 @@ use log::{error, info};
 use rsa::pkcs1::RsaPrivateKey;
 
 use const_oid::db::rfc5912::{ID_CE_KEY_USAGE, ID_CE_SUBJECT_ALT_NAME};
-use der::Decode;
+use der::{Decode, Encode};
 use x509_cert::{
     Certificate,
     ext::pkix::{KeyUsage, KeyUsages, SubjectAltName, name::GeneralName},
 };
+
 use yubikey::{
     PinPolicy, TouchPolicy, YubiKey,
     certificate::CertInfo,
-    piv::{AlgorithmId, RetiredSlotId, RsaKeyData, SlotId, SlotId::KeyManagement, import_rsa_key},
+    piv::{RetiredSlotId, RsaKeyData, SlotId, SlotId::KeyManagement, import_rsa_key},
 };
 
-use crate::Error::BadInput;
-use crate::misc::p12::process_p12;
-use crate::{Error, Result};
+use crate::{
+    Error, Result,
+    misc::p12::process_p12,
+    ota_yubikey::enroll::{get_rsa_algorithm, get_rsa_key_size},
+    supports_larger_rsa_keys,
+};
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -33,7 +37,7 @@ fn get_slot_from_sig_or_auth_cert(cert: &Certificate) -> Result<SlotId> {
         error!(
             "Certificate did not contain KeyUsage with DigitalSignature so SlotId could not be determined"
         );
-        return Err(BadInput);
+        return Err(Error::BadInput);
     }
 
     match san_has_other_name(cert) {
@@ -132,7 +136,7 @@ pub(crate) async fn import_p12(
 
     let der_key = match der_key {
         Some(dk) => dk,
-        None => return Err(BadInput),
+        None => return Err(Error::BadInput),
     };
 
     let slot = match slot_id {
@@ -168,18 +172,36 @@ pub(crate) async fn import_p12(
             return Err(Error::ParseError);
         }
     };
+
+    let enc_spki = cert
+        .cert
+        .tbs_certificate()
+        .subject_public_key_info()
+        .to_der()?;
+    let alg_id = get_rsa_algorithm(&enc_spki)?;
+
     if let Err(e) = import_rsa_key(
         yubikey,
         slot,
-        AlgorithmId::Rsa2048,
+        alg_id,
         rkd,
         TouchPolicy::Default,
         PinPolicy::Default,
     ) {
-        error!(
-            "Failed to import RSA key from PKCS #12 object into slot {slot}: {:?}",
-            e
-        );
+        if let Ok(key_size) = get_rsa_key_size(&enc_spki)
+            && !supports_larger_rsa_keys(yubikey)
+            && key_size > 2048
+        {
+            error!(
+                "Failed to import RSA key from PKCS #12 object into slot {slot}: {:?}. This YubiKey does not support {key_size}-bit keys.",
+                e
+            );
+        } else {
+            error!(
+                "Failed to import RSA key from PKCS #12 object into slot {slot}: {:?}",
+                e
+            );
+        }
         return Err(Error::YubiKey(e));
     }
 

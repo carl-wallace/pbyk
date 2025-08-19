@@ -1,10 +1,9 @@
 //! Profile to create device certificates for enrolling with Purebred using CertificateBuilder
 
-use std::vec;
-
 use spki::SubjectPublicKeyInfoRef;
-use x509_cert::{TbsCertificate, builder::profile::BuilderProfile};
 use x509_cert::{
+    TbsCertificate,
+    builder::profile::BuilderProfile,
     ext::{
         AsExtension, Extension,
         pkix::{AuthorityKeyIdentifier, KeyUsage, KeyUsages, SubjectKeyIdentifier},
@@ -23,7 +22,7 @@ pub struct PurebredDevCert {
 }
 
 impl PurebredDevCert {
-    /// Create a new Purebred device certficate
+    /// Create a new Purebred device certificate
     pub fn new(issuer: Name, subject: Name) -> crate::Result<Self> {
         Ok(Self { issuer, subject })
     }
@@ -42,8 +41,8 @@ impl BuilderProfile for PurebredDevCert {
         spk: SubjectPublicKeyInfoRef<'_>,
         issuer_spk: SubjectPublicKeyInfoRef<'_>,
         tbs: &TbsCertificate,
-    ) -> std::result::Result<Vec<Extension>, x509_cert::builder::Error> {
-        let mut extensions: vec::Vec<Extension> = vec::Vec::new();
+    ) -> Result<Vec<Extension>, x509_cert::builder::Error> {
+        let mut extensions: Vec<Extension> = Vec::new();
 
         let ski = SubjectKeyIdentifier::try_from(spk)?;
 

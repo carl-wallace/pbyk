@@ -4,8 +4,7 @@
 
 use crate::misc_win::cert_store::delete_cert_from_store;
 use der::Encode;
-use yubikey::YubiKey;
-use yubikey::piv::SLOTS;
+use yubikey::{YubiKey, piv::SLOTS};
 
 /// Check each slot on the YubiKey for a certificate. If one is found, delete it from the current
 /// user's CAPI stores.

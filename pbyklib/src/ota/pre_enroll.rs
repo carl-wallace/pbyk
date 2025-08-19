@@ -4,8 +4,7 @@ use log::error;
 use yubikey::MgmKey;
 use zeroize::Zeroizing;
 
-use crate::ota::CryptoModule;
-use crate::{Error, Result, get_pb_default};
+use crate::{Error, Result, get_pb_default, ota::CryptoModule};
 
 /// Executes "Phase 0" to prepare a device for enrollment
 ///

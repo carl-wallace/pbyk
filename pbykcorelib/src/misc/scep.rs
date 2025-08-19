@@ -8,42 +8,42 @@ use spki::EncodePublicKey;
 
 use rsa::RsaPublicKey;
 
-use cms::builder::{SignedDataBuilder, SignerInfoBuilder};
-use cms::cert::CertificateChoices;
-use cms::signed_data::EncapsulatedContentInfo;
 use cms::{
     builder::{
         ContentEncryptionAlgorithm, EnvelopedDataBuilder, KeyEncryptionInfo,
-        KeyTransRecipientInfoBuilder,
+        KeyTransRecipientInfoBuilder, SignedDataBuilder, SignerInfoBuilder,
     },
+    cert::CertificateChoices,
     content_info::ContentInfo,
+    signed_data::EncapsulatedContentInfo,
 };
 use const_oid::{
-    db::rfc5912::{ID_CE_SUBJECT_ALT_NAME, ID_EXTENSION_REQ},
     ObjectIdentifier,
+    db::rfc5912::{ID_CE_SUBJECT_ALT_NAME, ID_EXTENSION_REQ},
 };
 use der::{
-    asn1::{Ia5String, OctetString, PrintableString, SetOfVec},
     Any, AnyRef, Decode, Encode, Tag,
+    asn1::{Ia5String, OctetString, PrintableString, SetOfVec},
 };
 use signature::{Keypair, Signer};
 use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier};
 use x509_cert::{
+    Certificate,
     attr::{Attribute, AttributeValue},
     ext::{
-        pkix::{name::GeneralName, SubjectAltName},
         Extension,
+        pkix::{SubjectAltName, name::GeneralName},
     },
     spki::SubjectPublicKeyInfoRef,
-    Certificate,
 };
 
-use crate::misc::network::post_body;
-use crate::misc::utils::recipient_identifier_from_cert;
-use crate::misc::utils::signer_identifier_from_cert;
 use crate::{
-    Error, Result, ID_CHALLENGE_PASSWORD, RFC8894_ID_MESSAGE_TYPE, RFC8894_ID_SENDER_NONCE,
-    RFC8894_ID_TRANSACTION_ID,
+    Error, ID_CHALLENGE_PASSWORD, RFC8894_ID_MESSAGE_TYPE, RFC8894_ID_SENDER_NONCE,
+    RFC8894_ID_TRANSACTION_ID, Result,
+    misc::{
+        network::post_body,
+        utils::{recipient_identifier_from_cert, signer_identifier_from_cert},
+    },
 };
 
 /// Returns tuple containing `Challenge` and `URL` values extracted from `scep_instructions`

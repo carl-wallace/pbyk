@@ -1,6 +1,6 @@
 //! Program arguments
 
-use clap::{error::ErrorKind, Parser, ValueEnum};
+use clap::{Parser, ValueEnum, error::ErrorKind};
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 
@@ -135,7 +135,7 @@ pub(crate) fn num_environments() -> u8 {
 /// Utilities:
 ///   -y, --list-yubikeys  Lists available YubiKey devices, if any
 ///   -v, --list-vscs      Lists available virtual smart card (VSC) devices, if any
-///   -r, --reset-device   Resets the indicated device to a default state using a management key expected by Purebred applications
+///   -r, --reset-device   Resets the indicated device to a default state using the management key expected by Purebred applications; `AES192` is used with firmware 5.7.0 and later, otherwise `TDES` is used
 ///   -i, --interactive    Run pbyk as command line app
 ///
 /// Logging:
@@ -288,7 +288,8 @@ pub struct PbYkArgs {
     )]
     pub list_vscs: bool,
 
-    /// Resets the indicated device to a default state using a management key expected by Purebred applications
+    /// Resets the indicated device to a default state using the management key expected by Purebred applications;
+    /// `AES192` is used with firmware 5.7.0 and later, otherwise `TDES` is used.
     #[clap(
         long,
         short,

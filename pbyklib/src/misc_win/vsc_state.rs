@@ -8,19 +8,17 @@ use home::home_dir;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use windows::System::Profile::SystemIdentification;
 use windows::{
     Security::Cryptography::{
         BinaryStringEncoding,
         Core::{HashAlgorithmNames, HashAlgorithmProvider},
         CryptographicBuffer,
     },
-    System::Profile::AnalyticsInfo,
+    System::Profile::{AnalyticsInfo, SystemIdentification},
     core::HSTRING,
 };
 
-use crate::utils::state::create_app_home;
-use crate::{Error, Result};
+use crate::{Error, Result, utils::state::create_app_home};
 
 /// Returns operating system version and product name.
 ///

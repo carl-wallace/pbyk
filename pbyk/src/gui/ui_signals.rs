@@ -242,7 +242,9 @@ impl UiSignals {
                         s_hash.set(hash);
                     }
                     Err(_e) => {
-                        error!("Failed to calculate pre-enroll. Consider resetting the device and restarting enrollment.");
+                        error!(
+                            "Failed to calculate pre-enroll. Consider resetting the device and restarting enrollment."
+                        );
                     }
                 }
             } else {
@@ -252,7 +254,9 @@ impl UiSignals {
                     match get_pre_enroll_hash(&vsc_serial) {
                         Ok(hash) => s_hash.set(hash),
                         Err(_e) => {
-                            error!("Failed to calculate pre-enroll. Consider resetting the device and restarting enrollment.");
+                            error!(
+                                "Failed to calculate pre-enroll. Consider resetting the device and restarting enrollment."
+                            );
                         }
                     }
                 }

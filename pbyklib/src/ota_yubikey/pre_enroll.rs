@@ -8,17 +8,17 @@ use base64ct::{Base64, Encoding};
 use der::Encode;
 
 use yubikey::{
-    MgmKeyOps, Uuid, YubiKey,
+    MgmAlgorithmId, MgmKeyOps, Uuid, YubiKey,
     piv::{AlgorithmId, SlotId},
 };
+
+use pbykcorelib::misc::{network::post_body, utils::buffer_to_hex};
 
 use crate::{
     Error, Result,
     misc_yubikey::utils::{generate_self_signed_cert, get_attestation_p7},
     ota::Preenroll,
 };
-use pbykcorelib::misc::network::post_body;
-use pbykcorelib::misc::utils::buffer_to_hex;
 
 /// Executes "Phase 0" to prepare a YubiKey for enrollment
 ///
@@ -49,14 +49,24 @@ pub async fn pre_enroll<K: MgmKeyOps>(
     let uuid = Uuid::new_v4();
 
     debug!("Generating self-signed device certificate");
-    let self_signed_cert = generate_self_signed_cert(
-        yubikey,
-        SlotId::CardAuthentication,
-        AlgorithmId::Rsa2048,
-        format!("cn={uuid},c=US").as_str(),
-        pin,
-        mgmt_key,
-    )?;
+    let self_signed_cert = match mgmt_key.algorithm_id() {
+        MgmAlgorithmId::ThreeDes => generate_self_signed_cert(
+            yubikey,
+            SlotId::CardAuthentication,
+            AlgorithmId::Rsa2048,
+            format!("cn={uuid},c=US").as_str(),
+            pin,
+            mgmt_key,
+        )?,
+        _ => generate_self_signed_cert(
+            yubikey,
+            SlotId::CardAuthentication,
+            AlgorithmId::Rsa3072,
+            format!("cn={uuid},c=US").as_str(),
+            pin,
+            mgmt_key,
+        )?,
+    };
 
     debug!(
         "Generating attestation for self-signed certificate in {} slot",
