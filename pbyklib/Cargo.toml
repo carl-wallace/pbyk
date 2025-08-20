@@ -48,7 +48,7 @@ zeroize = "1.8.1"
 
 openssl = {version = "0.10.73", features = ["vendored"]}
 
-pb_pki = {git="https://github.com/carl-wallace/pb_pki.git", branch = "updates"}
+pb_pki = {git="https://github.com/carl-wallace/pb_pki.git", branch = "pki_updates"}
 
 [dev-dependencies]
 hex-literal = "1.0.0"
