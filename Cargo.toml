@@ -36,7 +36,8 @@ crypto-bigint = { git = "https://github.com/RustCrypto/crypto-bigint.git" }
 
 aes           = { git = "https://github.com/RustCrypto/block-ciphers.git" }
 
-ecdsa         = { git = "https://github.com/carl-wallace/signatures.git", branch = "aes_mgmt" }
+#ecdsa         = { git = "https://github.com/carl-wallace/signatures.git", branch = "aes_mgmt" }
+ecdsa         = { git = "https://github.com/RustCrypto/signatures.git"}
 
 cipher        = { git = "https://github.com/RustCrypto/traits.git" }
 elliptic-curve = { git = "https://github.com/RustCrypto/traits.git" }
