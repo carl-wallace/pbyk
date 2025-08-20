@@ -490,7 +490,7 @@ dependencies = [
 [[package]]
 name = "certval"
 version = "0.1.4"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=cert_limbo#88fdc02ec50b33af00b4ffa0e218eb23ead5cbe6"
+source = "git+https://github.com/carl-wallace/rust-pki.git?branch=depend_update#69f18ff6a9a60617d28a081066439d643bd6c9d4"
 dependencies = [
  "base64ct",
  "bitvec",
@@ -3916,7 +3916,7 @@ dependencies = [
 [[package]]
 name = "pb_pki"
 version = "0.1.3"
-source = "git+https://github.com/carl-wallace/pb_pki.git?branch=updates#7601493106efebdc19061d72f91323df236aec2a"
+source = "git+https://github.com/carl-wallace/pb_pki.git?branch=updates#97b37ddfa1c804c8ebb4ae99ba322d249c7c1e82"
 dependencies = [
  "certval",
  "log",
@@ -4239,7 +4239,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 [[package]]
 name = "pkiprocmacros"
 version = "0.1.2"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=cert_limbo#88fdc02ec50b33af00b4ffa0e218eb23ead5cbe6"
+source = "git+https://github.com/carl-wallace/rust-pki.git?branch=depend_update#69f18ff6a9a60617d28a081066439d643bd6c9d4"
 dependencies = [
  "quote",
  "syn 2.0.106",
