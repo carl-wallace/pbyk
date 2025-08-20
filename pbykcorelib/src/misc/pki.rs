@@ -24,12 +24,12 @@ fn log_certs_in_path(path: &CertificationPath) {
     for (i, cert) in path.intermediates.iter().enumerate() {
         trace!(
             "Certificate #{i}: {}",
-            Base64::encode_string(&cert.encoded_cert)
+            Base64::encode_string(&cert.as_bytes())
         );
     }
     trace!(
         "Target: {}",
-        Base64::encode_string(&path.target.encoded_cert)
+        Base64::encode_string(&path.target.as_bytes())
     );
 }
 
@@ -54,7 +54,10 @@ pub async fn validate_cert(
     // read trust anchors from apple_attest_ta_folder and populate a TaSource instance
     let mut ta_store = TaSource::new();
 
-    prepare_certval_environment(&mut pe, &mut ta_store, env)?;
+    if let Err(e) = prepare_certval_environment(&mut pe, &mut ta_store, env) {
+        error!("Error preparing PkiEnvironment: {e}");
+        return Err(Error::BadInput);
+    }
 
     let mut cert_source = CertSource::new();
     for (i, ca_cert) in intermediate.iter().enumerate() {
@@ -119,7 +122,7 @@ async fn validate_cert_buf(
                     info!(
                         "Validated {} certificate path for {}",
                         path.intermediates.len() + 2,
-                        name_to_string(path.target.decoded_cert.tbs_certificate().subject())
+                        name_to_string(path.target.as_ref().tbs_certificate().subject())
                     );
                     return Ok(());
                 }
@@ -127,7 +130,7 @@ async fn validate_cert_buf(
                     error!(
                         "Failed to validate {} certificate path for {}: {e:?}",
                         path.intermediates.len() + 2,
-                        name_to_string(path.target.decoded_cert.tbs_certificate().subject())
+                        name_to_string(path.target.as_ref().tbs_certificate().subject())
                     );
                     //return Err(Error::Attestation);
                 }
@@ -135,7 +138,7 @@ async fn validate_cert_buf(
         }
         error!(
             "Failed to find a valid certificate path for {}",
-            name_to_string(target_cert.decoded_cert.tbs_certificate().subject())
+            name_to_string(target_cert.as_ref().tbs_certificate().subject())
         );
         Err(Error::BadInput)
     } else {
