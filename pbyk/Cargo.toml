@@ -36,7 +36,7 @@ serde_json = "1.0.140"
 base64ct = { version="1.8.0", features = ["alloc"] }
 
 # certval has not yet been released, hence use of private branch
-certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std", "rsa"], branch = "depend_update"}
+certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std", "rsa"], branch = "cert_limbo"}
 futures = { version = "0.3.31", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
