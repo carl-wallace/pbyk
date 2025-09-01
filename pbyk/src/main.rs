@@ -642,8 +642,7 @@ async fn interactive_main() {
 
     let pb_base_url = match args.environment {
         #[cfg(feature = "dev")]
-        //Some(Environment::DEV) => "https://pb2.redhoundsoftware.net".to_string(),
-        Some(Environment::DEV) => "https://carls-mbp-2:8443".to_string(),
+        Some(Environment::DEV) => "https://pb2.redhoundsoftware.net".to_string(),
         #[cfg(feature = "om_nipr")]
         Some(Environment::OM_NIPR) => "https://purebred.c3pki.oandm.disa.mil".to_string(),
         #[cfg(feature = "om_sipr")]
