@@ -3916,7 +3916,7 @@ dependencies = [
 [[package]]
 name = "pb_pki"
 version = "0.1.3"
-source = "git+https://github.com/carl-wallace/pb_pki.git?branch=pki_updates#47d9482e042030e3f7f18791b04bef55748e9f88"
+source = "git+https://github.com/carl-wallace/pb_pki.git?branch=updates#14b6c95d478b2564cc6d9b69e2060828e42db1f2"
 dependencies = [
  "certval",
  "log",
