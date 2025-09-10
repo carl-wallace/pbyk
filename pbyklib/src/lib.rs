@@ -158,7 +158,11 @@ pub fn get_pb_default(yubikey: &YubiKey) -> MgmKey {
             major: 5,
             minor: ..=6,
             ..
-        } => MgmKey::from_bytes(DEFAULT_PB_MGM_KEY.as_slice(), MgmAlgorithmId::ThreeDes).unwrap(),
+        } => MgmKey::from_bytes(
+            DEFAULT_PB_MGM_KEY.as_slice(),
+            Some(MgmAlgorithmId::ThreeDes),
+        )
+        .unwrap(),
         // Firmware 5.7.0 and above default to AES-192.
         Version {
             major: 5,
@@ -166,7 +170,7 @@ pub fn get_pb_default(yubikey: &YubiKey) -> MgmKey {
             ..
         }
         | Version { major: 6.., .. } => {
-            MgmKey::from_bytes(DEFAULT_PB_MGM_KEY.as_slice(), MgmAlgorithmId::Aes192).unwrap()
+            MgmKey::from_bytes(DEFAULT_PB_MGM_KEY.as_slice(), Some(MgmAlgorithmId::Aes192)).unwrap()
         }
     }
 }

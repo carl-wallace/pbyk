@@ -11,7 +11,7 @@ use spki::{DecodePublicKey, SubjectPublicKeyInfoRef};
 use x509_cert::Certificate;
 
 use yubikey::{
-    MgmKeyOps, YubiKey,
+    MgmKey, YubiKey,
     certificate::yubikey_signer::{Rsa2048, Rsa3072, Rsa4096, RsaLength, YubiRsa},
     piv::{AlgorithmId, SlotId::CardAuthentication},
 };
@@ -54,13 +54,13 @@ fn sign_phase2<'y, RL: RsaLength>(
 }
 
 /// Execute the phase 2 portion of the OTA protocol as part of Purebred enrollment
-async fn phase2<K: MgmKeyOps>(
+async fn phase2(
     yubikey: &mut YubiKey,
     phase2_req: &[u8],
     self_signed_cert: &Certificate,
     url: &str,
     pin: &[u8],
-    mgmt_key: &K,
+    mgmt_key: &MgmKey,
     env: &str,
 ) -> Result<Vec<u8>> {
     info!("Executing Phase 2");
@@ -242,12 +242,12 @@ async fn phase2<K: MgmKeyOps>(
 /// * `pin` - YubiKey PIN required to provision user-related slots on the given YubiKey device (may be omitted for VSC enrollments)
 /// * `mgmt_key` - YubiKey management key value (may be omitted for VSC enrollments)
 /// * `env` - identifies the environment in which enrollment is being performed, i.e., DEV, NIPR, SIPR, OM_NIPR, OM_SIPR
-pub async fn enroll<K: MgmKeyOps>(
+pub async fn enroll(
     yubikey: &mut YubiKey,
     agent_edipi: &str,
     oai: &OtaActionInputs,
     pin: &[u8],
-    mgmt_key: &K,
+    mgmt_key: &MgmKey,
     env: &str,
 ) -> Result<()> {
     info!(

@@ -19,7 +19,7 @@ use x509_cert::{
 };
 
 use yubikey::{
-    MgmKeyOps, YubiKey,
+    MgmKey, YubiKey,
     certificate::{
         CertInfo,
         yubikey_signer::{Rsa2048, Rsa3072, Rsa4096, RsaLength, YubiRsa},
@@ -95,13 +95,13 @@ fn sign_request_rsa<'y, RL: RsaLength>(
 }
 
 /// Returns a DER-encoded CertReq containing the provided `attributes` and information from `self_signed_cert`.
-fn prepare_csr<K: MgmKeyOps>(
+fn prepare_csr(
     yubikey: &mut YubiKey,
     slot_id: SlotId,
     self_signed_cert: &Certificate,
     attrs: SetOfVec<Attribute>,
     pin: &[u8],
-    mgmt_key: &K,
+    mgmt_key: &MgmKey,
 ) -> Result<Vec<u8>> {
     let cert_req_info = CertReqInfo {
         version: Default::default(),
@@ -155,12 +155,12 @@ fn prepare_csr<K: MgmKeyOps>(
 ///
 /// SCEP payloads may contain `Keysize` values. Where a provided key size is not supported by the
 /// target YubiKey, a default key size of 2048 bits is used.
-pub(crate) async fn process_scep_payload<K: MgmKeyOps>(
+pub(crate) async fn process_scep_payload(
     yubikey: &mut YubiKey,
     scep_instructions: &Dictionary,
     is_phase2: bool,
     pin: &[u8],
-    mgmt_key: &K,
+    mgmt_key: &MgmKey,
     display: Option<String>,
     env: &str,
 ) -> Result<Vec<u8>> {

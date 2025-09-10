@@ -1,7 +1,7 @@
 //! Interacts with Purebred portal to recover escrowed keys to a YubiKey device
 
 use log::{error, info};
-use yubikey::{MgmKeyOps, YubiKey, piv::SlotId};
+use yubikey::{MgmKey, YubiKey, piv::SlotId};
 
 use pbykcorelib::misc::network::get_profile;
 
@@ -19,11 +19,11 @@ use crate::{
 /// * `pin` - YubiKey PIN required to provision user-related slots on the given YubiKey device (may be omitted for VSC enrollments)
 /// * `mgmt_key` - YubiKey management key value (may be omitted for VSC enrollments)
 /// * `env` - identifies the environment in which enrollment is being performed, i.e., DEV, NIPR, SIPR, OM_NIPR, OM_SIPR
-pub async fn recover<K: MgmKeyOps>(
+pub async fn recover(
     yubikey: &mut YubiKey,
     recover_inputs: &OtaActionInputs,
     pin: &[u8],
-    mgmt_key: &K,
+    mgmt_key: &MgmKey,
     env: &str,
 ) -> Result<()> {
     info!(

@@ -2,7 +2,7 @@
 
 use log::{error, info};
 use rand_core::{OsRng, RngCore, TryRngCore};
-use yubikey::{CccId, ChuId, MgmKey, MgmKeyOps, YubiKey};
+use yubikey::{CccId, ChuId, MgmKey, YubiKey};
 
 #[cfg(target_os = "windows")]
 use crate::misc_win::yubikey::cleanup_capi_yubikey;

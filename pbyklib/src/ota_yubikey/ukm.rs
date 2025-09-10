@@ -2,7 +2,7 @@
 
 use log::{error, info};
 
-use yubikey::{MgmKeyOps, YubiKey, piv::SlotId};
+use yubikey::{MgmKey, YubiKey, piv::SlotId};
 
 use pbykcorelib::misc::network::get_profile;
 
@@ -20,11 +20,11 @@ use crate::{
 /// * `ukm_inputs` - structure containing information used to prepare URI to execute UKM action
 /// * `pin` - YubiKey PIN required to provision user-related slots on the given YubiKey device (may be omitted for VSC enrollments)
 /// * `mgmt_key` - YubiKey management key value (may be omitted for VSC enrollments)/// * `env` - identifies the environment in which enrollment is being performed, i.e., DEV, NIPR, SIPR, OM_NIPR, OM_SIPR
-pub async fn ukm<K: MgmKeyOps>(
+pub async fn ukm(
     yubikey: &mut YubiKey,
     ukm_inputs: &OtaActionInputs,
     pin: &[u8],
-    mgmt_key: &K,
+    mgmt_key: &MgmKey,
     env: &str,
 ) -> Result<()> {
     info!(

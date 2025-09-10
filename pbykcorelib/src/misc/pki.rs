@@ -24,13 +24,10 @@ fn log_certs_in_path(path: &CertificationPath) {
     for (i, cert) in path.intermediates.iter().enumerate() {
         trace!(
             "Certificate #{i}: {}",
-            Base64::encode_string(&cert.as_bytes())
+            Base64::encode_string(cert.as_bytes())
         );
     }
-    trace!(
-        "Target: {}",
-        Base64::encode_string(&path.target.as_bytes())
-    );
+    trace!("Target: {}", Base64::encode_string(path.target.as_bytes()));
 }
 
 /// Takes a leaf certificate and a set of intermediate certificates and builds and validates a certification path to a

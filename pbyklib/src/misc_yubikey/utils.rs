@@ -35,7 +35,7 @@ use x509_cert::{
 };
 
 use yubikey::{
-    Key, MgmKeyOps, PinPolicy, TouchPolicy, Uuid, YubiKey,
+    Key, MgmKey, PinPolicy, TouchPolicy, Uuid, YubiKey,
     certificate::{SelfSigned, yubikey_signer},
     piv,
     piv::{AlgorithmId, SlotId},
@@ -187,13 +187,13 @@ pub(crate) fn get_uuid_from_cert(yubikey: &mut YubiKey) -> Result<String> {
 
 /// Generates a self-signed certificate containing a public key corresponding to the given algorithm
 /// and a subject DN set to the provided value using the indicated slot on the provided YubiKey.
-pub(crate) fn generate_self_signed_cert<K: MgmKeyOps>(
+pub(crate) fn generate_self_signed_cert(
     yubikey: &mut YubiKey,
     slot: SlotId,
     algorithm: AlgorithmId,
     name: &str,
     pin: &[u8],
-    mgmt_key: &K,
+    mgmt_key: &MgmKey,
 ) -> Result<Certificate> {
     // Generate a new key in the selected slot.
     let public_key = match piv::generate(
@@ -295,13 +295,13 @@ pub(crate) fn generate_self_signed_cert<K: MgmKeyOps>(
 /// Verifies a SignedData then decrypts an encapsulated EnvelopedData and returns the encapsulated
 /// contents from it as a buffer.
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn verify_and_decrypt<K: MgmKeyOps>(
+pub(crate) async fn verify_and_decrypt(
     yubikey: &mut YubiKey,
     slot: SlotId,
     content: &[u8],
     is_ota: bool,
     pin: &[u8],
-    mgmt_key: &K,
+    mgmt_key: &MgmKey,
     env: &str,
     alg: AlgorithmId,
 ) -> Result<Zeroizing<Vec<u8>>> {
@@ -378,11 +378,11 @@ pub(crate) async fn verify_and_decrypt<K: MgmKeyOps>(
 }
 
 /// Processes payloads from the presented `xml` generating and import keys using the provided YubiKey
-pub(crate) async fn process_payloads<K: MgmKeyOps>(
+pub(crate) async fn process_payloads(
     yubikey: &mut YubiKey,
     xml: &[u8],
     pin: &[u8],
-    mgmt_key: &K,
+    mgmt_key: &MgmKey,
     env: &str,
     is_recover: bool,
 ) -> Result<()> {
