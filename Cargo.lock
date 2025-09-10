@@ -3935,7 +3935,7 @@ dependencies = [
 
 [[package]]
 name = "pbyk"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -3962,7 +3962,7 @@ dependencies = [
 
 [[package]]
 name = "pbykcorelib"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
  "base64ct",
  "certval",
@@ -3986,7 +3986,7 @@ dependencies = [
 
 [[package]]
 name = "pbyklib"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
  "aes",
  "base64ct",
