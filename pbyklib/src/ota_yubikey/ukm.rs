@@ -1,13 +1,15 @@
 //! Interacts with Purebred portal to provision fresh PIV and signature credentials and current recovered encryption credential to a YubiKey device
 
 use log::{error, info};
-use yubikey::{piv::SlotId, MgmKey, YubiKey};
+
+use yubikey::{MgmKey, YubiKey, piv::SlotId};
+
+use pbykcorelib::misc::network::get_profile;
 
 use crate::{
-    misc::network::get_profile,
-    misc_yubikey::utils::{process_payloads, verify_and_decrypt},
-    ota::OtaActionInputs,
     Result,
+    misc_yubikey::utils::{get_card_auth_alg, process_payloads, verify_and_decrypt},
+    ota::OtaActionInputs,
 };
 
 /// Obtains fresh PIV and signature credentials and current encryption credential using the indicted
@@ -30,6 +32,7 @@ pub async fn ukm(
         ukm_inputs.serial
     );
 
+    let alg = get_card_auth_alg(yubikey)?;
     let profile = get_profile(&ukm_inputs.to_ukm_url()).await?;
     let dec = verify_and_decrypt(
         yubikey,
@@ -39,6 +42,7 @@ pub async fn ukm(
         pin,
         mgmt_key,
         env,
+        alg,
     )
     .await?;
     match process_payloads(yubikey, &dec, pin, mgmt_key, env, true).await {

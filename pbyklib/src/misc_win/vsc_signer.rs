@@ -3,29 +3,30 @@
 
 #![cfg(all(target_os = "windows", feature = "vsc"))]
 
-use der::Decode;
-use std::cmp::Ordering;
-use std::{ffi::c_void, ptr::NonNull};
+use std::{cmp::Ordering, ffi::c_void, ptr::NonNull};
 
 use log::{debug, error};
-use rsa::RsaPublicKey;
 use windows::{
-    core::PCWSTR,
     Win32::Security::Cryptography::{
-        CertDuplicateCertificateContext, CertFreeCertificateContext, NCryptOpenKey,
-        NCryptOpenStorageProvider, NCryptSignHash, BCRYPT_PAD_PKCS1, BCRYPT_PKCS1_PADDING_INFO,
-        BCRYPT_SHA256_ALGORITHM, CERT_CONTEXT, CERT_KEY_SPEC, CRYPT_KEY_PROV_INFO, NCRYPT_FLAGS,
-        NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
+        BCRYPT_PAD_PKCS1, BCRYPT_PKCS1_PADDING_INFO, BCRYPT_SHA256_ALGORITHM, CERT_CONTEXT,
+        CERT_KEY_SPEC, CRYPT_KEY_PROV_INFO, CertDuplicateCertificateContext,
+        CertFreeCertificateContext, NCRYPT_FLAGS, NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
+        NCryptOpenKey, NCryptOpenStorageProvider, NCryptSignHash,
     },
+    core::PCWSTR,
 };
 
+use rsa::RsaPublicKey;
 use sha2::{Digest, Sha256};
 use signature::{Keypair, Signer};
+
+use der::Decode;
 use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier};
 use x509_cert::Certificate;
 
-use crate::Error::BadInput;
-use crate::{misc::scep::get_rsa_key_from_cert, misc_win::csr::get_key_provider_info, Result};
+use pbykcorelib::misc::scep::get_rsa_key_from_cert;
+
+use crate::{Error, Result, misc_win::csr::get_key_provider_info};
 
 /// Wrapper for pointers to [CERT_CONTEXT](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Security/Cryptography/struct.CERT_CONTEXT.html)
 /// objects to ensure memory is freed when no longer used, to allow for thread safety, and to provide [Signer](https://docs.rs/signature/latest/signature/trait.Signer.html)
@@ -61,15 +62,15 @@ impl PartialOrd for CertContext {
 impl Ord for CertContext {
     fn cmp(&self, other: &Self) -> Ordering {
         let other_nb = other
-            .cert
-            .tbs_certificate
-            .validity
+            .cert()
+            .tbs_certificate()
+            .validity()
             .not_before
             .to_unix_duration();
         let self_nb = self
             .cert
-            .tbs_certificate
-            .validity
+            .tbs_certificate()
+            .validity()
             .not_before
             .to_unix_duration();
 
@@ -97,7 +98,7 @@ impl CertContext {
             Ok(k) => k,
             Err(e) => {
                 error!("Failed to get RSA key from certificate: {e:?}");
-                return Err(e);
+                return Err(Error::Pbykcorelib(e));
             }
         };
 
@@ -119,7 +120,7 @@ impl CertContext {
                 CertDuplicateCertificateContext(Some(cert_to_dup.as_ptr() as *const CERT_CONTEXT));
             if dup_cert.is_null() {
                 error!("Failed to duplicate CERT_CONTEXT");
-                return Err(BadInput);
+                return Err(Error::BadInput);
             }
             let der_cert = std::slice::from_raw_parts(
                 (*dup_cert).pbCertEncoded,
@@ -130,7 +131,7 @@ impl CertContext {
                 Ok(k) => k,
                 Err(e) => {
                     error!("Failed to get RSA key from certificate: {e:?}");
-                    return Err(e);
+                    return Err(Error::Pbykcorelib(e));
                 }
             };
             Ok(CertContext {

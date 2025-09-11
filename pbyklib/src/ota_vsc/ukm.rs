@@ -5,11 +5,14 @@
 use log::{error, info};
 use windows::Devices::SmartCards::SmartCard;
 
-use crate::misc_win::vsc_signer::CertContext;
-use crate::ota::OtaActionInputs;
+use pbykcorelib::misc::network::get_profile;
+
 use crate::{
-    misc::network::get_profile,
-    misc_win::utils::{process_payloads_vsc, verify_and_decrypt_vsc},
+    misc_win::{
+        utils::{process_payloads_vsc, verify_and_decrypt_vsc},
+        vsc_signer::CertContext,
+    },
+    ota::OtaActionInputs,
 };
 
 /// Obtains fresh PIV and signature credentials and current encryption credential using the indicted

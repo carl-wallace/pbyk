@@ -15,12 +15,12 @@ use log::{debug, error, info};
 use zeroize::Zeroizing;
 
 use pbyklib::{
+    get_pb_default,
     ota::{
-        data::OtaActionInputs, enroll::enroll, pre_enroll::pre_enroll, recover::recover, ukm::ukm,
-        CryptoModule,
+        CryptoModule, data::OtaActionInputs, enroll::enroll, pre_enroll::pre_enroll,
+        recover::recover, ukm::ukm,
     },
     utils::list_yubikeys::get_yubikey,
-    PB_MGMT_KEY,
 };
 
 use crate::args::PbYkArgs;
@@ -163,7 +163,8 @@ pub(crate) fn app(
 
                         if let Some(mut yubikey) = yubikey {
                             debug!("Determining phase of newly selected YubiKey: {serial}");
-                            match yubikey.authenticate(PB_MGMT_KEY.clone()) {
+                            let mgmt_key = get_pb_default(&yubikey);
+                            match yubikey.authenticate(&mgmt_key) {
                                 Ok(_) => {
                                     let phase = determine_phase(&mut yubikey);
                                     if phase != *app_signals.s_phase.read() {
@@ -422,7 +423,8 @@ pub(crate) fn app(
                                         }
                                     };
 
-                                    if yubikey.authenticate(PB_MGMT_KEY.clone()).is_err() {
+                                    let mgmt_key = get_pb_default(&yubikey);
+                                    if yubikey.authenticate(&mgmt_key).is_err() {
                                         let sm = format!("The YubiKey with serial number {} is not using the expected management key. Please reset the device then try again.", yubikey.serial());
                                         set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
 
@@ -530,7 +532,14 @@ pub(crate) fn app(
                                     ui_signals.s_pin.set(pin);
                                     let agent_edipi_t = agent_edipi.clone();
                                     ui_signals.s_edipi.set(agent_edipi.trim().to_string());
-                                    //let mut cm = CryptoModule::YubiKey(yubikey);
+
+                                    #[allow(irrefutable_let_patterns)]
+                                    let mgmt_key = if let CryptoModule::YubiKey(yubikey) = &mut cm {
+                                        Some(get_pb_default(yubikey))
+                                    } else {
+                                        None
+                                    };
+
                                     let _ = tokio::spawn(async move {
                                         match pre_enroll(
                                             &mut cm,
@@ -538,7 +547,7 @@ pub(crate) fn app(
                                             &pre_enroll_otp,
                                             &PB_BASE_URL,
                                             pin_t,
-                                            Some(&PB_MGMT_KEY.clone())
+                                            mgmt_key
                                         )
                                         .await
                                         {
@@ -629,14 +638,19 @@ pub(crate) fn app(
                                         &PB_BASE_URL.to_string(),
                                         &app,
                                     );
-                                    //let mut cm = CryptoModule::YubiKey(yubikey);
+                                    #[allow(irrefutable_let_patterns)]
+                                    let mgmt_key = if let CryptoModule::YubiKey(yubikey) = &mut cm {
+                                        Some(get_pb_default(yubikey))
+                                    } else {
+                                        None
+                                    };
                                     let _ = tokio::spawn(async move {
                                         match enroll(
                                             &mut cm,
                                             &agent_edipi,
                                             &oai,
                                             pin_t,
-                                            Some(&PB_MGMT_KEY.clone()),
+                                            mgmt_key,
                                             &environment
                                         )
                                         .await
@@ -723,9 +737,15 @@ pub(crate) fn app(
                                             None
                                         };
                                         ui_signals.s_pin.set(pin);
-                                        //let mut cm = CryptoModule::YubiKey(yubikey);
+                                        #[allow(irrefutable_let_patterns)]
+                                        let mgmt_key = if let CryptoModule::YubiKey(yubikey) = &mut cm {
+                                            Some(get_pb_default(yubikey))
+                                        } else {
+                                            None
+                                        };
+
                                         let _ = tokio::spawn(async move {
-                                            match recover(&mut cm, &oai, pin_t, Some(&PB_MGMT_KEY.clone()), &environment).await {
+                                            match recover(&mut cm, &oai, pin_t, mgmt_key, &environment).await {
                                                 Ok(_) => {
                                                     info!("Recover completed successfully");
                                                     if let Err(e) = tx.send(None) {
@@ -768,9 +788,15 @@ pub(crate) fn app(
                                             None
                                         };
                                         ui_signals.s_pin.set(pin);
-                                        //let mut cm = CryptoModule::YubiKey(yubikey);
+                                        #[allow(irrefutable_let_patterns)]
+                                        let mgmt_key = if let CryptoModule::YubiKey(yubikey) = &mut cm {
+                                            Some(get_pb_default(yubikey))
+                                        } else {
+                                            None
+                                        };
+
                                         let _ = tokio::spawn(async move {
-                                            match ukm(&mut cm, &oai, pin_t, Some(&PB_MGMT_KEY.clone()), &environment).await {
+                                            match ukm(&mut cm, &oai, pin_t, mgmt_key, &environment).await {
                                                 Ok(_) => {
                                                     info!("UKM completed successfully");
                                                     if let Err(e) = tx.send(None) {

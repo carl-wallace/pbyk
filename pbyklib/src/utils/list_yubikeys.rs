@@ -1,14 +1,17 @@
 //! Supports listing available YubiKeys and selecting a YubiKey by serial number
 
-use crate::{Error, Result};
-use certval::buffer_to_hex;
-use der::Encode;
 use log::error;
-use sha1::Digest;
-use sha1::Sha1;
+
+use sha1::{Digest, Sha1};
+
+use der::Encode;
 use x509_cert::Certificate;
-use yubikey::piv::SlotId;
-use yubikey::{reader::Context, Key, Serial, YubiKey};
+
+use yubikey::{Key, Serial, YubiKey, piv::SlotId, reader::Context};
+
+use certval::buffer_to_hex;
+
+use crate::{Error, Result};
 
 pub fn get_pre_enroll_hash_yubikey(serial: &str) -> Result<String> {
     if let Ok(yks) = serial.parse::<u32>() {
@@ -20,7 +23,9 @@ pub fn get_pre_enroll_hash_yubikey(serial: &str) -> Result<String> {
                     return Ok(buffer_to_hex(&Sha1::digest(der_cert)));
                 }
                 Err(_e) => {
-                    error!("Failed to read certificate to calculate pre-enroll. Consider resetting the device and restarting enrollment.");
+                    error!(
+                        "Failed to read certificate to calculate pre-enroll. Consider resetting the device and restarting enrollment."
+                    );
                 }
             }
         }
@@ -44,10 +49,10 @@ pub fn get_cert_from_slot(yubikey: &mut YubiKey, slot_id: SlotId) -> Result<Cert
         }
     };
     for key in keys {
-        if key.slot() == slot_id {
-            if let Some(cert) = Some(key.certificate().clone()) {
-                return Ok(cert.cert);
-            }
+        if key.slot() == slot_id
+            && let Some(cert) = Some(key.certificate().clone())
+        {
+            return Ok(cert.cert);
         }
     }
     Err(Error::BadInput)

@@ -11,10 +11,11 @@ use log::error;
 
 use signature::Keypair;
 use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier, SubjectPublicKeyInfoRef};
+
 use yubikey::{
-    certificate::yubikey_signer::KeyType,
-    piv::{sign_data, SlotId},
     YubiKey,
+    certificate::yubikey_signer::KeyType,
+    piv::{SlotId, sign_data},
 };
 
 /// Adaptation of Signer implementation in yubikey crate with an Arc Mutex wrapping the RefCell so that signer instance

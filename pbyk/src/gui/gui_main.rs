@@ -5,15 +5,16 @@
 
 use dioxus::prelude::*;
 use log::{debug, error, info};
-
+use pbyklib::get_min_pin_size;
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use pbyklib::utils::list_vscs::{
     get_device_cred, get_vsc_id_and_uuid_from_serial, get_vsc_id_from_serial, list_vscs,
 };
+use yubikey::{Version, YubiKey};
 
 use pbyklib::{
+    Error, Result, get_pb_default,
     utils::list_yubikeys::{get_yubikey, list_yubikeys},
-    Error, Result, PB_MGMT_KEY,
 };
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
@@ -23,6 +24,47 @@ use crate::gui::{
     app::app, app_signals::AppSignals, fatal_error::fatal_error, ui_signals::UiSignals,
     utils::determine_phase,
 };
+
+/// Return a PIN prompt appropriate for the active firmware
+fn get_pin_prompt_hint(yubikey: &YubiKey) -> String {
+    match yubikey.version() {
+        // Initial firmware versions default to 3DES.
+        Version { major: ..=4, .. }
+        | Version {
+            major: 5,
+            minor: ..=6,
+            ..
+        } => "Enter new PIN; PINs must contain 6 to 8 ASCII characters".to_string(),
+        // Firmware 5.7.0 and above default to AES-192.
+        Version {
+            major: 5,
+            minor: 7..,
+            ..
+        }
+        | Version { major: 6.., .. } => {
+            "Enter new PIN; PINs must contain 8 ASCII characters".to_string()
+        }
+    }
+}
+
+fn get_puk_prompt_hint(yubikey: &YubiKey) -> String {
+    match yubikey.version() {
+        // Initial firmware versions default to 3DES.
+        Version { major: ..=4, .. }
+        | Version {
+            major: 5,
+            minor: ..=6,
+            ..
+        } => "Enter YubiKey PUK (6 to 8 ASCII characters)".to_string(),
+        // Firmware 5.7.0 and above default to AES-192.
+        Version {
+            major: 5,
+            minor: 7..,
+            ..
+        }
+        | Version { major: 6.., .. } => "Enter YubiKey PUK (8 ASCII characters)".to_string(),
+    }
+}
 
 /// Used to establish what UI elements should be displayed during each protocol phase
 ///
@@ -49,7 +91,7 @@ pub(crate) enum Phase {
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 pub(crate) fn hide_console_window() {
     use winapi::um::wincon::GetConsoleWindow;
-    use winapi::um::winuser::{ShowWindow, SW_HIDE};
+    use winapi::um::winuser::{SW_HIDE, ShowWindow};
 
     let window = unsafe { GetConsoleWindow() };
     // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow
@@ -96,7 +138,9 @@ async fn get_serials(serials: &mut Vec<String>) -> Result<String> {
                                     }
                                 }
                                 Err(e) => {
-                                    error!("Failed to determine VSC ID for {name_str}: {e:?}. Continuing...");
+                                    error!(
+                                        "Failed to determine VSC ID for {name_str}: {e:?}. Continuing..."
+                                    );
                                 }
                             };
                         }
@@ -165,8 +209,8 @@ pub(crate) fn GuiMain() -> Element {
         if !serials.is_empty() {
             serials[0].clone()
         } else {
-            error!("Failed to list YubiKeys");
-            startup_fatal_error_val = "Failed to list YubiKeys or VSCs. Close the app, make sure at least one YubiKey is available then try again.".to_string();
+            error!("Failed to list YubiKeys or VSCs");
+            startup_fatal_error_val = "Failed to list YubiKeys or VSCs. Close the app, make sure a YubiKey or VSC is available then try again.".to_string();
             String::new()
         }
     });
@@ -180,15 +224,26 @@ pub(crate) fn GuiMain() -> Element {
     let mut do_reset = false;
     let mut s_is_yubikey = use_signal(|| false);
     let mut error_msg = None;
+    let mut pin_prompt = String::from("Enter new PIN; PINs must contain 8 ASCII characters");
+    let mut puk_prompt = String::from("Enter YubiKey PUK (8 ASCII characters)");
+    let mut min_len = 6_i8;
     if !*s_init.read() && !str_serial.is_empty() {
         debug!("Getting default device serial number inside main");
         if let Ok(yubikey_serial) = str_serial.parse::<u32>() {
             let s = yubikey::Serial(yubikey_serial);
             let yubikey = match get_yubikey(Some(s)) {
-                Ok(yk) => Some(yk),
+                Ok(yk) => {
+                    pin_prompt = get_pin_prompt_hint(&yk);
+                    puk_prompt = get_puk_prompt_hint(&yk);
+                    min_len = get_min_pin_size(&yk);
+                    Some(yk)
+                }
                 Err(e) => {
                     error!("Failed to connect to YubiKey with serial {str_serial} with: {e}");
-                    startup_fatal_error_val = format!("Failed to connect to YubiKey with serial {str_serial} with: {}. Close the app, make sure one YubiKey is available then try again.", e);
+                    startup_fatal_error_val = format!(
+                        "Failed to connect to YubiKey with serial {str_serial} with: {}. Close the app, make sure a YubiKey or VSC is available then try again.",
+                        e
+                    );
                     None
                 }
             };
@@ -197,12 +252,15 @@ pub(crate) fn GuiMain() -> Element {
 
             if let Some(mut yubikey) = yubikey {
                 debug!("Determining YubiKey phase inside main");
-                match yubikey.authenticate(PB_MGMT_KEY.clone()) {
+                let mgmt_key = get_pb_default(&yubikey);
+                match yubikey.authenticate(&mgmt_key) {
                     Ok(_) => {
                         phase = determine_phase(&mut yubikey);
                     }
                     Err(e) => {
-                        let err = format!("The YubiKey with serial number {str_serial} is not using the expected management key. Please reset the device then try again.");
+                        let err = format!(
+                            "The YubiKey with serial number {str_serial} is not using the expected management key. Please reset the device then try again."
+                        );
                         error!("{err}: {e:?}");
                         do_reset = true;
                         error_msg = Some(err);
@@ -215,8 +273,11 @@ pub(crate) fn GuiMain() -> Element {
                 match determine_vsc_phase(&str_serial) {
                     Ok(p) => phase = p,
                     Err(e) => {
-                        error!("Failed to connect to YubiKey with serial {str_serial} with: {e:?}");
-                        startup_fatal_error_val = format!("Failed to connect to YubiKey with serial {str_serial} with: {:?}. Close the app, make sure one YubiKey is available then try again.", e);
+                        error!("Failed to connect to YubiKey or VSC with serial {str_serial} with: {e:?}");
+                        startup_fatal_error_val = format!(
+                            "Failed to connect to YubiKey or VSC with serial {str_serial} with: {:?}. Close the app, make sure a YubiKey or VSC is available then try again.",
+                            e
+                        );
                     }
                 }
             }
@@ -247,7 +308,14 @@ pub(crate) fn GuiMain() -> Element {
             s_serials: use_signal(|| serials),
             s_fatal_error_val: use_signal(String::new),
         };
-        let ui_signals = UiSignals::init(&app_signals, *s_is_yubikey.read(), error_msg);
+        let ui_signals = UiSignals::init(
+            &app_signals,
+            *s_is_yubikey.read(),
+            error_msg,
+            pin_prompt,
+            puk_prompt,
+            min_len,
+        );
         app(app_signals, *s_is_yubikey.read(), ui_signals)
     }
 }

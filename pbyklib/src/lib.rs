@@ -41,6 +41,7 @@ pub enum Error {
     Decryption,
     MissingAttribute,
     UnexpectedValue,
+    Pbykcorelib(pbykcorelib::Error),
     #[cfg(all(target_os = "windows", feature = "vsc"))]
     Vsc,
     #[cfg(all(target_os = "windows", feature = "vsc"))]
@@ -65,6 +66,13 @@ impl From<reqwest::Error> for Error {
         Error::Network
     }
 }
+
+impl From<pbykcorelib::Error> for Error {
+    fn from(err: pbykcorelib::Error) -> Error {
+        Error::Pbykcorelib(err)
+    }
+}
+
 impl From<der::Error> for Error {
     fn from(err: der::Error) -> Error {
         Error::Asn1(err)
@@ -126,44 +134,87 @@ impl From<cms::builder::Error> for Error {
     }
 }
 
-use const_oid::ObjectIdentifier;
-use hex_literal::hex;
 use std::sync::LazyLock;
 
-use yubikey::MgmKey;
+use const_oid::ObjectIdentifier;
+
+use yubikey::{MgmAlgorithmId, MgmKey, Version, YubiKey};
+
 /// Default management key for YubiKey devices enrolled with Purebred
 ///
 /// The value used by Purebred is a slight modification (020203040506070801020304050607080102030405060708) to
 /// the [default value](https://docs.yubico.com/hardware/yubikey/yk-tech-manual/fips-specifics.html#id4) used natively
 /// by the device.
-pub static PB_MGMT_KEY: LazyLock<MgmKey> = LazyLock::new(|| {
-    MgmKey::new(hex!("020203040506070801020304050607080102030405060708")).unwrap()
-    // allow unwrap for static
-});
+const DEFAULT_PB_MGM_KEY: [u8; 24] = [
+    2, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8,
+];
 
-/// `pkcs-9-at-challengePassword` from [RFC 2985 Section 5.4.1]
-///
-/// [RFC 2985 Section 5.4.1]: https://www.rfc-editor.org/rfc/rfc2985#section-5.4.1
-pub static ID_CHALLENGE_PASSWORD: LazyLock<ObjectIdentifier> =
-    LazyLock::new(|| ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.7"));
+/// Return firmware-appropriate default management key
+pub fn get_pb_default(yubikey: &YubiKey) -> MgmKey {
+    match yubikey.version() {
+        // Initial firmware versions default to 3DES.
+        Version { major: ..=4, .. }
+        | Version {
+            major: 5,
+            minor: ..=6,
+            ..
+        } => MgmKey::from_bytes(
+            DEFAULT_PB_MGM_KEY.as_slice(),
+            Some(MgmAlgorithmId::ThreeDes),
+        )
+        .unwrap(),
+        // Firmware 5.7.0 and above default to AES-192.
+        Version {
+            major: 5,
+            minor: 7..,
+            ..
+        }
+        | Version { major: 6.., .. } => {
+            MgmKey::from_bytes(DEFAULT_PB_MGM_KEY.as_slice(), Some(MgmAlgorithmId::Aes192)).unwrap()
+        }
+    }
+}
 
-/// `id-messageType` from [RFC 8894 Section 3.2.1.2]
-///
-/// [RFC 8894 Section 3.2.1.2]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.2
-pub static RFC8894_ID_MESSAGE_TYPE: LazyLock<ObjectIdentifier> =
-    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.2"));
+/// Determines if the given YubiKey is expected to support larger RSA key sizes, i.e., true if firmware is 5.7.0 or
+/// greater and false otherwise.
+pub fn supports_larger_rsa_keys(yubikey: &YubiKey) -> bool {
+    match yubikey.version() {
+        // Initial firmware versions default to 3DES.
+        Version { major: ..=4, .. }
+        | Version {
+            major: 5,
+            minor: ..=6,
+            ..
+        } => false,
+        // Firmware 5.7.0 and above default to AES-192.
+        Version {
+            major: 5,
+            minor: 7..,
+            ..
+        }
+        | Version { major: 6.., .. } => true,
+    }
+}
 
-/// `id-senderNonce` from [RFC 8894 Section 3.2.1.5]
-///
-/// [RFC 8894 Section 3.2.1.5]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.5
-pub static RFC8894_ID_SENDER_NONCE: LazyLock<ObjectIdentifier> =
-    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.5"));
-
-/// `id-transactionID` from [RFC 8894 Section 3.2.1.1]
-///
-/// [RFC 8894 Section 3.2.1.1]: https://www.rfc-editor.org/rfc/rfc8894#section-3.2.1.1
-pub static RFC8894_ID_TRANSACTION_ID: LazyLock<ObjectIdentifier> =
-    LazyLock::new(|| ObjectIdentifier::new_unwrap("2.16.840.1.113733.1.9.7"));
+/// Gets the minimum PIN size based on firmware version
+pub fn get_min_pin_size(yubikey: &YubiKey) -> i8 {
+    match yubikey.version() {
+        // Initial firmware versions default to 3DES.
+        Version { major: ..=4, .. }
+        | Version {
+            major: 5,
+            minor: ..=6,
+            ..
+        } => 6,
+        // Firmware 5.7.0 and above default to AES-192.
+        Version {
+            major: 5,
+            minor: 7..,
+            ..
+        }
+        | Version { major: 6.., .. } => 8,
+    }
+}
 
 /// `id-purebred-yubikey-attestation-attribute` from Red Hound's OID arc
 pub static ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE: LazyLock<ObjectIdentifier> =

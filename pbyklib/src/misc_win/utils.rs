@@ -2,11 +2,13 @@
 
 #![cfg(all(target_os = "windows", feature = "vsc"))]
 
-use std::{io::Cursor, sync::Mutex};
+use std::{
+    io::Cursor,
+    sync::{LazyLock, Mutex},
+};
 
 use log::{debug, error, info};
 use windows::{
-    core::{HSTRING, PCWSTR},
     Devices::SmartCards::SmartCard,
     Security::Cryptography::{
         Certificates::{
@@ -17,46 +19,49 @@ use windows::{
         CryptographicBuffer,
     },
     Win32::Security::Cryptography::{
-        NCryptDecrypt, NCryptOpenKey, NCryptOpenStorageProvider, BCRYPT_PAD_PKCS1, CERT_KEY_SPEC,
-        NCRYPT_FLAGS, NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
+        BCRYPT_PAD_PKCS1, CERT_KEY_SPEC, NCRYPT_FLAGS, NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
+        NCryptDecrypt, NCryptOpenKey, NCryptOpenStorageProvider,
     },
+    core::{HSTRING, PCWSTR},
 };
 
+use cipher::{BlockModeDecrypt, KeyIvInit};
+
 use base64ct::{Base64, Encoding};
-use cipher::{generic_array::GenericArray, BlockDecryptMut, KeyIvInit};
 use cms::{
     content_info::ContentInfo,
     enveloped_data::{EnvelopedData, RecipientInfo},
 };
-use der::{asn1::OctetString, Decode, Encode};
+use der::{Decode, Encode, asn1::OctetString, zeroize::Zeroizing};
 
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use crate::misc::utils::buffer_to_hex;
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use crate::misc_win::scep::get_vsc_id_from_smartcard;
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use crate::misc_win::vsc_state::{read_saved_state_or_default, save_state};
 use certval::PDVCertificate;
-use der::zeroize::Zeroizing;
-#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-use sha2::{Digest, Sha256};
-use std::sync::LazyLock;
+use pbykcorelib::misc::utils::{get_as_string, purebred_authorize_request};
 
-use crate::misc_win::cert_store::delete_cert_from_store;
-use crate::misc_win::csr::consume_attested_csr;
 use crate::{
+    Error, Result,
     misc::p12::process_p12,
-    misc::utils::{get_as_string, purebred_authorize_request},
     misc_win::{
+        cert_store::delete_cert_from_store,
         csr::{
-            consume_csr, get_credential_list, get_key_provider_info, prepare_base64_certs_only_p7,
-            resign_as_self,
+            consume_attested_csr, consume_csr, get_credential_list, get_key_provider_info,
+            prepare_base64_certs_only_p7, resign_as_self,
         },
         scep::process_scep_payload_vsc,
         vsc_signer::CertContext,
     },
-    Error, Result,
 };
+
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use crate::misc_win::scep::get_vsc_id_from_smartcard;
+
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use crate::misc_win::vsc_state::{read_saved_state_or_default, save_state};
+
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use pbykcorelib::misc::utils::buffer_to_hex;
+
+#[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+use sha2::{Digest, Sha256};
 
 //------------------------------------------------------------------------------------
 // Global variable
@@ -242,7 +247,7 @@ pub(crate) async fn generate_self_signed_cert_vsc(
     sc: &SmartCard,
 ) -> Result<(Vec<u8>, Option<String>)> {
     debug!(
-        "Attempting to generate a fresh key pair with attestation in generate_self_signed_cert_vsc"
+        "Attempting to generate a fresh key pair with attestation in generate_self_signed_cert_vsc for {subject_name}"
     );
 
     let with_attestation = gamble_on_attestation(true);
@@ -267,7 +272,9 @@ pub(crate) async fn generate_self_signed_cert_vsc(
         Err(e) => {
             if gamble_on_attestation(true) {
                 attestation_does_not_work();
-                debug!("Attempting to generate a fresh key pair without attestation in generate_self_signed_cert_vsc after an attempt with attestation failed with: {e:?}");
+                debug!(
+                    "Attempting to generate a fresh key pair without attestation in generate_self_signed_cert_vsc after an attempt with attestation failed with: {e:?}"
+                );
                 (
                     generate_csr(
                         subject_name,
@@ -292,11 +299,13 @@ pub(crate) async fn generate_self_signed_cert_vsc(
     } else {
         consume_csr(&csr_to_consume.to_string()).await?
     };
+    let der_cert = fake_cert.to_der()?;
+    let b64_cert = Base64::encode_string(&der_cert);
+    debug!(
+        "Freshly generated fake certificate in generate_self_signed_cert_vsc: {b64_fake_cert_as_p7}"
+    );
     if let Err(e) = CertificateEnrollmentManager::UserCertificateEnrollmentManager()?
-        .InstallCertificateAsync(
-            &HSTRING::from(b64_fake_cert_as_p7),
-            InstallOptions::DeleteExpired,
-        )?
+        .InstallCertificateAsync(&HSTRING::from(b64_cert), InstallOptions::DeleteExpired)?
         .get()
     {
         error!("Failed to install fake certificate in generate_self_signed_cert_vsc: {e:?}");
@@ -323,13 +332,13 @@ pub(crate) async fn generate_self_signed_cert_vsc(
             let reader = get_vsc_id_from_smartcard(sc);
 
             #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-            if !reader.is_empty() {
-                if let Ok(der_cert) = self_signed.to_der() {
-                    let hash = Sha256::digest(der_cert);
-                    let hex_hash = buffer_to_hex(&hash);
-                    win_state.add_cert_hash_for_reader(&reader, &hex_hash);
-                    let _ = save_state(&win_state);
-                }
+            if !reader.is_empty()
+                && let Ok(der_cert) = self_signed.to_der()
+            {
+                let hash = Sha256::digest(der_cert);
+                let hex_hash = buffer_to_hex(&hash);
+                win_state.add_cert_hash_for_reader(&reader, &hex_hash);
+                let _ = save_state(&win_state);
             }
 
             let container_name = get_key_provider_info(cred)?.get_container_name()?;
@@ -384,7 +393,9 @@ pub(crate) async fn generate_self_signed_cert_vsc(
             Ok((self_signed.to_der()?, attestation))
         }
         None => {
-            error!("Failed to retrieve credential for freshly generated key pair in generate_self_signed_cert_vsc");
+            error!(
+                "Failed to retrieve credential for freshly generated key pair in generate_self_signed_cert_vsc"
+            );
             Err(Error::Unrecognized)
         }
     }
@@ -421,7 +432,9 @@ pub(crate) async fn import_p12_vsc(
         )?
         .get()
     {
-        error!("Failed to install PKCS #12 object into SmartCard: {e:?}. Trying to install into software module.");
+        error!(
+            "Failed to install PKCS #12 object into SmartCard: {e:?}. Trying to install into software module."
+        );
         CertificateEnrollmentManager::UserCertificateEnrollmentManager()?
             .ImportPfxDataToKspAsync(
                 &base64_pkcs12_h,
@@ -463,7 +476,7 @@ pub(crate) async fn verify_and_decrypt_vsc(
     let xml = purebred_authorize_request(content, env).await?;
 
     let enc_ci = match is_ota {
-        true => crate::misc::utils::get_encrypted_payload_content(&xml)?,
+        true => pbykcorelib::misc::utils::get_encrypted_payload_content(&xml)?,
         false => xml.to_vec(),
     };
 
@@ -487,7 +500,7 @@ pub(crate) async fn verify_and_decrypt_vsc(
     let os_iv = OctetString::from_der(&enc_params)?;
     let iv = os_iv.as_bytes();
 
-    let ct = match ed.encrypted_content.encrypted_content {
+    let mut ct = match ed.encrypted_content.encrypted_content {
         Some(ct) => ct.as_bytes().to_vec(),
         None => return Err(Error::Unrecognized),
     };
@@ -501,13 +514,17 @@ pub(crate) async fn verify_and_decrypt_vsc(
             _ => continue,
         };
 
-        let key = GenericArray::from_slice(&key);
-
         /// decryption type
         type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-        let cipher = Aes256CbcDec::new(key, iv.into());
-        if let Ok(pt) = cipher.decrypt_padded_vec_mut::<cipher::block_padding::Pkcs7>(&ct) {
-            return Ok(Zeroizing::new(pt));
+        let cipher = match Aes256CbcDec::new_from_slices(&key, iv) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("Failed to create new Aes256CbcDec instance: {e}. Continuing...");
+                continue;
+            }
+        };
+        if let Ok(pt) = cipher.decrypt_padded::<cipher::block_padding::Pkcs7>(&mut ct) {
+            return Ok(Zeroizing::new(pt.to_vec()));
         }
     }
     Err(Error::Unrecognized)
@@ -539,92 +556,102 @@ pub(crate) async fn process_payloads_vsc(
     let mut p12_index = 0;
     let mut recovered_index = 0;
     for payload in payloads {
-        if let Some(dict) = payload.as_dictionary() {
-            if let Some(payload_type) = dict.get("PayloadType") {
-                match payload_type.as_string() {
-                    Some(t) => {
-                        if "com.apple.security.scep" == t {
-                            let payload_content = match dict.get("PayloadContent") {
-                                Some(pc) => match pc.as_dictionary() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!("Failed to parse PayloadContent as a dictionary for SCEP payload.");
-                                        return Err(Error::Plist);
-                                    }
-                                },
+        if let Some(dict) = payload.as_dictionary()
+            && let Some(payload_type) = dict.get("PayloadType")
+        {
+            match payload_type.as_string() {
+                Some(t) => {
+                    if "com.apple.security.scep" == t {
+                        let payload_content = match dict.get("PayloadContent") {
+                            Some(pc) => match pc.as_dictionary() {
+                                Some(d) => d,
                                 None => {
-                                    error!("SCEP payload missing PayloadContent.");
+                                    error!(
+                                        "Failed to parse PayloadContent as a dictionary for SCEP payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
-
-                            if let Err(e) = process_scep_payload_vsc(
-                                smartcard,
-                                payload_content,
-                                get_as_string(dict, "PayloadDisplayName"),
-                                env,
-                            )
-                            .await
-                            {
-                                error!("Failed to process SCEP payload: {e:?}.");
-                                return Err(e);
+                            },
+                            None => {
+                                error!("SCEP payload missing PayloadContent.");
+                                return Err(Error::Plist);
                             }
-                        } else if "com.apple.security.pkcs12" == t {
-                            let payload_content = match dict.get("PayloadContent") {
-                                Some(pc) => match pc.as_data() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!("Failed to parse PayloadContent as a data for PKCS #12 payload.");
-                                        return Err(Error::Plist);
-                                    }
-                                },
+                        };
+
+                        if let Err(e) = process_scep_payload_vsc(
+                            smartcard,
+                            payload_content,
+                            get_as_string(dict, "PayloadDisplayName"),
+                            env,
+                        )
+                        .await
+                        {
+                            error!("Failed to process SCEP payload: {e:?}.");
+                            return Err(e);
+                        }
+                    } else if "com.apple.security.pkcs12" == t {
+                        let payload_content = match dict.get("PayloadContent") {
+                            Some(pc) => match pc.as_data() {
+                                Some(d) => d,
                                 None => {
-                                    error!("PKCS #12 payload missing PayloadContent.");
+                                    error!(
+                                        "Failed to parse PayloadContent as a data for PKCS #12 payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
+                            },
+                            None => {
+                                error!("PKCS #12 payload missing PayloadContent.");
+                                return Err(Error::Plist);
+                            }
+                        };
 
-                            let password = match dict.get("Password") {
-                                Some(pc) => match pc.as_string() {
-                                    Some(d) => d,
-                                    None => {
-                                        error!("Failed to parse Password as a data for PKCS #12 payload.");
-                                        return Err(Error::Plist);
-                                    }
-                                },
+                        let password = match dict.get("Password") {
+                            Some(pc) => match pc.as_string() {
+                                Some(d) => d,
                                 None => {
-                                    error!("PKCS #12 payload missing Password.");
+                                    error!(
+                                        "Failed to parse Password as a data for PKCS #12 payload."
+                                    );
                                     return Err(Error::Plist);
                                 }
-                            };
-                            let friendly_name = match dict.get("DisplayName") {
-                                Some(pc) => match pc.as_string() {
-                                    Some(d) => d.to_string(),
-                                    None => {
-                                        error!("Failed to parse Password as a data for PKCS #12 payload.");
-                                        return Err(Error::Plist);
-                                    }
-                                },
-                                None => format!("PKCS #12 #{recovered_index}"),
-                            };
+                            },
+                            None => {
+                                error!("PKCS #12 payload missing Password.");
+                                return Err(Error::Plist);
+                            }
+                        };
+                        let friendly_name = match dict.get("DisplayName") {
+                            Some(pc) => match pc.as_string() {
+                                Some(d) => d.to_string(),
+                                None => {
+                                    error!(
+                                        "Failed to parse Password as a data for PKCS #12 payload."
+                                    );
+                                    return Err(Error::Plist);
+                                }
+                            },
+                            None => format!("PKCS #12 #{recovered_index}"),
+                        };
 
-                            info!("Processing PKCS #12 payload with index {p12_index}");
-                            if let Err(e) =
-                                import_p12_vsc(smartcard, payload_content, password, &friendly_name)
-                                    .await
-                            {
-                                error!("Failed to process PKCS #12 payload at index {p12_index}: {e:?}.");
-                                return Err(e);
-                            }
-                            p12_index += 1;
-                            if is_recover {
-                                recovered_index += 1;
-                            }
+                        info!("Processing PKCS #12 payload with index {p12_index}");
+                        if let Err(e) =
+                            import_p12_vsc(smartcard, payload_content, password, &friendly_name)
+                                .await
+                        {
+                            error!(
+                                "Failed to process PKCS #12 payload at index {p12_index}: {e:?}."
+                            );
+                            return Err(e);
+                        }
+                        p12_index += 1;
+                        if is_recover {
+                            recovered_index += 1;
                         }
                     }
-                    None => {
-                        continue;
-                    }
+                }
+                None => {
+                    continue;
                 }
             }
         }

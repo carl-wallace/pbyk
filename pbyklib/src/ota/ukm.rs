@@ -7,8 +7,10 @@ use zeroize::Zeroizing;
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::ota::get_device_cred_from_smartcard;
 
-use crate::ota::CryptoModule;
-use crate::{ota::OtaActionInputs, Error, Result, PB_MGMT_KEY};
+use crate::{
+    Error, Result, get_pb_default,
+    ota::{CryptoModule, OtaActionInputs},
+};
 
 /// Obtains fresh PIV and signature credentials and current encryption credential using the indicted
 /// YubiKey device using the URL obtained from `ukm_inputs`
@@ -23,7 +25,7 @@ pub async fn ukm(
     cm: &mut CryptoModule,
     ukm_inputs: &OtaActionInputs,
     pin: Option<Zeroizing<String>>,
-    mgmt_key: Option<&MgmKey>,
+    mgmt_key: Option<MgmKey>,
     env: &str,
 ) -> Result<()> {
     match cm {
@@ -40,7 +42,7 @@ pub async fn ukm(
                 yk,
                 ukm_inputs,
                 pin.as_bytes(),
-                mgmt_key.unwrap_or(&PB_MGMT_KEY),
+                &mgmt_key.unwrap_or(get_pb_default(yk)),
                 env,
             )
             .await

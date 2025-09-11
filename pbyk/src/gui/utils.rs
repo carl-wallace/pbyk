@@ -11,10 +11,10 @@ use dioxus_desktop::DesktopContext;
 use home::home_dir;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
-use yubikey::{piv::SlotId, YubiKey};
+use yubikey::{YubiKey, piv::SlotId};
 
-use certval::{is_self_signed, PDVCertificate, PkiEnvironment};
-use pbyklib::{utils::get_cert_from_slot, utils::state::create_app_home, Error, Result};
+use certval::{PDVCertificate, PkiEnvironment, is_self_signed};
+use pbyklib::{Error, Result, utils::get_cert_from_slot, utils::state::create_app_home};
 
 use crate::{args::PbYkArgs, gui::gui_main::Phase};
 
@@ -127,22 +127,24 @@ pub(crate) fn read_saved_window_size() -> SavedWindowsSize {
 
 /// Searches the map for the given key. If an entry is found, the value is returned. Else, None is returned.
 pub(crate) fn string_or_none(ev: &Event<FormData>, key: &str) -> Option<String> {
-    if let Some(v) = ev.values().get(key) {
-        if !v[0].is_empty() {
-            return Some(v[0].clone());
-        }
+    if let Some(v) = ev.values().get(key)
+        && !v[0].is_empty()
+    {
+        Some(v[0].clone())
+    } else {
+        None
     }
-    None
 }
 
 /// Searches the map for the given key. If an entry is found, the value is returned. Else, the provided default value is returned as a String.
 pub(crate) fn string_or_default(ev: &Event<FormData>, key: &str, default: &str) -> String {
-    if let Some(v) = ev.values().get(key) {
-        if !v[0].is_empty() {
-            return v[0].clone();
-        }
+    if let Some(v) = ev.values().get(key)
+        && !v[0].is_empty()
+    {
+        v[0].clone()
+    } else {
+        default.to_string()
     }
-    default.to_string()
 }
 
 /// Returns PreEnroll if no certificate can be read from CardAuthentication slot or if

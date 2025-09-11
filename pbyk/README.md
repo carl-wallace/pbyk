@@ -9,7 +9,7 @@ provided in a timely manner. When provisioning user certificates to the device, 
 passwords (OTPs) are required. These can be obtained by authenticating to the target Purebred instance using the
 (simulated) CAC credentials from which derived credentials will be created.
 
-The `pbyk` utility uses support provided by the [pbyklib](../pbyklib/index.html) crate.
+The `pbyk` utility uses support provided by the [pbyklib](../pbyklib/index.html) crate and the the [pbykcorelib](../pbykcorelib/index.html) crate.
 
 ## Usage
 The available options depend on the elected features. The example below was prepared using `--features om_sipr,sipr,gui,vsc`.
@@ -43,7 +43,7 @@ Diagnostics:
 Utilities:
   -y, --list-yubikeys  Lists available YubiKey devices, if any
   -v, --list-vscs      Lists available virtual smart card (VSC) devices, if any
-  -r, --reset-device   Resets the indicated device to a default state using a management key expected by Purebred applications
+  -r, --reset-device   Resets the indicated device to a default state using the management key expected by Purebred applications; `AES192` is used with firmware 5.7.0 and later, otherwise `TDES` is used
   -i, --interactive    Run pbyk as command line app
 
 Logging:
@@ -139,8 +139,8 @@ when `pbyk` is built. The following environment-related features are available:
 | Feature  | Description                 |
 |----------|-----------------------------|
 | dev      | Development environment     |
-| om_nipr* | Test environment for NIPR   |
-| nipr*    | NIPR production environment |
+| om_nipr  | Test environment for NIPR   |
+| nipr     | NIPR production environment |
 | om_sipr  | Test environment for SIPR   |
 | sipr     | SIPR production environment |
 | gui      | GUI support                 |
@@ -159,8 +159,6 @@ When more than one environment is available, the `environment` option must be sp
 The `vsc` feature is only available on Windows systems. There is also a `reset_vsc` feature that is not currently
 supported and that may be removed.
 
-\* The pbyk application does not currently support processing BER encoded data. NIPR CAs presently return BER-encoded data when executing the [SCEP protocol](https://datatracker.ietf.org/doc/html/rfc8894). The NIPR features have been temporarily disabled until the NIPR CAs have been updated and return DER-encoded data. 
-
 ## Status
 
 The `pbyk` utility has been successfully tested against dev, om-sipr and sipr environments.
@@ -170,7 +168,7 @@ The `pbyk` utility has been successfully tested against dev, om-sipr and sipr en
 ### General
 - NIPR and O&M NIPR builds are not presently supported owing to lack of support for BER decoding in the `cms` crate and the current NIPR CA's usage of BER encoding when returning CA certificates during SCEP processing. The next CA update should enable these features to be used.
 - GUI support is not presently provided for Linux
-- 
+ 
 ### GUI mode
 - Console window remains visible when run in GUI mode except on Windows
 - State information is only saved when an action is performed, not when app is closed
@@ -181,9 +179,25 @@ The `pbyk` utility has been successfully tested against dev, om-sipr and sipr en
 - VSC reset support is not provided by `pbyk` for various reasons, including the need for administrator permissions to manage virtual smart cards in the target environment, insufficiency of the VSC content management API (i.e., no means to delete a key), and inability to get VSC management operations (i.e., card creation and deletion) to work in an FFI context.
 - The user's CAPI certificate store must be manually cleaned, i.e., using the certificate snap-in in MMC, after deleting and recreating a previously provisioned VSC.
 
+## Release notes
+
+### v0.4.0
+- Adds support for YubiKeys that use AES management keys
+- Adds support for larger RSA key sizes on YubiKeys that support larger RSA key sizes. For devices that support larger RSA key sizes, a 3072-bit RSA key is generated during pre-enrollment (instead of the default 2048-bit key). During enrollment and user key management, key sizes are dictated by the payloads supplied by the Purebred portal. If a device does not support a requested key size, a 2048-bit key is generated instead. Recovery operations that attempt to install an RSA key larger than the target YubiKey supports will fail.
+- Removes prohibition on using "nipr" and "om_nipr" features
+- Update Rust edition and version
+- Align with pre-release versions of PKI-related crates, i.e., x509-cert, certval, etc.
+- Use updated PKI artifacts from [pb_pki](https://github.com/carl-wallace/pb_pki)
+
+### v0.3.0
+- Unreleased version that added support for virtual smart cards (VSCs) on Windows systems
+
+### v0.2.0
+- Unreleased version that added a graphical user interface (GUI)
+
 ## Minimum Supported Rust Version
 
-This crate requires **Rust 1.80.1** at a minimum.
+This crate requires **Rust 1.88.0** at a minimum.
 
 ## License
 

@@ -3,15 +3,22 @@
 #![cfg(all(target_os = "windows", feature = "vsc"))]
 
 use core::ffi::c_void;
-use std::ptr::NonNull;
-use std::{ffi::CString, ptr::null, time::Duration};
+use std::{
+    ffi::CString,
+    ptr::{NonNull, null},
+    time::Duration,
+    vec,
+};
 
 use log::error;
-use windows::Win32::Security::Cryptography::{
-    CertCloseStore, CertEnumCertificatesInStore, CertGetCertificateContextProperty, CertOpenStore,
-    CryptMemAlloc, CryptMemFree, CERT_CONTEXT, CERT_KEY_PROV_INFO_PROP_ID,
-    CERT_STORE_OPEN_EXISTING_FLAG, CERT_STORE_PROV_SYSTEM_A, CRYPT_KEY_PROV_INFO,
-    PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
+use windows::{
+    Win32::Security::Cryptography::{
+        CERT_CONTEXT, CERT_KEY_PROV_INFO_PROP_ID, CERT_STORE_OPEN_EXISTING_FLAG,
+        CERT_STORE_PROV_SYSTEM_A, CRYPT_KEY_PROV_INFO, CertCloseStore, CertEnumCertificatesInStore,
+        CertGetCertificateContextProperty, CertOpenStore, CryptMemAlloc, CryptMemFree,
+        PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
+    },
+    core::HSTRING,
 };
 
 use rsa::{pkcs1::DecodeRsaPrivateKey, pkcs1v15::SigningKey};
@@ -19,29 +26,34 @@ use sha2::Sha256;
 
 use base64ct::{Base64, Encoding};
 use cms::{
-    builder::SignedDataBuilder, cert::CertificateChoices, signed_data::EncapsulatedContentInfo,
+    builder::SignedDataBuilder,
+    cert::CertificateChoices,
+    content_info::ContentInfo,
+    signed_data::{EncapsulatedContentInfo, SignedData},
 };
-use const_oid::db::rfc5912::{ID_CCT_PKI_DATA, ID_CE_SUBJECT_KEY_IDENTIFIER};
-use der::{asn1::OctetString, Choice, Decode, Encode, Sequence};
+use const_oid::db::{
+    rfc5911::ID_SIGNED_DATA,
+    rfc5912::{ID_CCT_PKI_DATA, ID_CE_SUBJECT_KEY_IDENTIFIER},
+};
+use der::{
+    Choice, Decode, Encode, Sequence,
+    asn1::{Int, OctetString},
+};
 use x509_cert::{
-    builder::{Builder, CertificateBuilder, Profile},
+    Certificate,
+    builder::{Builder, CertificateBuilder},
     request::CertReq,
     serial_number::SerialNumber,
     time::Validity,
-    Certificate,
 };
 
 use certval::{ExtensionProcessing, PDVCertificate, PDVExtension};
-use cms::content_info::ContentInfo;
-use cms::signed_data::SignedData;
-use const_oid::db::rfc5911::ID_SIGNED_DATA;
-use der::asn1::Int;
-use windows::core::HSTRING;
+use pbykcorelib::misc::utils::get_encap_content;
 
-use crate::misc::utils::get_encap_content;
-use crate::misc_win::csr::TaggedRequest::Tcr;
-use crate::misc_win::vsc_signer::CertContext;
-use crate::{Error, Result, CERT_SYSTEM_STORE_CURRENT_USER};
+use crate::{
+    CERT_SYSTEM_STORE_CURRENT_USER, Error, Result,
+    misc_win::{csr::TaggedRequest::Tcr, profiles::PurebredDevCert, vsc_signer::CertContext},
+};
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -49,7 +61,7 @@ use crate::{Error, Result, CERT_SYSTEM_STORE_CURRENT_USER};
 /// Takes a `Certificate` object and a byte array and returns true if the `Certificate` contains a `SubjectKeyIdentifier`
 /// extension whose value matches the byte array.
 fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
-    if let Some(exts) = &cert.tbs_certificate.extensions {
+    if let Some(exts) = cert.tbs_certificate().extensions() {
         for ext in exts {
             if ext.extn_id == ID_CE_SUBJECT_KEY_IDENTIFIER {
                 match OctetString::from_der(ext.extn_value.as_bytes()) {
@@ -59,8 +71,12 @@ fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
                         }
                     }
                     Err(e) => {
-                        error!("Failed to parse SubjectKeyIdentifier extension from Certificate with serial number {} as\
-                         an OctetString: {}. Ignoring and continuing...", cert.tbs_certificate.serial_number, e);
+                        error!(
+                            "Failed to parse SubjectKeyIdentifier extension from Certificate with serial number {} as\
+                         an OctetString: {}. Ignoring and continuing...",
+                            cert.tbs_certificate().serial_number(),
+                            e
+                        );
                     }
                 }
             }
@@ -84,23 +100,18 @@ fn skid_match(cert: &Certificate, target_skid: &[u8]) -> bool {
 ///   allow use a private key before a CA-issued certificate has been issued
 /// * `signer` - [CertContext] object that (presumably) wraps a `CERT_CONTEXT` that references the `Certificate` in `cert`
 pub(crate) fn resign_as_self(cert: &Certificate, signer: &CertContext) -> Result<Certificate> {
-    let profile = Profile::Leaf {
-        issuer: cert.tbs_certificate.subject.clone(),
-        enable_key_agreement: false,
-        enable_key_encipherment: true,
-        include_subject_key_identifier: true,
-    };
-
+    let profile = PurebredDevCert::new(
+        cert.tbs_certificate().subject().clone(),
+        cert.tbs_certificate().subject().clone(),
+    )?;
     let builder = CertificateBuilder::new(
         profile,
-        cert.tbs_certificate.serial_number.clone(),
-        cert.tbs_certificate.validity,
-        cert.tbs_certificate.subject.clone(),
-        cert.tbs_certificate.subject_public_key_info.clone(),
-        signer,
+        cert.tbs_certificate().serial_number().clone(),
+        *cert.tbs_certificate().validity(),
+        cert.tbs_certificate().subject_public_key_info().clone(),
     )?;
 
-    Ok(builder.build()?)
+    Ok(builder.build(signer)?)
 }
 
 /// `PKIData` is defined in [RFC 5272 Section 3.2.1]. This implementation ignores the control_sequence,
@@ -214,23 +225,19 @@ async fn consume_parsed_csr(csr: &CertReq) -> Result<(String, Certificate)> {
     let issuer_cert = Certificate::from_der(issuer_cert_bytes)?;
 
     // generate fake certificate with a ~10 year validity period
-    let profile = Profile::Leaf {
-        issuer: issuer_cert.tbs_certificate.issuer.clone(),
-        enable_key_agreement: false,
-        enable_key_encipherment: true,
-        include_subject_key_identifier: true,
-    };
+    let profile = PurebredDevCert::new(
+        issuer_cert.tbs_certificate().issuer().clone(),
+        csr.info.subject.clone(),
+    )?;
 
     let builder = CertificateBuilder::new(
         profile,
         SerialNumber::from(1u32),
         Validity::from_now(Duration::new(365 * 24 * 60 * 60 * 10, 0))?,
-        csr.info.subject.clone(),
         csr.info.public_key.clone(),
-        &signer,
     )?;
 
-    let certificate = builder.build()?;
+    let certificate = builder.build(&signer)?;
     let p7 = prepare_base64_certs_only_p7(&certificate)?;
     Ok((p7, certificate))
 }
@@ -316,13 +323,17 @@ pub(crate) fn get_credential_list(target_cert: Option<PDVCertificate>) -> Result
                                     )) {
                                         Ok(cc) => rv.push(cc),
                                         Err(e) => {
-                                            error!("Failed to prepare CertContext in get_credential_list: {e:?}. Continuing...")
+                                            error!(
+                                                "Failed to prepare CertContext in get_credential_list: {e:?}. Continuing..."
+                                            )
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
-                                error!("Failed to parse certificate from MY store: {e:?}. Ignoring and continuing...");
+                                error!(
+                                    "Failed to parse certificate from MY store: {e:?}. Ignoring and continuing..."
+                                );
                             }
                         };
                     }
@@ -333,7 +344,7 @@ pub(crate) fn get_credential_list(target_cert: Option<PDVCertificate>) -> Result
             };
             prev_cert_context = CertEnumCertificatesInStore(cert_store, Some(prev_cert_context));
         }
-        if let Err(e) = CertCloseStore(cert_store, 0) {
+        if let Err(e) = CertCloseStore(Some(cert_store), 0) {
             error!("CertCloseStore failed with {e:?}. Ignoring and continuing...");
         }
     }
@@ -460,11 +471,13 @@ fn list_container_names_test() {
                         }
 
                         let cur_cert = cert_context.cert();
-                        let subject = cur_cert.tbs_certificate.subject.to_string();
+                        let subject = cur_cert.tbs_certificate().subject.to_string();
                         println!("subject: {subject}\n");
                     }
                     Err(e) => {
-                        error!("Failed to prepare CertContext in list_container_names_test: {e:?}. Continuing...");
+                        error!(
+                            "Failed to prepare CertContext in list_container_names_test: {e:?}. Continuing..."
+                        );
                     }
                 }
                 prev_cert_context =
