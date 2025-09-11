@@ -209,8 +209,8 @@ pub(crate) fn GuiMain() -> Element {
         if !serials.is_empty() {
             serials[0].clone()
         } else {
-            error!("Failed to list YubiKeys");
-            startup_fatal_error_val = "Failed to list YubiKeys or VSCs. Close the app, make sure at least one YubiKey is available then try again.".to_string();
+            error!("Failed to list YubiKeys or VSCs");
+            startup_fatal_error_val = "Failed to list YubiKeys or VSCs. Close the app, make sure a YubiKey or VSC is available then try again.".to_string();
             String::new()
         }
     });
@@ -241,7 +241,7 @@ pub(crate) fn GuiMain() -> Element {
                 Err(e) => {
                     error!("Failed to connect to YubiKey with serial {str_serial} with: {e}");
                     startup_fatal_error_val = format!(
-                        "Failed to connect to YubiKey with serial {str_serial} with: {}. Close the app, make sure one YubiKey is available then try again.",
+                        "Failed to connect to YubiKey with serial {str_serial} with: {}. Close the app, make sure a YubiKey or VSC is available then try again.",
                         e
                     );
                     None
@@ -273,9 +273,9 @@ pub(crate) fn GuiMain() -> Element {
                 match determine_vsc_phase(&str_serial) {
                     Ok(p) => phase = p,
                     Err(e) => {
-                        error!("Failed to connect to YubiKey with serial {str_serial} with: {e:?}");
+                        error!("Failed to connect to YubiKey or VSC with serial {str_serial} with: {e:?}");
                         startup_fatal_error_val = format!(
-                            "Failed to connect to YubiKey with serial {str_serial} with: {:?}. Close the app, make sure one YubiKey is available then try again.",
+                            "Failed to connect to YubiKey or VSC with serial {str_serial} with: {:?}. Close the app, make sure a YubiKey or VSC is available then try again.",
                             e
                         );
                     }

@@ -139,8 +139,8 @@ when `pbyk` is built. The following environment-related features are available:
 | Feature  | Description                 |
 |----------|-----------------------------|
 | dev      | Development environment     |
-| om_nipr* | Test environment for NIPR   |
-| nipr*    | NIPR production environment |
+| om_nipr  | Test environment for NIPR   |
+| nipr     | NIPR production environment |
 | om_sipr  | Test environment for SIPR   |
 | sipr     | SIPR production environment |
 | gui      | GUI support                 |
@@ -158,8 +158,6 @@ When more than one environment is available, the `environment` option must be sp
 ```
 The `vsc` feature is only available on Windows systems. There is also a `reset_vsc` feature that is not currently
 supported and that may be removed.
-
-\* The pbyk application does not currently support processing BER encoded data. NIPR CAs presently return BER-encoded data when executing the [SCEP protocol](https://datatracker.ietf.org/doc/html/rfc8894). The NIPR features have been temporarily disabled until the NIPR CAs have been updated and return DER-encoded data. 
 
 ## Status
 
@@ -183,9 +181,19 @@ The `pbyk` utility has been successfully tested against dev, om-sipr and sipr en
 
 ## Release notes
 
-### v0.2.0
+### v0.4.0
 - Adds support for YubiKeys that use AES management keys
-- Adds support for larger RSA key sizes on YubiKeys that support larger RSA key sizes. For devices that support larger RSA key sizes, a 3072-bit RSA key is generated during pre-enrollment (instead of the default 2048-bit key). During enrollment and user key management, key sizes are dictated by the payloads supplied by the Purebred portal. If a device does not support a requested key size, a 2048-bit key is generated instead. Recovery operations that attempt it installed an RSA key larger than the target YubiKey supports will fail.
+- Adds support for larger RSA key sizes on YubiKeys that support larger RSA key sizes. For devices that support larger RSA key sizes, a 3072-bit RSA key is generated during pre-enrollment (instead of the default 2048-bit key). During enrollment and user key management, key sizes are dictated by the payloads supplied by the Purebred portal. If a device does not support a requested key size, a 2048-bit key is generated instead. Recovery operations that attempt to install an RSA key larger than the target YubiKey supports will fail.
+- Removes prohibition on using "nipr" and "om_nipr" features
+- Update Rust edition and version
+- Align with pre-release versions of PKI-related crates, i.e., x509-cert, certval, etc.
+- Use updated PKI artifacts from [pb_pki](https://github.com/carl-wallace/pb_pki)
+
+### v0.3.0
+- Unreleased version that added support for virtual smart cards (VSCs) on Windows systems
+
+### v0.2.0
+- Unreleased version that added a graphical user interface (GUI)
 
 ## Minimum Supported Rust Version
 

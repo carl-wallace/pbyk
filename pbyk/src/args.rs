@@ -343,7 +343,7 @@ pub struct PbYkArgs {
     feature = "nipr"
 )))]
 compile_error! {
-    "At least one of feature \"dev\", \"om\", \"om_nipr\", \"om_sipr\", or \"sipr\" must be enabled for this crate."
+    "At least one of feature \"dev\", \"om\", \"om_nipr\", \"om_sipr\", \"nipr\", or \"sipr\" must be enabled for this crate."
 }
 
 #[cfg(all(
