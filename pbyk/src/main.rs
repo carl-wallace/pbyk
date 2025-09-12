@@ -822,6 +822,15 @@ async fn interactive_main() {
     // let pin = "123456";
 
     if let Some(pre_enroll_otp) = args.pre_enroll_otp {
+        if 8 != pre_enroll_otp.len() || !pre_enroll_otp.chars().all(|c| c.is_numeric()) {
+            println!(
+                "{}",
+                "The pre_enroll_otp value must be 8 characters long and only contain digits."
+                    .bold()
+            );
+            return;
+        }
+
         match pre_enroll(
             &mut cm,
             &agent_edipi,
@@ -852,6 +861,15 @@ async fn interactive_main() {
             }
         }
     } else if let Some(enroll_otp) = args.enroll_otp {
+        if 8 != enroll_otp.len() || !enroll_otp.chars().all(|c| c.is_numeric()) {
+            println!(
+                "{}",
+                "The enroll_otp value must be 8 characters long and only contain digits."
+                    .bold()
+            );
+            return;
+        }
+
         let oai = OtaActionInputs::new(
             &args.serial.as_ref().unwrap().to_string(), // allow unwrap where clap enforces presence
             &enroll_otp,
@@ -879,6 +897,15 @@ async fn interactive_main() {
             }
         }
     } else if let Some(ukm_otp) = args.ukm_otp {
+        if 8 != ukm_otp.len() || !ukm_otp.chars().all(|c| c.is_numeric()) {
+            println!(
+                "{}",
+                "The ukm_otp value must be 8 characters long and only contain digits."
+                    .bold()
+            );
+            return;
+        }
+
         let oai = OtaActionInputs::new(
             &args.serial.as_ref().unwrap().to_string(), // allow unwrap where clap enforces presence
             &ukm_otp,
