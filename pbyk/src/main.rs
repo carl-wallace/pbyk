@@ -718,6 +718,21 @@ async fn interactive_main() {
     #[allow(unused_assignments)]
     let mut require_pin = false;
 
+    let agent_edipi = match args.agent_edipi {
+        Some(agent_edipi) => {
+            if 10 != agent_edipi.len() || !agent_edipi.chars().all(|c| c.is_numeric()) {
+                println!(
+                    "{}",
+                    "The agent_edipi value must be 10 characters long and only contain digits."
+                        .bold()
+                );
+                return;
+            }
+            agent_edipi
+        }
+        None => String::default(),
+    };
+
     let (mut cm, mgmt_key) = match &args.serial {
         Some(serial) => match serial.parse::<u32>() {
             Ok(s) => {
@@ -809,7 +824,7 @@ async fn interactive_main() {
     if let Some(pre_enroll_otp) = args.pre_enroll_otp {
         match pre_enroll(
             &mut cm,
-            &args.agent_edipi.unwrap(), // allow unwrap where clap enforces presence
+            &agent_edipi,
             &pre_enroll_otp,
             &pb_base_url,
             pin,
@@ -843,16 +858,7 @@ async fn interactive_main() {
             &pb_base_url,
             &app,
         );
-        match enroll(
-            &mut cm,
-            &args.agent_edipi.unwrap().to_string(), // allow unwrap where clap enforces presence
-            &oai,
-            pin,
-            mgmt_key,
-            &env,
-        )
-        .await
-        {
+        match enroll(&mut cm, &agent_edipi, &oai, pin, mgmt_key, &env).await {
             Ok(_) => {
                 println!("Enroll completed successfully");
             }

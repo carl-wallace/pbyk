@@ -273,7 +273,9 @@ pub(crate) fn GuiMain() -> Element {
                 match determine_vsc_phase(&str_serial) {
                     Ok(p) => phase = p,
                     Err(e) => {
-                        error!("Failed to connect to YubiKey or VSC with serial {str_serial} with: {e:?}");
+                        error!(
+                            "Failed to connect to YubiKey or VSC with serial {str_serial} with: {e:?}"
+                        );
                         startup_fatal_error_val = format!(
                             "Failed to connect to YubiKey or VSC with serial {str_serial} with: {:?}. Close the app, make sure a YubiKey or VSC is available then try again.",
                             e
