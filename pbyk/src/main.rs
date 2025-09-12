@@ -933,6 +933,16 @@ async fn interactive_main() {
             }
         }
     } else if let Some(recover_otp) = args.recover_otp {
+        if 8 != recover_otp.len() || !recover_otp.chars().all(|c| c.is_numeric()) {
+            println!(
+                "{}",
+                "The recover_otp value must be 8 characters long and only contain digits."
+                    .bold()
+            );
+            return;
+        }
+
+
         let oai = OtaActionInputs::new(
             &args.serial.as_ref().unwrap().to_string(), // allow unwrap where clap enforces presence
             &recover_otp,
