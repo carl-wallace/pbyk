@@ -487,7 +487,15 @@ pub(crate) fn app(
                                 PreEnroll => {
                                     info!("Starting Pre-enroll operation...");
                                     let agent_edipi = match string_or_none(&ev, "edipi") {
-                                        Some(agent_edipi) => agent_edipi,
+                                        Some(agent_edipi) => {
+                                            if !agent_edipi.chars().all(|c| c.is_numeric()) || 10 != agent_edipi.len() {
+                                                let sm = "Agent EDIPI values MUST be exactly 10 characters long and only contain numeric values.";
+                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
+                                                return;
+                                            }
+                                            agent_edipi
+                                        },
                                         None => {
                                             let sm = "No Agent EDIPI was provided. Please enter the EDIPI of the cooperating Purebred Agent and try again";
                                             set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
@@ -589,7 +597,15 @@ pub(crate) fn app(
                                 Enroll => {
                                     info!("Starting Enroll operation...");
                                     let agent_edipi = match string_or_none(&ev, "edipi") {
-                                        Some(agent_edipi) => agent_edipi,
+                                        Some(agent_edipi) => {
+                                            if !agent_edipi.chars().all(|c| c.is_numeric()) || 10 != agent_edipi.len() {
+                                                let sm = "Agent EDIPI values MUST be exactly 10 characters long and only contain numeric values.";
+                                                set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
+                                                show_message!();
+                                                return;
+                                            }
+                                            agent_edipi
+                                        },
                                         None => {
                                             let sm = "No Agent EDIPI was provided. Please enter the EDIPI of the cooperating Purebred Agent and try again";
                                             set_error(sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
