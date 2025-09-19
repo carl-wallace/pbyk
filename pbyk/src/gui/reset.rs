@@ -29,12 +29,19 @@ pub(crate) fn reset(
     macro_rules! show_error_dialog {
         () => {
             if !ui_signals.s_error_msg.read().is_empty() {
+                let context = ui_signals.s_error_msg.to_string();
+                let (icon, heading) = if context.contains("has not been configured for use with Purebred") {
+                    (Some(Icon::Info), Some("Reset Device".to_string()))
+                } else {
+                    (Some(Icon::Error), Some("Reset Error".to_string()))
+                };
+
                 let _id = ui_signals.toast.write().popup(ToastInfo {
-                    heading: Some("Reset Error".to_string()),
-                    context: ui_signals.s_error_msg.to_string(),
+                    heading,
+                    context,
                     allow_toast_close: true,
                     position: dioxus_toast::Position::TopLeft,
-                    icon: Some(Icon::Error),
+                    icon,
                     hide_after: None,
                 });
                 ui_signals.s_error_msg.set(String::new());
