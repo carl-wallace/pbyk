@@ -864,8 +864,7 @@ async fn interactive_main() {
         if 8 != enroll_otp.len() || !enroll_otp.chars().all(|c| c.is_numeric()) {
             println!(
                 "{}",
-                "The enroll_otp value must be 8 characters long and only contain digits."
-                    .bold()
+                "The enroll_otp value must be 8 characters long and only contain digits.".bold()
             );
             return;
         }
@@ -900,8 +899,7 @@ async fn interactive_main() {
         if 8 != ukm_otp.len() || !ukm_otp.chars().all(|c| c.is_numeric()) {
             println!(
                 "{}",
-                "The ukm_otp value must be 8 characters long and only contain digits."
-                    .bold()
+                "The ukm_otp value must be 8 characters long and only contain digits.".bold()
             );
             return;
         }
@@ -936,12 +934,10 @@ async fn interactive_main() {
         if 8 != recover_otp.len() || !recover_otp.chars().all(|c| c.is_numeric()) {
             println!(
                 "{}",
-                "The recover_otp value must be 8 characters long and only contain digits."
-                    .bold()
+                "The recover_otp value must be 8 characters long and only contain digits.".bold()
             );
             return;
         }
-
 
         let oai = OtaActionInputs::new(
             &args.serial.as_ref().unwrap().to_string(), // allow unwrap where clap enforces presence
