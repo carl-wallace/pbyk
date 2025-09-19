@@ -29,12 +29,19 @@ pub(crate) fn reset(
     macro_rules! show_error_dialog {
         () => {
             if !ui_signals.s_error_msg.read().is_empty() {
+                let context = ui_signals.s_error_msg.to_string();
+                let icon = if context.contains("management key") {
+                    Some(Icon::Info)
+                } else {
+                    Some(Icon::Error)
+                };
+
                 let _id = ui_signals.toast.write().popup(ToastInfo {
                     heading: Some("Reset Error".to_string()),
-                    context: ui_signals.s_error_msg.to_string(),
+                    context,
                     allow_toast_close: true,
                     position: dioxus_toast::Position::TopLeft,
-                    icon: Some(Icon::Error),
+                    icon,
                     hide_after: None,
                 });
                 ui_signals.s_error_msg.set(String::new());
