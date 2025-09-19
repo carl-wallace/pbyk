@@ -259,7 +259,7 @@ pub(crate) fn GuiMain() -> Element {
                     }
                     Err(e) => {
                         let err = format!(
-                            "The YubiKey with serial number {str_serial} is not using the expected management key. Please reset the device then try again."
+                            "The YubiKey with serial number {str_serial} has not been configured for use with Purebred. To configure, please complete the provided form then continue with enrollment."
                         );
                         error!("{err}: {e:?}");
                         do_reset = true;

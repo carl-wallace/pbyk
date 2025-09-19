@@ -746,7 +746,7 @@ async fn interactive_main() {
                 let mgmt_key = get_pb_default(&yubikey);
                 if yubikey.authenticate(&mgmt_key).is_err() {
                     println!(
-                        "{}: this YubiKey is not using the expected management key. Please reset the device then try again.",
+                        "{}: this YubiKey has not been configured for use with Purebred. To configure, please reset then device using the --reset-device option then continue with enrollment.",
                         "ERROR".bold()
                     );
                     return;

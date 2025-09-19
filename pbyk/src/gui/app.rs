@@ -182,7 +182,7 @@ pub(crate) fn app(
                                     }
                                 }
                                 Err(e) => {
-                                    let err = format!("The YubiKey with serial number {serial} is not using the expected management key. Please reset the device then try again.");
+                                    let err = format!("The YubiKey with serial number {serial} has not been configured for use with Purebred. To configure, please complete the provided form then continue with enrollment.");
                                     error!("{err}: {e:?}");
                                     ui_signals.s_error_msg.set(err.to_string());
                                     app_signals.s_reset_req.set(true);
@@ -425,7 +425,7 @@ pub(crate) fn app(
 
                                     let mgmt_key = get_pb_default(&yubikey);
                                     if yubikey.authenticate(&mgmt_key).is_err() {
-                                        let sm = format!("The YubiKey with serial number {} is not using the expected management key. Please reset the device then try again.", yubikey.serial());
+                                        let sm = format!("The YubiKey with serial number {} has not been configured for use with Purebred. To configure, please complete the provided form then continue with enrollment.", yubikey.serial());
                                         set_error(&sm, ui_signals.s_error_msg, ui_signals.s_cursor, ui_signals.s_disabled);
 
                                         // choice dialog is no longer used, show a toast then send the user to the reset form
