@@ -25,7 +25,7 @@ reqwest = {version = "0.12.22", features = ["rustls-tls", "multipart", "blocking
 serde_json = "1.0.140"
 subtle-encoding = "0.5.1"
 
-pb_pki = {git="https://github.com/carl-wallace/pb_pki.git", branch = "updates"}
+pb_pki = {git="https://github.com/carl-wallace/pb_pki.git"}
 rand_core = { version = "0.9.3" , features = ["os_rng"]}
 rand = "0.9"
 
