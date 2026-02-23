@@ -2,8 +2,6 @@
 
 use log::error;
 use plist::Dictionary;
-use rand::rngs::OsRng;
-use rand_core::TryRngCore;
 use spki::EncodePublicKey;
 
 use rsa::RsaPublicKey;
@@ -161,7 +159,7 @@ pub fn prepare_enveloped_data(csr_der: &[u8], ca_cert: &Certificate) -> Result<V
     .map_err(|_| Error::Unrecognized)?;
 
     // Add recipient info. Multiple recipients are possible, but not used here.
-    let mut rng = OsRng.unwrap_err();
+    let mut rng = rand::rng();
     let enveloped_data = enveloped_data_builder
         .add_recipient_info(recipient_info_builder)
         .map_err(|_| Error::Unrecognized)?
