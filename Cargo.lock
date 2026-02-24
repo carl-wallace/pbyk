@@ -495,7 +495,7 @@ dependencies = [
 [[package]]
 name = "certval"
 version = "0.1.4"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=pre-release#72a2b84e01f236940fd0091cad3a49ddaa07f754"
+source = "git+https://github.com/carl-wallace/rust-pki.git?branch=pre-release#ab4fd5ae6672bc5e7a59a1351b7081a9713adf20"
 dependencies = [
  "base64ct",
  "bitvec",
@@ -698,7 +698,7 @@ checksum = "de0758edba32d61d1fd9f4d69491b47604b91ee2f7e6b33de7e54ca4ebe55dc3"
 [[package]]
 name = "cms"
 version = "0.3.0-pre.2"
-source = "git+https://github.com/RustCrypto/formats.git#e2c4c0b23499ee4e14786cff423e4d828f7bc2ad"
+source = "git+https://github.com/RustCrypto/formats.git#97dbdac01a281abf74af6616d84212d46d47a9ff"
 dependencies = [
  "aes",
  "aes-kw",
@@ -1760,7 +1760,8 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 [[package]]
 name = "ecdsa"
 version = "0.17.0-rc.16"
-source = "git+https://github.com/RustCrypto/signatures.git#210ca157dbae49d74a072f5ae4d4a37b90316a86"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91bbdd377139884fafcad8dc43a760a3e1e681aa26db910257fa6535b70e1829"
 dependencies = [
  "der",
  "digest 0.11.0",
@@ -1774,7 +1775,8 @@ dependencies = [
 [[package]]
 name = "elliptic-curve"
 version = "0.14.0-rc.28"
-source = "git+https://github.com/RustCrypto/traits.git#e42238d7f7513ec8a956526614abf071f3857188"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bde7860544606d222fd6bd6d9f9a0773321bf78072a637e1d560a058c0031978"
 dependencies = [
  "base16ct 1.0.0",
  "crypto-bigint",
@@ -3054,9 +3056,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.88"
+version = "0.3.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7e709f3e3d22866f9c25b3aff01af289b18422cc8b4262fb19103ee80fe513d"
+checksum = "f4eacb0641a310445a4c513f2a5e23e19952e269c6a38887254d5f837a305506"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
@@ -3996,7 +3998,7 @@ dependencies = [
 
 [[package]]
 name = "pbyk"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -4023,7 +4025,7 @@ dependencies = [
 
 [[package]]
 name = "pbykcorelib"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "base64ct",
  "certval",
@@ -4047,7 +4049,7 @@ dependencies = [
 
 [[package]]
 name = "pbyklib"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "aes",
  "base64ct",
@@ -4302,7 +4304,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 [[package]]
 name = "pkiprocmacros"
 version = "0.1.2"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=pre-release#72a2b84e01f236940fd0091cad3a49ddaa07f754"
+source = "git+https://github.com/carl-wallace/rust-pki.git?branch=pre-release#ab4fd5ae6672bc5e7a59a1351b7081a9713adf20"
 dependencies = [
  "quote",
  "syn 2.0.117",
@@ -4412,7 +4414,8 @@ dependencies = [
 [[package]]
 name = "primefield"
 version = "0.14.0-rc.7"
-source = "git+https://github.com/RustCrypto/elliptic-curves.git#219d95418a56be08e362d779b635c049cf4f62c9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93401c13cc7ff24684571cfca9d3cf9ebabfaf3d4b7b9963ade41ec54da196b5"
 dependencies = [
  "crypto-bigint",
  "crypto-common 0.2.0",
@@ -4798,9 +4801,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.9"
+version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a96887878f22d7bad8a3b6dc5b7440e0ada9a245242924394987b21cf2210a4c"
+checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
 name = "reqwest"
@@ -5828,9 +5831,9 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tempfile"
-version = "3.25.0"
+version = "3.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0136791f7c95b1f6dd99f9cc786b91bb81c3800b639b3478e561ddb7be95e5f1"
+checksum = "82a72c767771b47409d2345987fda8628641887d5466101319899796367354a0"
 dependencies = [
  "fastrand",
  "getrandom 0.4.1",
@@ -6482,9 +6485,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.111"
+version = "0.2.112"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec1adf1535672f5b7824f817792b1afd731d7e843d2d04ec8f27e8cb51edd8ac"
+checksum = "05d7d0fce354c88b7982aec4400b3e7fcf723c32737cef571bd165f7613557ee"
 dependencies = [
  "cfg-if",
  "once_cell",
@@ -6495,9 +6498,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-futures"
-version = "0.4.61"
+version = "0.4.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe88540d1c934c4ec8e6db0afa536876c5441289d7f9f9123d4f065ac1250a6b"
+checksum = "ee85afca410ac4abba5b584b12e77ea225db6ee5471d0aebaae0861166f9378a"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -6509,9 +6512,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.111"
+version = "0.2.112"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19e638317c08b21663aed4d2b9a2091450548954695ff4efa75bff5fa546b3b1"
+checksum = "55839b71ba921e4f75b674cb16f843f4b1f3b26ddfcb3454de1cf65cc021ec0f"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -6519,9 +6522,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.111"
+version = "0.2.112"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c64760850114d03d5f65457e96fc988f11f01d38fbaa51b254e4ab5809102af"
+checksum = "caf2e969c2d60ff52e7e98b7392ff1588bffdd1ccd4769eba27222fd3d621571"
 dependencies = [
  "bumpalo",
  "proc-macro2",
@@ -6532,9 +6535,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.111"
+version = "0.2.112"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60eecd4fe26177cfa3339eb00b4a36445889ba3ad37080c2429879718e20ca41"
+checksum = "0861f0dcdf46ea819407495634953cdcc8a8c7215ab799a7a7ce366be71c7b30"
 dependencies = [
  "unicode-ident",
 ]
@@ -6588,9 +6591,9 @@ dependencies = [
 
 [[package]]
 name = "web-sys"
-version = "0.3.88"
+version = "0.3.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d6bb20ed2d9572df8584f6dc81d68a41a625cadc6f15999d649a70ce7e3597a"
+checksum = "10053fbf9a374174094915bbce141e87a6bf32ecd9a002980db4b638405e8962"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -7477,7 +7480,7 @@ dependencies = [
 [[package]]
 name = "x509-ocsp"
 version = "0.3.0-pre"
-source = "git+https://github.com/RustCrypto/formats.git#e2c4c0b23499ee4e14786cff423e4d828f7bc2ad"
+source = "git+https://github.com/RustCrypto/formats.git#97dbdac01a281abf74af6616d84212d46d47a9ff"
 dependencies = [
  "const-oid",
  "der",
