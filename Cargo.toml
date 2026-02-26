@@ -15,3 +15,7 @@ debug = true
 [patch.crates-io]
 cms       = { git = "https://github.com/RustCrypto/formats.git" }
 x509-ocsp = { git = "https://github.com/RustCrypto/formats.git" }
+
+cbc       = { git = "https://github.com/RustCrypto/block-modes.git" }
+keccak    = { git = "https://github.com/RustCrypto/sponges.git" }
+sha3      = { git = "https://github.com/RustCrypto/hashes.git" }
