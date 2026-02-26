@@ -23,7 +23,7 @@ x509-cert = "0.3.0-rc.4"
 certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std", "rsa"], branch = "pre-release"}
 
 aes = { version = "0.9.0-rc.4", features = ["zeroize"] }
-cipher = { version = "0.5.0", features = ["rand_core"] }
+cipher = { version = "0.5.1", features = ["rand_core"] }
 cbc = "0.2.0-rc.3"
 pkcs1 = "0.8.0-rc.4"
 rsa = { version = "0.10.0-rc.15", features = ["sha2"] }
@@ -35,7 +35,6 @@ home = "0.5.12"
 log = "0.4.29"
 plist = "1.8.0"
 rand = "0.10.0"
-#rand_core = { version = "0.9.3", features = ["std", "os_rng"] }
 rand_core = { version = "0.10.0"}
 
 reqwest = {version = "0.13.2", features = ["multipart", "blocking"]}
