@@ -5,7 +5,7 @@ use x509_cert::{
     TbsCertificate,
     builder::profile::BuilderProfile,
     ext::{
-        AsExtension, Extension,
+        Extension, ToExtension,
         pkix::{AuthorityKeyIdentifier, KeyUsage, KeyUsages, SubjectKeyIdentifier},
     },
     name::Name,
