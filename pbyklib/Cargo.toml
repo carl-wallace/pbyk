@@ -12,8 +12,7 @@ pbykcorelib = {path = "../pbykcorelib"}
 base64ct = { version="1.8.3", features = ["alloc"] }
 # EnvelopedDataBuilder is not yet released, hence use of private branch
 cms = {version = "0.3.0-pre.2"}
-# todo - replace openssl P12 usage with pkcs12 crate
-# pkcs12 = {version = "0.0.0", git = "https://github.com/carl-wallace/formats.git", branch = "pbyk"}
+pkcs12_builder = {git = "https://github.com/carl-wallace/pkcs12_builder", features = ["sha1"]}
 const-oid = { version = "0.10.2", features = ["db"] }
 der = { version = "0.8.0", features = ["alloc", "derive", "oid", "pem"] }
 spki = "0.8.0-rc.4"
@@ -24,7 +23,7 @@ certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["s
 
 aes = { version = "0.9.0-rc.4", features = ["zeroize"] }
 cipher = { version = "0.5.1", features = ["rand_core"] }
-cbc = "0.2.0-rc.3"
+cbc = "0.2.0-rc.4"
 pkcs1 = "0.8.0-rc.4"
 rsa = { version = "0.10.0-rc.15", features = ["sha2"] }
 sha1 = {version = "0.11.0-rc.5", default-features = false}
@@ -48,7 +47,7 @@ uuid = { version = "1.21.0", features = ["v4"] }
 yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "updates", features = ["untested"]}
 zeroize = "1.8.2"
 
-openssl = {version = "0.10.75", features = ["vendored"]}
+pkcs8 = "0.11.0-rc.11"
 
 pb_pki = {git="https://github.com/carl-wallace/pb_pki.git", branch = "updates"}
 
