@@ -245,11 +245,11 @@ pub(crate) fn reset(
                         tr{
                             style: "{ui_signals.s_pin_style}",
                             th{rowspan: "2", div{label {r#for: "puk", "YubiKey PUK"}}}
-                            td{input { r#type: "password", placeholder: "{ui_signals.s_puk_prompt_hint}", name: "puk", value: "{ui_signals.s_pin}", maxlength: "8"}}
+                            td{input { r#type: "password", placeholder: "{ui_signals.s_puk_prompt_hint}", name: "puk", value: "{ui_signals.s_puk}", maxlength: "8"}}
                         }
                         tr{
                             style: "{ui_signals.s_pin_style}",
-                            td{input { r#type: "password", placeholder: "Re-enter YubiKey PUK", name: "puk2", value: "{ui_signals.s_pin}", maxlength: "8"}}
+                            td{input { r#type: "password", placeholder: "Re-enter YubiKey PUK", name: "puk2", value: "{ui_signals.s_puk}", maxlength: "8"}}
                         }
                     }
                 }
