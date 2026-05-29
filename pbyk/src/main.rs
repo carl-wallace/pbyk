@@ -506,53 +506,82 @@ async fn interactive_main() {
                 );
 
                 // The rules below are culled from here: https://docs.yubico.com/yesdk/users-manual/application-piv/pin-puk-mgmt-key.html
-                let pin = loop {
-                    let pin = Zeroizing::new(
-                        rpassword::prompt_password(
-                            format!("{}: ", get_pin_prompt(&yubikey)).to_string(),
-                        )
-                        .unwrap(), // allow panic for IO errors here
-                    );
-                    let pin2 = Zeroizing::new(
-                        rpassword::prompt_password(
-                            format!("{}: ", "Re-enter new PIN".bold()).to_string(),
-                        )
-                        .unwrap(), // allow panic for IO errors here
-                    );
-                    if pin != pin2 {
-                        println!("{}: PINs do not match", "ERROR".bold());
-                    } else if pin.len() < min_pin_len as usize {
-                        println!(
-                            "{}: PIN is not at least {min_pin_len} characters long",
-                            "ERROR".bold()
+                #[allow(unused_labels)]
+                let pin = 'pin_block: {
+                    #[cfg(feature = "test_pin")]
+                    if let Ok(env_pin) = std::env::var("PBYK_PIN") {
+                        let pin = Zeroizing::new(env_pin);
+                        if pin.len() < min_pin_len as usize || pin.len() > 8 || !pin.is_ascii() {
+                            println!(
+                                "{}: PBYK_PIN must be {}-8 ASCII characters",
+                                "ERROR".bold(),
+                                min_pin_len
+                            );
+                            return;
+                        }
+                        break 'pin_block pin;
+                    }
+                    loop {
+                        let pin = Zeroizing::new(
+                            rpassword::prompt_password(
+                                format!("{}: ", get_pin_prompt(&yubikey)).to_string(),
+                            )
+                            .unwrap(), // allow panic for IO errors here
                         );
-                    } else if pin.len() > 8 {
-                        println!("{}: PIN is longer than 8 characters long", "ERROR".bold());
-                    } else if !pin.is_ascii() {
-                        println!("{}: PIN contains non-ASCII characters", "ERROR".bold());
-                    } else {
-                        break pin;
+                        let pin2 = Zeroizing::new(
+                            rpassword::prompt_password(
+                                format!("{}: ", "Re-enter new PIN".bold()).to_string(),
+                            )
+                            .unwrap(), // allow panic for IO errors here
+                        );
+                        if pin != pin2 {
+                            println!("{}: PINs do not match", "ERROR".bold());
+                        } else if pin.len() < min_pin_len as usize {
+                            println!(
+                                "{}: PIN is not at least {min_pin_len} characters long",
+                                "ERROR".bold()
+                            );
+                        } else if pin.len() > 8 {
+                            println!("{}: PIN is longer than 8 characters long", "ERROR".bold());
+                        } else if !pin.is_ascii() {
+                            println!("{}: PIN contains non-ASCII characters", "ERROR".bold());
+                        } else {
+                            break pin;
+                        }
                     }
                 };
-                let puk = loop {
-                    let puk = Zeroizing::new(rpassword::prompt_password(
-                            format!("{}: ", "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length".bold()).to_string())
-                                                 .unwrap() // allow panic for IO errors here
-                    );
-                    let puk2 = Zeroizing::new(
-                        rpassword::prompt_password(
-                            format!("{}: ", "Re-enter new PIN Unlock Key (PUK)".bold()).to_string(),
-                        )
-                        .unwrap(), // allow panic for IO errors here
-                    );
-                    if puk != puk2 {
-                        println!("{}: PUKs do not match", "ERROR".bold());
-                    } else if puk.len() < 6 {
-                        println!("{}: PUK is not at least 6 characters long", "ERROR".bold());
-                    } else if puk.len() > 8 {
-                        println!("{}: PUK is longer than 8 characters long", "ERROR".bold());
-                    } else {
-                        break puk;
+                #[allow(unused_labels)]
+                let puk = 'puk_block: {
+                    #[cfg(feature = "test_pin")]
+                    if let Ok(env_puk) = std::env::var("PBYK_PUK") {
+                        let puk = Zeroizing::new(env_puk);
+                        if puk.len() < 6 || puk.len() > 8 {
+                            println!("{}: PBYK_PUK must be 6-8 characters", "ERROR".bold());
+                            return;
+                        }
+                        break 'puk_block puk;
+                    }
+                    loop {
+                        let puk = Zeroizing::new(rpassword::prompt_password(
+                                format!("{}: ", "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length".bold()).to_string())
+                                                     .unwrap() // allow panic for IO errors here
+                        );
+                        let puk2 = Zeroizing::new(
+                            rpassword::prompt_password(
+                                format!("{}: ", "Re-enter new PIN Unlock Key (PUK)".bold())
+                                    .to_string(),
+                            )
+                            .unwrap(), // allow panic for IO errors here
+                        );
+                        if puk != puk2 {
+                            println!("{}: PUKs do not match", "ERROR".bold());
+                        } else if puk.len() < 6 {
+                            println!("{}: PUK is not at least 6 characters long", "ERROR".bold());
+                        } else if puk.len() > 8 {
+                            println!("{}: PUK is longer than 8 characters long", "ERROR".bold());
+                        } else {
+                            break puk;
+                        }
                     }
                 };
                 // comment out above two loops and uncomment below to run in debugger
@@ -642,7 +671,7 @@ async fn interactive_main() {
 
     let pb_base_url = match args.environment {
         #[cfg(feature = "dev")]
-        Some(Environment::DEV) => "https://pb2.redhoundsoftware.net".to_string(),
+        Some(Environment::DEV) => "https://pb2.redhoundsoftware.net".to_string(),// dev portal
         #[cfg(feature = "om_nipr")]
         Some(Environment::OM_NIPR) => "https://purebred.c3pki.oandm.disa.mil".to_string(),
         #[cfg(feature = "om_sipr")]
@@ -791,17 +820,26 @@ async fn interactive_main() {
 
     let mut pin = None;
     if require_pin {
+        #[cfg(feature = "test_pin")]
+        let env_pin = std::env::var("PBYK_PIN").ok();
+        #[cfg(not(feature = "test_pin"))]
+        let env_pin: Option<String> = None;
+
         loop {
-            let entered_pin = Zeroizing::new(
-                rpassword::prompt_password(
-                    format!(
-                        "Enter PIN for device with serial number {}: ",
-                        args.serial.clone().unwrap_or_default()
+            let entered_pin = if let Some(p) = env_pin.clone() {
+                Zeroizing::new(p)
+            } else {
+                Zeroizing::new(
+                    rpassword::prompt_password(
+                        format!(
+                            "Enter PIN for device with serial number {}: ",
+                            args.serial.clone().unwrap_or_default()
+                        )
+                        .bold(),
                     )
-                    .bold(),
+                    .unwrap(), // allow panic for IO errors here
                 )
-                .unwrap(), // allow panic for IO errors here
-            );
+            };
 
             #[allow(irrefutable_let_patterns)]
             if let CryptoModule::YubiKey(yubikey) = &mut cm {
@@ -810,7 +848,11 @@ async fn interactive_main() {
                         pin = Some(entered_pin);
                         break;
                     }
-                    Err(_) => {
+                    Err(e) => {
+                        if env_pin.is_some() {
+                            println!("{}: PBYK_PIN verification failed: {e}", "ERROR".bold());
+                            return;
+                        }
                         println!("{}: PIN verification failed. Try again.", "ERROR".bold())
                     }
                 };

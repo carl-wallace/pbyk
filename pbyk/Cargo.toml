@@ -1,6 +1,6 @@
 [package]
 name = "pbyk"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 rust-version = "1.88.0"
 
@@ -9,35 +9,35 @@ rust-version = "1.88.0"
 [dependencies]
 pbyklib = {path = "../pbyklib"}
 
-clap = {version = "4.5.40", features=["std", "derive"]}
-colored = "3.0.0"
-log = "0.4.27"
-log4rs = {version = "1.3.0"}
+clap = {version = "4.5.60", features=["std", "derive"]}
+colored = "3.1.1"
+log = "0.4.29"
+log4rs = {version = "1.4.0"}
 rpassword = "7.4.0"
-tokio = { version = "1.45.1", features = ["full", "time", "rt-multi-thread"]}
+tokio = { version = "1.49.0", features = ["full", "time", "rt-multi-thread"]}
 # the yubikey fork features a length check needed when pbyk is run in presence of some middleware. use fork until upstream is updated with length check added to form.
 #yubikey = { version = "0.8.0", features = ["untested"] }
-yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "aes_mgmt", features = ["untested"]}
-zeroize = "1.8.1"
+yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "updates", features = ["untested"]}
+zeroize = "1.8.2"
 
-dioxus = {version = "0.6.1", optional = true}
-dioxus-desktop = {version = "0.6.1", optional = true}
+dioxus = {version = "0.6.3", optional = true}
+dioxus-desktop = {version = "0.6.3", optional = true}
 
 # Use fork until upstream is updated. This bumps the project to dioxus 0.4.0. See https://github.com/mrxiaozhuox/dioxus-toast/pull/3.
 dioxus-toast = { git = "https://github.com/carl-wallace/dioxus-toast", optional = true, branch = "main" }
 
-cfg-if = "1.0.1"
-home = {version = "0.5.11", optional = true}
-anyhow = {version = "1.0.98", optional = true}
+cfg-if = "1.0.4"
+home = {version = "0.5.12", optional = true}
+anyhow = {version = "1.0.102", optional = true}
 
-serde = { version = "1.0.219", default-features = false, features = ["derive"] }
-serde_json = "1.0.140"
+serde = { version = "1.0.228", default-features = false, features = ["derive"] }
+serde_json = "1.0.149"
 
-base64ct = { version="1.8.0", features = ["alloc"] }
+base64ct = { version="1.8.3", features = ["alloc"] }
 
 # certval has not yet been released, hence use of private branch
-certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std", "rsa"], branch = "cert_limbo"}
-futures = { version = "0.3.31", optional = true }
+certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std", "rsa"], branch = "pre-release"}
+futures = { version = "0.3.32", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = {version = "0.3.9", features = ["wincon", "winuser"]}
@@ -52,3 +52,4 @@ sipr = ["pbyklib/sipr"]
 gui = ["home", "anyhow", "dioxus-desktop", "dioxus", "dioxus-toast", "futures"]
 vsc = ["pbyklib/vsc", "reset_vsc"]
 reset_vsc = ["pbyklib/reset_vsc"] # this feature exists to quarantine non-functional VSC reset code. do not use.
+test_pin = [] # adds PBYK_PIN / PBYK_PUK env vars to bypass interactive PIN/PUK prompts. test/scripting only — do not ship.

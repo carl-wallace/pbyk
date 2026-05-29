@@ -353,3 +353,29 @@ compile_error! {
 compile_error! {
     "The `vsc` and `reset_vsc` features are only available for Windows systems."
 }
+
+#[cfg(all(
+    feature = "test_pin",
+    not(any(feature = "dev", feature = "om_nipr", feature = "om_sipr"))
+))]
+compile_error! {
+    "The `test_pin` feature requires `dev`, `om_nipr`, or `om_sipr` and must not be enabled in production builds."
+}
+
+#[cfg(all(feature = "test_pin", any(feature = "nipr", feature = "sipr")))]
+compile_error! {
+    "The `test_pin` feature cannot be combined with the production environment features `nipr` or `sipr`."
+}
+
+#[cfg(all(
+    any(feature = "nipr", feature = "sipr"),
+    any(feature = "dev", feature = "om_nipr", feature = "om_sipr")
+))]
+compile_error! {
+    "The production environment features `nipr` and `sipr` cannot be combined with test environment features `dev`, `om_nipr`, or `om_sipr`."
+}
+
+#[cfg(all(feature = "nipr", feature = "sipr"))]
+compile_error! {
+    "The `nipr` and `sipr` features cannot be enabled together."
+}

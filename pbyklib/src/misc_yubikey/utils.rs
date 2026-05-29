@@ -7,7 +7,7 @@ use std::{
 };
 
 use log::{error, info};
-use rand_core::{OsRng, RngCore, TryRngCore};
+use rand_core::TryRng;
 
 use cipher::{BlockModeDecrypt, KeyIvInit};
 use sha1::{Digest, Sha1};
@@ -208,7 +208,7 @@ pub(crate) fn generate_self_signed_cert(
     };
 
     let mut serial = [0u8; 20];
-    OsRng.unwrap_err().fill_bytes(&mut serial);
+    rand::rng().try_fill_bytes(&mut serial);
     serial[0] = 0x01;
     let serial = SerialNumber::new(&serial[..]).expect("serial can't be more than 20 bytes long");
 
