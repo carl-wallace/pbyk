@@ -66,6 +66,17 @@ pub fn get_challenge_and_url(scep_instructions: &Dictionary) -> Result<(String, 
         },
         None => return Err(Error::ParseError),
     };
+    // Refuse anything but HTTPS. The reqwest client used downstream is not
+    // built with `https_only(true)`, enrollment could run in
+    // cleartext. Compare-ignore-ascii-case because URI schemes are
+    // case-insensitive per RFC 3986.
+    if !url
+        .get(..8)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("https://"))
+    {
+        error!("Refusing non-HTTPS SCEP URL: {url}");
+        return Err(Error::BadInput);
+    }
     Ok((challenge.to_string(), url.to_string()))
 }
 
