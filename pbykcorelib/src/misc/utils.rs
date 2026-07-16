@@ -47,8 +47,23 @@ fn check_message_digest_attr(
     if let Some(attrs) = &si.signed_attrs {
         for attr in attrs.iter() {
             if attr.oid == ID_MESSAGE_DIGEST {
+                // Look the digest up with get() rather than indexing: si.digest_alg
+                // is attacker-controlled and hash_content only populates the algs
+                // actually present in sd.digest_algorithms (SHA-256/384/512), so a
+                // crafted SignerInfo naming any other algorithm would panic on a
+                // missing key and abort the host app before signatures are checked.
+                let expected = match hash.get(&si.digest_alg.oid) {
+                    Some(expected) => expected,
+                    None => {
+                        error!(
+                            "No content hash was computed for the SignerInfo digest algorithm {}",
+                            si.digest_alg.oid
+                        );
+                        return Err(Error::UnexpectedValue);
+                    }
+                };
                 for value in attr.values.iter() {
-                    if value.value() == hash[&si.digest_alg.oid] {
+                    if value.value() == expected.as_slice() {
                         return Ok(());
                     }
                 }
@@ -479,5 +494,70 @@ pub fn get_as_string(dict: &Dictionary, key: &str) -> Option<String> {
         Some(rv.to_string())
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cms::content_info::CmsVersion;
+    use const_oid::db::rfc5912::ID_SHA_256;
+    use der::asn1::SetOfVec;
+    use x509_cert::attr::Attribute;
+
+    /// Build a minimal SignerInfo with the given digest-algorithm OID and a single
+    /// message-digest signed attribute carrying `md_value`. Only the fields
+    /// `check_message_digest_attr` reads (`digest_alg` + `signed_attrs`) are
+    /// meaningful; the remaining fields are valid filler.
+    fn signer_info_with(digest_oid: ObjectIdentifier, md_value: &[u8]) -> SignerInfo {
+        let md_attr = Attribute {
+            oid: ID_MESSAGE_DIGEST,
+            values: SetOfVec::try_from(vec![Any::new(Tag::OctetString, md_value).unwrap()])
+                .unwrap(),
+        };
+        let alg = AlgorithmIdentifierOwned {
+            oid: digest_oid,
+            parameters: None,
+        };
+        SignerInfo {
+            version: CmsVersion::V1,
+            sid: SignerIdentifier::SubjectKeyIdentifier(SubjectKeyIdentifier(
+                OctetString::new(vec![0u8]).unwrap(),
+            )),
+            digest_alg: alg.clone(),
+            signed_attrs: Some(SetOfVec::try_from(vec![md_attr]).unwrap()),
+            signature_algorithm: alg,
+            signature: OctetString::new(vec![0u8]).unwrap(),
+            unsigned_attrs: None,
+        }
+    }
+
+    /// H-1 regression: a SignerInfo whose digest algorithm is absent from the
+    /// computed-hash map must return an error, not index-panic (the map is built
+    /// from `sd.digest_algorithms`, but the digest alg here is attacker-controlled).
+    #[test]
+    fn missing_digest_alg_returns_err_not_panic() {
+        let si = signer_info_with(ID_SHA_256, &[0xAB; 32]);
+        let hashes: BTreeMap<ObjectIdentifier, Vec<u8>> = BTreeMap::new();
+        assert!(check_message_digest_attr(&hashes, &si).is_err());
+    }
+
+    /// Happy path preserved: digest alg present and the attribute value matches.
+    #[test]
+    fn matching_digest_returns_ok() {
+        let digest = vec![0xAB; 32];
+        let si = signer_info_with(ID_SHA_256, &digest);
+        let mut hashes = BTreeMap::new();
+        hashes.insert(ID_SHA_256, digest);
+        assert!(check_message_digest_attr(&hashes, &si).is_ok());
+    }
+
+    /// Digest alg present but the attribute value differs -> rejection, no panic.
+    #[test]
+    fn mismatched_digest_value_returns_err() {
+        let si = signer_info_with(ID_SHA_256, &[0x11; 32]);
+        let mut hashes = BTreeMap::new();
+        hashes.insert(ID_SHA_256, vec![0x22; 32]);
+        assert!(check_message_digest_attr(&hashes, &si).is_err());
     }
 }

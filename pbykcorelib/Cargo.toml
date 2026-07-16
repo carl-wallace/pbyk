@@ -8,26 +8,26 @@ rust-version = "1.88.0"
 base64ct = { version="1.8.3", features = ["alloc"] }
 cms = { version = "0.3.0-pre.2", features = ["builder"] }
 const-oid = { version = "0.10.2", features = ["db"] }
-der = { version = "0.8.0", features = ["alloc", "derive", "oid", "pem"] }
-spki = "0.8.0-rc.4"
-x509-cert = "0.3.0-rc.4"
+der = { version = "0.8.1", features = ["alloc", "derive", "oid", "pem"] }
+spki = "0.8.0"
+x509-cert = "0.3.0"
 
 # certval has not yet been released, hence use of private branch
-certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std", "rsa"], branch = "pre-release"}
+certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std", "rsa"], branch = "main"}
 
-rsa = { version = "0.10.0-rc.15", features = ["sha2"] }
-sha2 = "0.11.0-rc.5"
-signature = { version = "3.0.0-rc.10", features = ["digest", "alloc"]}
+rsa = { version = "0.10.0-rc.18", features = ["sha2"] }
+sha2 = "0.11.0"
+signature = { version = "3.0.0", features = ["digest", "alloc"]}
 
-log = "0.4.29"
-plist = "1.8.0"
-reqwest = {version = "0.13.2", default-features = false, features = ["rustls", "multipart", "blocking"]}
-serde_json = "1.0.149"
+log = "0.4.33"
+plist = "1.10.0"
+reqwest = {version = "0.13.4", default-features = false, features = ["rustls", "multipart", "blocking"]}
+serde_json = "1.0.150"
 subtle-encoding = "0.5.1"
 
 pb_pki = {git="https://github.com/carl-wallace/pb_pki.git", branch = "updates"}
-rand = "0.10.0"
-rand_core = { version = "0.10.0"}
+rand = "0.10.2"
+rand_core = { version = "0.10.1"}
 
 [features]
 default = ["dev"]
