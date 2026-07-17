@@ -1667,8 +1667,9 @@ dependencies = [
 
 [[package]]
 name = "dioxus-toast"
-version = "0.5.0"
-source = "git+https://github.com/carl-wallace/dioxus-toast?branch=main#b11baaee7e737926da9d531be312bb9f79d6553b"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c424116e781a685f2e0ff3f290a509d7746688b619bb342a753063e1d81bc6a"
 dependencies = [
  "chrono",
  "dioxus",
