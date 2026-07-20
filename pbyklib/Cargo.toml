@@ -12,7 +12,7 @@ pbykcorelib = {path = "../pbykcorelib"}
 base64ct = { version="1.8.3", features = ["alloc"] }
 # EnvelopedDataBuilder is not yet released, hence use of private branch
 cms = {version = "0.3.0-pre.2"}
-pkcs12_builder = {git = "https://github.com/carl-wallace/pkcs12_builder", features = ["legacy"]}
+pkcs12_builder = {git = "https://github.com/carl-wallace/pkcs12_builder"}
 const-oid = { version = "0.10.2", features = ["db"] }
 der = { version = "0.8.1", features = ["alloc", "derive", "oid", "pem"] }
 spki = "0.8.0"
@@ -71,3 +71,7 @@ nipr = ["pb_pki/nipr"]
 sipr = ["pb_pki/sipr"]
 vsc = []
 reset_vsc = [] # this feature exists to quarantine non-functional VSC reset code. do not use.
+# Legacy PBE support (RC2/3DES/SHA-1) when parsing PKCS #12 objects. Portal-minted
+# P12s are modern PBES2/AES, so this is off by default; enable to accept
+# legacy-encrypted P12s.
+legacy_p12 = ["pkcs12_builder/legacy"]
