@@ -29,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libpcsclite-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --lib --locked
@@ -50,6 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libpcsclite-dev
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
@@ -66,6 +68,7 @@ jobs:
         env: [dev, nipr, sipr, om_nipr, om_sipr]
     steps:
       - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libpcsclite-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --no-default-features --features pbyk/${{ matrix.env }},pbyklib/${{ matrix.env }},pbykcorelib/${{ matrix.env }} --locked
@@ -86,6 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libpcsclite-dev
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.88.0
