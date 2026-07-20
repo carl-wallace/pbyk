@@ -52,3 +52,4 @@ gui = ["home", "anyhow", "dioxus-desktop", "dioxus", "dioxus-toast", "futures"]
 vsc = ["pbyklib/vsc", "reset_vsc"]
 reset_vsc = ["pbyklib/reset_vsc"] # this feature exists to quarantine non-functional VSC reset code. do not use.
 test_pin = [] # adds PBYK_PIN / PBYK_PUK env vars to bypass interactive PIN/PUK prompts. test/scripting only — do not ship.
+legacy_p12 = ["pbyklib/legacy_p12"] # accept legacy (RC2/3DES/SHA-1) PKCS #12 encryption; portal P12s are modern, off by default
