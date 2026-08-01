@@ -3,6 +3,7 @@
 pub(crate) mod cert_store;
 #[cfg(feature = "vsc")]
 pub(crate) mod csr;
+#[cfg(feature = "vsc")]
 mod profiles;
 #[cfg(feature = "vsc")]
 pub(crate) mod scep;
