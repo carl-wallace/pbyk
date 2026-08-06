@@ -25,14 +25,20 @@ reqwest = {version = "0.13.4", default-features = false, features = ["rustls", "
 serde_json = "1.0.150"
 subtle-encoding = "0.5.1"
 
-pb_pki = {git="https://github.com/carl-wallace/pb_pki.git", branch = "main"}
+# Trust-store providers (formerly the single pb_pki crate). core is always
+# needed; the environment providers are optional and pulled in by the matching
+# feature below. certval_stores_sipr lives in a private repo.
+certval_stores_core  = { git = "https://github.com/carl-wallace/certval-stores.git", branch = "main" }
+certval_stores_nipr  = { git = "https://github.com/carl-wallace/certval-stores.git", branch = "main", optional = true }
+certval_stores_pbdev = { git = "https://github.com/carl-wallace/certval-stores.git", branch = "main", optional = true }
+certval_stores_sipr  = { git = "ssh://git@github.com/RedHoundSoftware/certval_stores_sipr.git", branch = "main", optional = true }
 rand = "0.10.2"
 rand_core = { version = "0.10.1"}
 
 [features]
 default = ["dev"]
-dev = ["pb_pki/dev"]
-om_nipr = ["pb_pki/om_nipr"]
-om_sipr = ["pb_pki/om_sipr"]
-nipr = ["pb_pki/nipr"]
-sipr = ["pb_pki/sipr"]
+dev = ["certval_stores_pbdev/dev"]
+om_nipr = ["certval_stores_nipr/om_nipr"]
+om_sipr = ["certval_stores_sipr/om_sipr"]
+nipr = ["certval_stores_nipr/nipr"]
+sipr = ["certval_stores_sipr/sipr"]
