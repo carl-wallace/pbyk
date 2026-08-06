@@ -179,6 +179,10 @@ pub(crate) async fn process_scep_payload_vsc(
     let ss_cert = PDVCertificate::try_from(ssc)?;
     let cred = get_credential_list(Some(ss_cert))?;
 
+    // Captured here because `ssc2` is consumed by `prepare_scep_signed_data` below, and this is
+    // needed afterwards to identify which certificate in the response was issued for this key.
+    let enc_spki = ssc2.tbs_certificate().subject_public_key_info().to_der()?;
+
     let attestation_bytes = match attestation {
         Some(attestation_p7) => {
             let stripped = attestation_p7.replace(['\r', '\n'], "");
@@ -191,7 +195,7 @@ pub(crate) async fn process_scep_payload_vsc(
     let get_ca_url = format!("{url}?operation=GetCACert");
     let pki_op_url = format!("{url}?operation=PKIOperation");
     debug!("Obtaining RA certificate from {get_ca_url}");
-    let ca_cert = get_ca_cert(&get_ca_url).await?;
+    let ca_cert = get_ca_cert(&get_ca_url, env).await?;
     let attrs = prepare_attributes(
         &challenge,
         &email_addresses,
@@ -231,55 +235,66 @@ pub(crate) async fn process_scep_payload_vsc(
     let mut win_state = read_saved_state_or_default();
     #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
     let reader = get_vsc_id_from_smartcard(sc);
-    if let Some(certs) = sd.certificates
-        && let Some(cert_choice) = certs.0.iter().next()
-    {
-        match cert_choice {
-            CertificateChoices::Certificate(c) => {
-                let enc_cert = c.to_der()?;
-
-                #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
-                if !reader.is_empty() {
-                    let hash = Sha256::digest(&enc_cert);
-                    let hex_hash = buffer_to_hex(&hash);
-                    win_state.add_cert_hash_for_reader(&reader, &hex_hash);
-                    let _ = save_state(&win_state);
-                }
-
-                let container_name = get_key_provider_info(cred)?.get_container_name()?;
-
-                // generate a CSR so we can try to install again
-                let _csr_to_discard = generate_csr(
-                    &subject_name.to_string(),
-                    sc,
-                    false,
-                    Some(container_name.clone()),
-                    &friendly_name,
-                )
-                .await?;
-
-                let ss_p7 = prepare_base64_certs_only_p7(c)?;
-                if let Err(e) = CertificateEnrollmentManager::UserCertificateEnrollmentManager()?
-                    .InstallCertificateAsync(&HSTRING::from(ss_p7), InstallOptions::DeleteExpired)?
-                    .get()
-                {
-                    error!(
-                        "Failed to install self-signed certificate in generate_self_signed_cert: {e:?}"
-                    );
-                    return Err(Error::Unrecognized);
-                }
-
-                delete_cert_from_store(&self_signed_bytes);
-
-                return Ok(enc_cert);
+    // Select the issued certificate by matching its SubjectPublicKeyInfo against the key the
+    // request was made for, rather than taking whichever certificate appears first. A CertRep may
+    // carry more than one certificate and their order is not something the responder promises;
+    // installing an unmatched one would leave a certificate this credential's key cannot use.
+    let mut issued = None;
+    if let Some(certs) = &sd.certificates {
+        for cert_choice in certs.0.iter() {
+            // Anything that is not a plain Certificate cannot be the issued certificate; skip it
+            // and keep looking rather than abandoning the response.
+            let CertificateChoices::Certificate(c) = cert_choice else {
+                continue;
+            };
+            if c.tbs_certificate().subject_public_key_info().to_der()? != enc_spki {
+                continue;
             }
-            _ => {
-                error!("Unexpected CertificateChoice in SCEP response");
-                return Err(Error::Unrecognized);
-            }
+            issued = Some(c);
+            break;
         }
     }
 
-    error!("CertificateChoice not found in SCEP response");
-    Err(Error::Unrecognized)
+    let Some(c) = issued else {
+        error!(
+            "No certificate in the SCEP response matches the public key the request was made for. \
+             Refusing to install a certificate for a different key."
+        );
+        return Err(Error::Unrecognized);
+    };
+
+    let enc_cert = c.to_der()?;
+
+    #[cfg(all(feature = "vsc", feature = "reset_vsc"))]
+    if !reader.is_empty() {
+        let hash = Sha256::digest(&enc_cert);
+        let hex_hash = buffer_to_hex(&hash);
+        win_state.add_cert_hash_for_reader(&reader, &hex_hash);
+        let _ = save_state(&win_state);
+    }
+
+    let container_name = get_key_provider_info(cred)?.get_container_name()?;
+
+    // generate a CSR so we can try to install again
+    let _csr_to_discard = generate_csr(
+        &subject_name.to_string(),
+        sc,
+        false,
+        Some(container_name.clone()),
+        &friendly_name,
+    )
+    .await?;
+
+    let ss_p7 = prepare_base64_certs_only_p7(c)?;
+    if let Err(e) = CertificateEnrollmentManager::UserCertificateEnrollmentManager()?
+        .InstallCertificateAsync(&HSTRING::from(ss_p7), InstallOptions::DeleteExpired)?
+        .get()
+    {
+        error!("Failed to install self-signed certificate in generate_self_signed_cert: {e:?}");
+        return Err(Error::Unrecognized);
+    }
+
+    delete_cert_from_store(&self_signed_bytes);
+
+    Ok(enc_cert)
 }
