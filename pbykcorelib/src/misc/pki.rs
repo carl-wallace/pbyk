@@ -7,9 +7,10 @@ use der::Encode;
 use x509_cert::Certificate;
 
 use certval::*;
-use pb_pki::prepare_certval_environment;
+use certval_stores_core::prepare_certval_environment;
 
 use crate::Error;
+use crate::misc::stores::providers;
 
 /// Writes base64 encodings of certificates in the path to the logging system at the trace level
 fn log_certs_in_path(path: &CertificationPath) {
@@ -51,7 +52,7 @@ pub async fn validate_cert(
     // read trust anchors from apple_attest_ta_folder and populate a TaSource instance
     let mut ta_store = TaSource::new();
 
-    if let Err(e) = prepare_certval_environment(&mut pe, &mut ta_store, env) {
+    if let Err(e) = prepare_certval_environment(&providers(), &mut pe, &mut ta_store, env) {
         error!("Error preparing PkiEnvironment: {e}");
         return Err(Error::BadInput);
     }

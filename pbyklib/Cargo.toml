@@ -49,8 +49,6 @@ zeroize = "1.9.0"
 
 pkcs8 = "0.11.0"
 
-pb_pki = {git="https://github.com/carl-wallace/pb_pki.git", branch = "main"}
-
 [dev-dependencies]
 hex-literal = "1.1.0"
 log4rs = "1.4.0"
@@ -64,11 +62,11 @@ windows = {version = "0.61.3", features = [
 
 [features]
 default = ["dev"]
-dev = ["pb_pki/dev"]
-om_nipr = ["pb_pki/om_nipr"]
-om_sipr = ["pb_pki/om_sipr"]
-nipr = ["pb_pki/nipr"]
-sipr = ["pb_pki/sipr"]
+dev = ["pbykcorelib/dev"]
+om_nipr = ["pbykcorelib/om_nipr"]
+om_sipr = ["pbykcorelib/om_sipr"]
+nipr = ["pbykcorelib/nipr"]
+sipr = ["pbykcorelib/sipr"]
 vsc = []
 reset_vsc = [] # this feature exists to quarantine non-functional VSC reset code. do not use.
 # Legacy PBE support (RC2/3DES/SHA-1) when parsing PKCS #12 objects. Portal-minted

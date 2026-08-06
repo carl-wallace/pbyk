@@ -561,6 +561,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "certval_stores_core"
+version = "0.1.0"
+source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#28c39dd09dec87d24d4aa86020f2ddac5cff4efb"
+dependencies = [
+ "certval",
+ "log",
+ "reqwest 0.13.4",
+]
+
+[[package]]
+name = "certval_stores_nipr"
+version = "0.1.0"
+source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#28c39dd09dec87d24d4aa86020f2ddac5cff4efb"
+dependencies = [
+ "certval_stores_core",
+]
+
+[[package]]
+name = "certval_stores_pbdev"
+version = "0.1.0"
+source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#28c39dd09dec87d24d4aa86020f2ddac5cff4efb"
+dependencies = [
+ "certval_stores_core",
+]
+
+[[package]]
+name = "certval_stores_sipr"
+version = "0.1.0"
+source = "git+ssh://git@github.com/RedHoundSoftware/certval_stores_sipr.git?branch=main#94e17495fff9f25a8f28067630546976a52536a8"
+dependencies = [
+ "certval_stores_core",
+]
+
+[[package]]
 name = "cesu8"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4101,16 +4135,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pb_pki"
-version = "0.1.5"
-source = "git+https://github.com/carl-wallace/pb_pki.git?branch=main#07637641a4731bc62f943a3bd85f1aa7b3460d09"
-dependencies = [
- "certval",
- "log",
- "reqwest 0.13.4",
-]
-
-[[package]]
 name = "pbkdf2"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4153,11 +4177,14 @@ version = "0.4.2"
 dependencies = [
  "base64ct",
  "certval",
+ "certval_stores_core",
+ "certval_stores_nipr",
+ "certval_stores_pbdev",
+ "certval_stores_sipr",
  "cms",
  "const-oid",
  "der",
  "log",
- "pb_pki",
  "plist",
  "rand 0.10.2",
  "rand_core 0.10.1",
@@ -4187,7 +4214,6 @@ dependencies = [
  "home",
  "log",
  "log4rs",
- "pb_pki",
  "pbykcorelib",
  "pkcs1",
  "pkcs12_builder",

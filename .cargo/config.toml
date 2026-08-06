@@ -1,0 +1,5 @@
+# Use the git CLI (and thus the developer's SSH agent / credentials) to fetch
+# git dependencies. Needed for the private certval_stores_sipr SSH dependency;
+# avoids libgit2 SSH flakiness.
+[net]
+git-fetch-with-cli = true
