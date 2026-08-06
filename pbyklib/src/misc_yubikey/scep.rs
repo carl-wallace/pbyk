@@ -228,7 +228,7 @@ pub(crate) async fn process_scep_payload(
     let get_ca_url = format!("{url}?operation=GetCACert");
     let pki_op_url = format!("{url}?operation=PKIOperation");
     debug!("Obtaining RA certificate from {get_ca_url}");
-    let ca_cert = get_ca_cert(&get_ca_url).await?;
+    let ca_cert = get_ca_cert(&get_ca_url, env).await?;
     let attrs = prepare_attributes(
         &challenge,
         &email_addresses,
@@ -318,23 +318,36 @@ pub(crate) async fn process_scep_payload(
     let bytes = ci.content.to_der()?;
     let sd = SignedData::from_der(bytes.as_slice())?;
 
-    if let Some(certs) = sd.certificates
-        && let Some(cert_choice) = certs.0.iter().next()
-    {
-        match cert_choice {
-            CertificateChoices::Certificate(c) => {
-                let enc_cert = c.to_der()?;
-                let yc = yubikey::certificate::Certificate { cert: c.clone() };
-                let _ = yc.write(yubikey, slot_id, CertInfo::Uncompressed);
-                Ok(enc_cert)
-            }
-            _ => {
-                error!("Unexpected CertificateChoice in SCEP response");
-                Err(Error::Unrecognized)
-            }
-        }
-    } else {
+    let Some(certs) = sd.certificates else {
         error!("CertificateChoice not found in SCEP response");
-        Err(Error::Unrecognized)
+        return Err(Error::Unrecognized);
+    };
+
+    // Select the issued certificate by matching its SubjectPublicKeyInfo against the key the CSR
+    // was built from (`enc_spki`, taken from the self-signed certificate in this slot), rather than
+    // taking whichever certificate happens to appear first. A CertRep may carry more than one
+    // certificate, and their order is not something the responder promises. Writing an unmatched
+    // certificate into the slot would leave a certificate whose public key the slot's key cannot
+    // use, which surfaces later as an unexplained failure rather than as the enrollment error it
+    // actually is.
+    for cert_choice in certs.0.iter() {
+        // Anything that is not a plain Certificate cannot be the issued certificate; skip it and
+        // keep looking rather than abandoning the response.
+        let CertificateChoices::Certificate(c) = cert_choice else {
+            continue;
+        };
+        if c.tbs_certificate().subject_public_key_info().to_der()? != enc_spki {
+            continue;
+        }
+        let enc_cert = c.to_der()?;
+        let yc = yubikey::certificate::Certificate { cert: c.clone() };
+        let _ = yc.write(yubikey, slot_id, CertInfo::Uncompressed);
+        return Ok(enc_cert);
     }
+
+    error!(
+        "No certificate in the SCEP response matches the public key the request was made for. \
+         Refusing to install a certificate for a different key."
+    );
+    Err(Error::Unrecognized)
 }

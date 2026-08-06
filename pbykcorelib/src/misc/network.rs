@@ -7,6 +7,7 @@ use certval_stores_core::get_reqwest_client_rustls;
 use cms::{cert::CertificateChoices, content_info::ContentInfo, signed_data::SignedData};
 use der::{Decode, Encode};
 
+use crate::misc::pki::validate_cert;
 use crate::misc::stores::providers;
 use crate::{Error, Result};
 
@@ -39,27 +40,31 @@ fn check_response(response: &Response, uri: &str) -> Result<()> {
 //------------------------------------------------------------------------------------
 // Public methods
 //------------------------------------------------------------------------------------
-/// Takes an encoded ContentInfo and returns the first Certificate read from SignedData payload
-pub fn get_first_cert_from_signed_data(enc_ci: &[u8]) -> Result<x509_cert::Certificate> {
+/// Takes an encoded ContentInfo and returns every Certificate carried in the SignedData payload, in
+/// the order they appear.
+///
+/// A SCEP `GetCACert` response is a degenerate SignedData that carries the RA certificate(s)
+/// alongside the CA certificate(s) (RFC 8894 Section 2.1.3), and the CA certificates are what a path
+/// to a trust anchor is built through — so callers that intend to validate the RA certificate need
+/// the whole set, not just the one they picked.
+pub fn get_certs_from_signed_data(enc_ci: &[u8]) -> Result<Vec<x509_cert::Certificate>> {
     match ContentInfo::from_der(enc_ci) {
         Ok(ci) => match ci.content.to_der() {
             Ok(content) => match SignedData::from_der(content.as_slice()) {
                 Ok(sd) => {
+                    let mut certs = vec![];
                     for c in sd.certificates.iter() {
                         for a in c.0.iter() {
-                            if let CertificateChoices::Certificate(c) = a
-                                && c.tbs_certificate().subject() != c.tbs_certificate().issuer()
-                            {
-                                return Ok(c.clone());
+                            if let CertificateChoices::Certificate(c) = a {
+                                certs.push(c.clone());
                             }
                         }
                     }
-                    error!("No certificate found in SignedData in get_first_cert_from_signed_data");
-                    Err(Error::ParseError)
+                    Ok(certs)
                 }
                 Err(e) => {
                     error!(
-                        "Failed to parse SignedData in get_first_cert_from_signed_data: {:?}",
+                        "Failed to parse SignedData in get_certs_from_signed_data: {:?}",
                         e
                     );
                     Err(Error::Asn1(e))
@@ -67,7 +72,7 @@ pub fn get_first_cert_from_signed_data(enc_ci: &[u8]) -> Result<x509_cert::Certi
             },
             Err(e) => {
                 error!(
-                    "Failed to encode content in get_first_cert_from_signed_data: {:?}",
+                    "Failed to encode content in get_certs_from_signed_data: {:?}",
                     e
                 );
                 Err(Error::Asn1(e))
@@ -130,8 +135,23 @@ pub async fn get_profile(url: &str) -> Result<Vec<u8>> {
     }
 }
 
-/// Fetches a P7 blob from the given URL and returns the first certificate that is not self-issued
-pub async fn get_ca_cert(url: &str) -> Result<x509_cert::Certificate> {
+/// Fetches a SCEP `GetCACert` response from the given URL and returns the RA certificate to encrypt
+/// the enrollment request to, after validating it to a trust anchor.
+///
+/// The RA certificate is selected as the first certificate in the response that is not self-issued.
+/// That is a positional heuristic rather than the `keyUsage` discrimination RFC 8894 Section 2.1.3
+/// calls for; it holds while the response carries a single usable RA certificate, and stops holding
+/// when the RA has separate signing and encryption certificates — which post-quantum algorithms
+/// force, since ML-DSA signs and ML-KEM encapsulates and neither does both.
+///
+/// The selected certificate is then validated to a trust anchor, building through the other
+/// certificates in the response. Without this the client encrypts the enrollment request — which
+/// carries the CSR, the attestation, and the one-time challenge password — to whatever public key
+/// the response happened to contain. Transport is TLS-authenticated against the same trust material,
+/// so this is defense in depth rather than the only control, but the challenge is bound to the
+/// subject DN and SAN rather than to the CSR's public key, so anyone able to decrypt the request
+/// could pair the challenge with a key of their own choosing.
+pub async fn get_ca_cert(url: &str, env: &str) -> Result<x509_cert::Certificate> {
     let client = get_reqwest_client_rustls(&providers(), TIMEOUT, None)?;
     match client.get(url).send().await {
         Ok(response) => {
@@ -150,7 +170,37 @@ pub async fn get_ca_cert(url: &str) -> Result<x509_cert::Certificate> {
             }
 
             match &response.bytes().await {
-                Ok(bytes) => get_first_cert_from_signed_data(bytes),
+                Ok(bytes) => {
+                    let certs = get_certs_from_signed_data(bytes)?;
+                    let Some(ra_cert) = certs
+                        .iter()
+                        .find(|c| c.tbs_certificate().subject() != c.tbs_certificate().issuer())
+                    else {
+                        error!("No RA certificate found in the GetCACert response from {url}");
+                        return Err(Error::ParseError);
+                    };
+
+                    // Build through the rest of the response. The CA certificate that issued the RA
+                    // certificate travels in the same degenerate SignedData, and the trust anchor
+                    // comes from the compiled-in stores.
+                    let intermediates = certs
+                        .iter()
+                        .filter(|c| *c != ra_cert)
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    let ra_cert_der = ra_cert.to_der()?;
+                    if validate_cert(&ra_cert_der, intermediates, env)
+                        .await
+                        .is_err()
+                    {
+                        error!(
+                            "Failed to validate the RA certificate returned by {url}. Refusing to \
+                             encrypt an enrollment request to it."
+                        );
+                        return Err(Error::BadInput);
+                    }
+                    Ok(ra_cert.clone())
+                }
                 Err(e) => {
                     error!("Failed to read response from {:?} with {e:?}.", url);
                     Err(Error::Network)
