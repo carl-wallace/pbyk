@@ -370,7 +370,31 @@ async fn interactive_main() {
                     };
                     match reader.Name() {
                         Ok(name) => {
-                            println!("{}: {}", "Name".bold(), name);
+                            // Emit the VSC ID alongside the reader name, mirroring the
+                            // list_yubikeys output above. The reader name is only a local
+                            // symbolic handle ("Microsoft Virtual Smart Card 0") and is
+                            // what --serial takes to select the device; the VSC ID is the
+                            // calculated value pre-enroll actually registers with the
+                            // portal as the device SerialNumber (see ota_vsc::pre_enroll,
+                            // which passes get_vsc_id_and_uuid()'s vsc_id as `serial`).
+                            // Printing only the name left no way to look the device up on
+                            // the portal. The GUI has always shown both.
+                            let name_str = name.to_string();
+                            match get_vsc_id_from_serial(&name_str) {
+                                Ok(vsc_id) => println!(
+                                    "{}: {}; {}: {}",
+                                    "Name".bold(),
+                                    name_str,
+                                    "Serial".bold(),
+                                    vsc_id
+                                ),
+                                Err(e) => {
+                                    error!(
+                                        "Failed to determine VSC ID for {name_str}: {e:?}. Continuing..."
+                                    );
+                                    println!("{}: {}", "Name".bold(), name_str);
+                                }
+                            }
                         }
                         Err(e) => {
                             error!("Failed to read name of reader instance: {e}. Continuing...");

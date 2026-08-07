@@ -83,12 +83,18 @@ impl CertDelete {
     pub(crate) async fn delete(cert: &[u8], cs: &UserCertificateStore) {
         match CryptographicBuffer::CreateFromByteArray(cert) {
             Ok(buffer) => match Certificate::CreateCertificate(&buffer) {
-                Ok(cert_to_delete) => {
-                    cs.RequestDeleteAsync(&cert_to_delete)
-                        .unwrap()
-                        .get()
-                        .unwrap();
-                }
+                Ok(cert_to_delete) => match cs.RequestDeleteAsync(&cert_to_delete) {
+                    // RequestDeleteAsync prompts the user for consent, so a declined prompt is an
+                    // expected error here, as are ACL denial and a VSC that has gone away.
+                    Ok(action) => {
+                        if let Err(e) = action.await {
+                            error!("Failed to delete certificate from store: {e:?}");
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to request deletion of certificate from store: {e:?}");
+                    }
+                },
                 Err(e) => {
                     error!("Failed to create certificate from IBuffer: {e:?}");
                 }
