@@ -59,6 +59,12 @@ windows = {version = "0.61.3", features = [
     "Security_Cryptography", "Security_Cryptography_Certificates", "Security_Cryptography_Core", "Security_ExchangeActiveSyncProvisioning",
     "Storage_Streams", "System_Profile",
     "Win32_Foundation", "Win32_Security", "Win32_Security_Cryptography"] }
+# The windows crate depends on windows-future with default-features = false and never enables its
+# `std` feature, and that is where the IntoFuture impls for IAsyncOperation live. Without this,
+# WinRT async calls can only be consumed with the blocking `get()`. Enabling `std` here (no
+# additional crates -- windows-future is already in the graph, and its `std` feature is empty)
+# lets reset_vsc await the consent-prompting delete instead of blocking on it.
+windows-future = { version = "0.2.1", optional = true }
 
 [features]
 default = ["dev"]
@@ -68,7 +74,7 @@ om_sipr = ["pbykcorelib/om_sipr"]
 nipr = ["pbykcorelib/nipr"]
 sipr = ["pbykcorelib/sipr"]
 vsc = []
-reset_vsc = [] # this feature exists to quarantine non-functional VSC reset code. do not use.
+reset_vsc = ["dep:windows-future"] # this feature exists to quarantine non-functional VSC reset code. do not use.
 # Legacy PBE support (RC2/3DES/SHA-1) when parsing PKCS #12 objects. Portal-minted
 # P12s are modern PBES2/AES, so this is off by default; enable to accept
 # legacy-encrypted P12s.

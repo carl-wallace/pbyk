@@ -85,9 +85,19 @@ pub(crate) fn get_version_and_product() -> Result<(String, String, String)> {
 pub(crate) struct WindowsState {
     /// Simulated ASHWID values are randomly generated UUIDs
     simulated_ashwid: String,
-    /// Provides a map from a UUID (value) from a self-signed certificate (i.e., not a simulated ASHWID) to a VSC reader name (key)
+    /// Maps a VSC ID (key) to the UUID (value) from a self-signed certificate (i.e., not a
+    /// simulated ASHWID).
+    ///
+    /// NOTE: the key is the VSC ID as calculated by [get_vsc_id], NOT the smart card reader
+    /// name. See [get_vsc_id_and_uuid], which inserts under `vsc_id`. The reader name is only
+    /// an input to that calculation; it is a local symbolic handle ("Microsoft Virtual Smart
+    /// Card 0") and never appears as a key here.
     pub reader_uuid_map: BTreeMap<String, String>,
-    /// Provides a map from a certificate hash (value) to a VSC reader name (key)
+    /// Maps a VSC ID (key) to the hashes of certificates written to that card (value).
+    ///
+    /// NOTE: same keying as `reader_uuid_map` - a VSC ID, not a reader name. The `reader`
+    /// parameter on the accessors below is named misleadingly: every caller passes the
+    /// output of `get_vsc_id_from_smartcard` (see misc_win::utils and misc_win::scep).
     pub reader_cert_hash_map: BTreeMap<String, Vec<String>>,
 }
 impl Default for WindowsState {
