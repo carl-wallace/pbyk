@@ -2,6 +2,8 @@
 
 use log::error;
 use plist::Dictionary;
+
+use crate::misc::rng::pb_rng;
 use spki::EncodePublicKey;
 
 use rsa::RsaPublicKey;
@@ -170,7 +172,7 @@ pub fn prepare_enveloped_data(csr_der: &[u8], ca_cert: &Certificate) -> Result<V
     .map_err(|_| Error::Unrecognized)?;
 
     // Add recipient info. Multiple recipients are possible, but not used here.
-    let mut rng = rand::rng();
+    let mut rng = pb_rng();
     let enveloped_data = enveloped_data_builder
         .add_recipient_info(recipient_info_builder)
         .map_err(|_| Error::Unrecognized)?
