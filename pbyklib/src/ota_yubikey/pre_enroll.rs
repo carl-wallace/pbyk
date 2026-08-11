@@ -72,7 +72,7 @@ pub async fn pre_enroll(
         "Generating attestation for self-signed certificate in {} slot",
         SlotId::CardAuthentication
     );
-    let attestation_p7 = get_attestation_p7(yubikey, SlotId::CardAuthentication)?;
+    let attestation_p7 = get_attestation_p7(yubikey, SlotId::CardAuthentication, pin, mgmt_key)?;
     let yubikey_attestation = Base64::encode_string(attestation_p7.as_slice());
 
     let der_cert = match self_signed_cert.to_der() {

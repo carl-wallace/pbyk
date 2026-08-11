@@ -32,6 +32,10 @@ signature = { version = "3.0.0", features = ["digest", "alloc"]}
 
 home = "0.5.12"
 log = "0.4.33"
+# direct dependency solely to name the pcsc::Error variants that indicate a dropped card or reader.
+# the yubikey crate carries pcsc in its public error type but does not re-export it. keep this in
+# step with the version yubikey resolves to so the two refer to the same type.
+pcsc = "2.9.0"
 plist = "1.10.0"
 rand = "0.10.2"
 rand_core = { version = "0.10.1"}

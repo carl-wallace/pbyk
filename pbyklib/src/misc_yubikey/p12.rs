@@ -11,7 +11,7 @@ use x509_cert::{
 };
 
 use yubikey::{
-    PinPolicy, TouchPolicy, YubiKey,
+    MgmKey, PinPolicy, TouchPolicy, YubiKey,
     certificate::CertInfo,
     piv::{RetiredSlotId, RsaKeyData, SlotId, SlotId::KeyManagement, import_rsa_key},
 };
@@ -19,6 +19,7 @@ use yubikey::{
 use crate::{
     Error, Result,
     misc::p12::process_p12,
+    misc_yubikey::retry::retry_after_pcsc_drop,
     ota_yubikey::enroll::{get_rsa_algorithm, get_rsa_key_size},
     supports_larger_rsa_keys,
 };
@@ -121,12 +122,19 @@ pub(crate) fn get_slot_from_index(index: u8) -> SlotId {
 /// (if provided). If not slot is provided, the key usage and subject alt name extensions are
 /// considered. Where key usage is signature, if the SAN has an OtherName, PIV slot is used else
 /// signature slot is used. For key encipherment, the index is applied to the list of retired slots.
+///
+/// The PIN and management key are used to reconnect to the YubiKey and write the slot again if it
+/// drops out of the reader mid-import (see [retry_after_pcsc_drop]). A repeated import overwrites
+/// whatever a partial one left in the slot.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn import_p12(
     yubikey: &mut YubiKey,
     enc_p12: &[u8],
     password: &str,
     recovered_index: u8,
     slot_id: Option<SlotId>,
+    pin: &[u8],
+    mgmt_key: &MgmKey,
 ) -> Result<Vec<u8>> {
     let (der_cert, der_key) = process_p12(enc_p12, password, true)?;
     let cert = match Certificate::from_der(&der_cert) {
@@ -165,14 +173,6 @@ pub(crate) async fn import_p12(
         }
     };
 
-    let rkd = match RsaKeyData::new(rpk.prime1.as_bytes(), rpk.prime2.as_bytes()) {
-        Ok(rkd) => rkd,
-        Err(e) => {
-            error!("Failed to instantiate new RSA key object from PKCS #12 for {slot} slot: {e}");
-            return Err(Error::ParseError);
-        }
-    };
-
     let enc_spki = cert
         .cert
         .tbs_certificate()
@@ -180,38 +180,59 @@ pub(crate) async fn import_p12(
         .to_der()?;
     let alg_id = get_rsa_algorithm(&enc_spki)?;
 
-    if let Err(e) = import_rsa_key(
+    retry_after_pcsc_drop(
         yubikey,
-        slot,
-        alg_id,
-        rkd,
-        TouchPolicy::Default,
-        PinPolicy::Default,
-    ) {
-        if let Ok(key_size) = get_rsa_key_size(&enc_spki)
-            && !supports_larger_rsa_keys(yubikey)
-            && key_size > 2048
-        {
-            error!(
-                "Failed to import RSA key from PKCS #12 object into slot {slot}: {:?}. This YubiKey does not support {key_size}-bit keys.",
-                e
-            );
-        } else {
-            error!(
-                "Failed to import RSA key from PKCS #12 object into slot {slot}: {:?}",
-                e
-            );
-        }
-        return Err(Error::YubiKey(e));
-    }
+        pin,
+        mgmt_key,
+        &format!("Import of a PKCS #12 object into slot {slot}"),
+        |yubikey| {
+            // import_rsa_key consumes the key data, so build it inside the closure to leave a
+            // retry with a fresh copy.
+            let rkd = match RsaKeyData::new(rpk.prime1.as_bytes(), rpk.prime2.as_bytes()) {
+                Ok(rkd) => rkd,
+                Err(e) => {
+                    error!(
+                        "Failed to instantiate new RSA key object from PKCS #12 for {slot} slot: {e}"
+                    );
+                    return Err(Error::ParseError);
+                }
+            };
 
-    if let Err(e) = cert.write(yubikey, slot, CertInfo::Uncompressed) {
-        error!(
-            "Failed to import certificate from PKCS #12 object into slot {slot}: {:?}",
-            e
-        );
-        return Err(Error::YubiKey(e));
-    }
+            if let Err(e) = import_rsa_key(
+                yubikey,
+                slot,
+                alg_id,
+                rkd,
+                TouchPolicy::Default,
+                PinPolicy::Default,
+            ) {
+                if let Ok(key_size) = get_rsa_key_size(&enc_spki)
+                    && !supports_larger_rsa_keys(yubikey)
+                    && key_size > 2048
+                {
+                    error!(
+                        "Failed to import RSA key from PKCS #12 object into slot {slot}: {:?}. This YubiKey does not support {key_size}-bit keys.",
+                        e
+                    );
+                } else {
+                    error!(
+                        "Failed to import RSA key from PKCS #12 object into slot {slot}: {:?}",
+                        e
+                    );
+                }
+                return Err(Error::YubiKey(e));
+            }
+
+            if let Err(e) = cert.write(yubikey, slot, CertInfo::Uncompressed) {
+                error!(
+                    "Failed to import certificate from PKCS #12 object into slot {slot}: {:?}",
+                    e
+                );
+                return Err(Error::YubiKey(e));
+            }
+            Ok(())
+        },
+    )?;
 
     info!("Installed PKCS #12 into {slot} slot");
     Ok(der_cert)

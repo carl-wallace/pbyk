@@ -39,6 +39,7 @@ use pbykcorelib::misc::{
 use crate::{
     Error, ID_PUREBRED_YUBIKEY_ATTESTATION_ATTRIBUTE, Result,
     misc_yubikey::{
+        retry::retry_after_pcsc_drop,
         utils::{generate_self_signed_cert, get_attestation_p7, verify_and_decrypt},
         yk_signer::YkSigner,
     },
@@ -94,6 +95,35 @@ fn sign_request_rsa<'y, RL: RsaLength>(
     }
 }
 
+/// Prepares the SCEP request SignedData wrapping `enc_ed`, signed with the key in `slot_id` using a
+/// template to determine signer type, i.e., 2048, 3072 or 4096.
+///
+/// The signer is created here rather than by the caller so that the whole operation can be repeated
+/// after a reconnect: a `YkSigner` borrows the YubiKey for its lifetime, and one built against a
+/// connection that has since been reset cannot be reused.
+fn sign_scep_request<RL: RsaLength>(
+    yubikey: &mut YubiKey,
+    slot_id: SlotId,
+    enc_spki: &[u8],
+    self_signed_cert: &Certificate,
+    enc_ed: &[u8],
+) -> Result<Vec<u8>> {
+    let spki_ref = SubjectPublicKeyInfoRef::from_der(enc_spki)?;
+    let signer: YkSigner<'_, YubiRsa<RL>> = match YkSigner::new(yubikey, slot_id, spki_ref) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to created YubiKey signer: {e:?}");
+            return Err(Error::YubiKey(e));
+        }
+    };
+
+    Ok(prepare_scep_signed_data(
+        &signer,
+        self_signed_cert.clone(),
+        enc_ed,
+    )?)
+}
+
 /// Returns a DER-encoded CertReq containing the provided `attributes` and information from `self_signed_cert`.
 fn prepare_csr(
     yubikey: &mut YubiKey,
@@ -115,16 +145,23 @@ fn prepare_csr(
 
     let enc_cri = cert_req_info.to_der()?;
 
-    if let Err(e) = yubikey.verify_pin(pin) {
-        error!("Failed to verify PIN in prepare_csr: {e:?}");
-        return Err(Error::YubiKey(e));
-    }
-    if let Err(e) = yubikey.authenticate(mgmt_key) {
-        error!("Failed to authenticate using management key in prepare_csr: {e:?}");
-        return Err(Error::YubiKey(e));
-    }
-
-    let sig = match sign_request(yubikey, slot_id, self_signed_cert, &enc_cri) {
+    let sig = match retry_after_pcsc_drop(
+        yubikey,
+        pin,
+        mgmt_key,
+        &format!("Signing of a CSR using slot {slot_id}"),
+        |yubikey| {
+            if let Err(e) = yubikey.verify_pin(pin) {
+                error!("Failed to verify PIN in prepare_csr: {e:?}");
+                return Err(Error::YubiKey(e));
+            }
+            if let Err(e) = yubikey.authenticate(mgmt_key) {
+                error!("Failed to authenticate using management key in prepare_csr: {e:?}");
+                return Err(Error::YubiKey(e));
+            }
+            sign_request(yubikey, slot_id, self_signed_cert, &enc_cri)
+        },
+    ) {
         Ok(sig) => sig,
         Err(e) => {
             error!("Failed to sign CSR: {e:?}");
@@ -224,7 +261,7 @@ pub(crate) async fn process_scep_payload(
         }
     };
 
-    let attestation_p7 = get_attestation_p7(yubikey, slot_id)?;
+    let attestation_p7 = get_attestation_p7(yubikey, slot_id, pin, mgmt_key)?;
     let get_ca_url = format!("{url}?operation=GetCACert");
     let pki_op_url = format!("{url}?operation=PKIOperation");
     debug!("Obtaining RA certificate from {get_ca_url}");
@@ -247,45 +284,18 @@ pub(crate) async fn process_scep_payload(
         return Err(Error::YubiKey(e));
     }
     let enc_spki = ss.tbs_certificate().subject_public_key_info().to_der()?;
-    let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
 
+    let signing_label = format!("Signing of a SCEP request using slot {slot_id}");
     let signed_data_pkcs7_der = match key_size {
-        2048 => {
-            let signer: YkSigner<'_, YubiRsa<Rsa2048>> =
-                match YkSigner::new(yubikey, slot_id, spki_ref) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        error!("Failed to created YubiKey signer: {e:?}");
-                        return Err(Error::YubiKey(e));
-                    }
-                };
-
-            prepare_scep_signed_data(&signer, ss, &enc_ed)?
-        }
-        3072 => {
-            let signer: YkSigner<'_, YubiRsa<Rsa3072>> =
-                match YkSigner::new(yubikey, slot_id, spki_ref) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        error!("Failed to created YubiKey signer: {e:?}");
-                        return Err(Error::YubiKey(e));
-                    }
-                };
-
-            prepare_scep_signed_data(&signer, ss, &enc_ed)?
-        }
-        4096 => {
-            let signer: YkSigner<'_, YubiRsa<Rsa4096>> =
-                match YkSigner::new(yubikey, slot_id, spki_ref) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        error!("Failed to created YubiKey signer: {e:?}");
-                        return Err(Error::YubiKey(e));
-                    }
-                };
-
-            prepare_scep_signed_data(&signer, ss, &enc_ed)?
-        }
+        2048 => retry_after_pcsc_drop(yubikey, pin, mgmt_key, &signing_label, |yubikey| {
+            sign_scep_request::<Rsa2048>(yubikey, slot_id, &enc_spki, &ss, &enc_ed)
+        })?,
+        3072 => retry_after_pcsc_drop(yubikey, pin, mgmt_key, &signing_label, |yubikey| {
+            sign_scep_request::<Rsa3072>(yubikey, slot_id, &enc_spki, &ss, &enc_ed)
+        })?,
+        4096 => retry_after_pcsc_drop(yubikey, pin, mgmt_key, &signing_label, |yubikey| {
+            sign_scep_request::<Rsa4096>(yubikey, slot_id, &enc_spki, &ss, &enc_ed)
+        })?,
         _ => {
             error!("Unexpected RSA key size");
             return Err(Error::Unrecognized);
