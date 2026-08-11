@@ -4215,6 +4215,7 @@ dependencies = [
  "log",
  "log4rs",
  "pbykcorelib",
+ "pcsc",
  "pkcs1",
  "pkcs12_builder",
  "pkcs8",

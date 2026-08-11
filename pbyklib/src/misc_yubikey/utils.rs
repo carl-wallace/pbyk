@@ -49,14 +49,37 @@ use pbykcorelib::misc::utils::{
 use crate::{
     Error, Result,
     misc::rsa_utils::decrypt_inner,
-    misc_yubikey::{p12::import_p12, scep::process_scep_payload},
+    misc_yubikey::{
+        p12::import_p12,
+        retry::{is_transient_yubikey_error, retry_after_pcsc_drop},
+        scep::process_scep_payload,
+    },
     ota_yubikey::enroll::get_rsa_algorithm,
     utils::get_cert_from_slot,
 };
 
 /// Generates an attestation for the indicated slot and returns a P7 containing that attestation and
 /// the attestation certificate read from the Attestation slot.
-pub(crate) fn get_attestation_p7(yubikey: &mut YubiKey, slot_id: SlotId) -> Result<Vec<u8>> {
+///
+/// The PIN and management key are used to reconnect to the YubiKey and retry if it drops out of the
+/// reader while the attestation is being generated (see [retry_after_pcsc_drop]).
+pub(crate) fn get_attestation_p7(
+    yubikey: &mut YubiKey,
+    slot_id: SlotId,
+    pin: &[u8],
+    mgmt_key: &MgmKey,
+) -> Result<Vec<u8>> {
+    retry_after_pcsc_drop(
+        yubikey,
+        pin,
+        mgmt_key,
+        &format!("Attestation for slot {slot_id}"),
+        |yubikey| get_attestation_p7_inner(yubikey, slot_id),
+    )
+}
+
+/// Body of [get_attestation_p7], factored out so it can be retried after a dropped connection.
+fn get_attestation_p7_inner(yubikey: &mut YubiKey, slot_id: SlotId) -> Result<Vec<u8>> {
     let attestation = match piv::attest(yubikey, slot_id) {
         Ok(a) => a,
         Err(e) => {
@@ -188,7 +211,30 @@ pub(crate) fn get_uuid_from_cert(yubikey: &mut YubiKey) -> Result<String> {
 
 /// Generates a self-signed certificate containing a public key corresponding to the given algorithm
 /// and a subject DN set to the provided value using the indicated slot on the provided YubiKey.
+///
+/// On-card RSA key generation is the longest single operation pbyk performs -- minutes for a 4096
+/// bit key -- and is where a YubiKey is most likely to drop out of the reader. If that happens the
+/// YubiKey is reconnected and the key is generated again (see [retry_after_pcsc_drop]). Generating
+/// a fresh key overwrites whatever the interrupted attempt left in the slot.
 pub(crate) fn generate_self_signed_cert(
+    yubikey: &mut YubiKey,
+    slot: SlotId,
+    algorithm: AlgorithmId,
+    name: &str,
+    pin: &[u8],
+    mgmt_key: &MgmKey,
+) -> Result<Certificate> {
+    retry_after_pcsc_drop(
+        yubikey,
+        pin,
+        mgmt_key,
+        &format!("Generation of a {algorithm:?} key and self-signed certificate in slot {slot}"),
+        |yubikey| generate_self_signed_cert_inner(yubikey, slot, algorithm, name, pin, mgmt_key),
+    )
+}
+
+/// Body of [generate_self_signed_cert], factored out so it can be retried after a dropped connection.
+fn generate_self_signed_cert_inner(
     yubikey: &mut YubiKey,
     slot: SlotId,
     algorithm: AlgorithmId,
@@ -333,7 +379,7 @@ pub(crate) async fn verify_and_decrypt(
     let bytes2ed = ci_ed.content.to_der()?;
     let ed = EnvelopedData::from_der(&bytes2ed)?;
 
-    let params = match ed.encrypted_content.content_enc_alg.parameters {
+    let params = match &ed.encrypted_content.content_enc_alg.parameters {
         Some(p) => p,
         None => return Err(Error::Unrecognized),
     };
@@ -342,17 +388,47 @@ pub(crate) async fn verify_and_decrypt(
     let os_iv = OctetString::from_der(&enc_params)?;
     let iv = os_iv.as_bytes();
 
-    let mut ct = match ed.encrypted_content.encrypted_content {
+    let ct = match &ed.encrypted_content.encrypted_content {
         Some(ct) => ct.as_bytes().to_vec(),
         None => return Err(Error::Unrecognized),
     };
 
+    retry_after_pcsc_drop(
+        yubikey,
+        pin,
+        mgmt_key,
+        "Decryption of a content encryption key",
+        |yubikey| decrypt_enveloped_data(yubikey, slot, alg, &ed, iv, &ct),
+    )
+}
+
+/// Unwraps the content encryption key from each `RecipientInfo` in `ed` in turn using the key in the
+/// indicated slot and, where that succeeds, decrypts `ct` with it.
+///
+/// A YubiKey that goes away mid-operation is reported instead of skipped, so the caller can
+/// reconnect and try again instead of reporting the enveloped data as undecryptable.
+fn decrypt_enveloped_data(
+    yubikey: &mut YubiKey,
+    slot: SlotId,
+    alg: AlgorithmId,
+    ed: &EnvelopedData,
+    iv: &[u8],
+    ct: &[u8],
+) -> Result<Zeroizing<Vec<u8>>> {
     for ri in ed.recip_infos.0.iter() {
         let dec_key = match ri {
             RecipientInfo::Ktri(ktri) => {
                 let dk = match piv::decrypt_data(yubikey, ktri.enc_key.as_bytes(), alg, slot) {
                     Ok(dk) => dk,
-                    Err(_e) => continue,
+                    Err(e) => {
+                        if is_transient_yubikey_error(&e) {
+                            error!(
+                                "YubiKey went away while decrypting a content encryption key: {e:?}"
+                            );
+                            return Err(Error::YubiKey(e));
+                        }
+                        continue;
+                    }
                 };
                 match decrypt_inner(dk.to_vec(), 256) {
                     Ok(dec_key) => dec_key,
@@ -371,6 +447,9 @@ pub(crate) async fn verify_and_decrypt(
                 continue;
             }
         };
+        // decrypt_padded works in place and scrambles the buffer when it fails, so each candidate
+        // key (and each retry after a reconnect) gets its own copy of the ciphertext.
+        let mut ct = ct.to_vec();
         if let Ok(pt) = cipher.decrypt_padded::<cipher::block_padding::Pkcs7>(&mut ct) {
             return Ok(Zeroizing::new(pt.to_vec()));
         }
@@ -476,9 +555,16 @@ pub(crate) async fn process_payloads(
                         };
 
                         info!("Processing PKCS #12 payload with index {p12_index}");
-                        if let Err(e) =
-                            import_p12(yubikey, payload_content, password, recovered_index, None)
-                                .await
+                        if let Err(e) = import_p12(
+                            yubikey,
+                            payload_content,
+                            password,
+                            recovered_index,
+                            None,
+                            pin,
+                            mgmt_key,
+                        )
+                        .await
                         {
                             error!(
                                 "Failed to process PKCS #12 payload at index {p12_index}: {e:?}."

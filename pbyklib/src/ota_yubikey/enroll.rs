@@ -25,6 +25,7 @@ use crate::{
     Error, Result,
     misc_yubikey::{
         p12::import_p12,
+        retry::retry_after_pcsc_drop,
         scep::process_scep_payload,
         utils::{get_uuid_from_cert, verify_and_decrypt},
         yk_signer::YkSigner,
@@ -34,12 +35,17 @@ use crate::{
 };
 
 /// Signs Phase 2 request using a template to determine signer type, i.e., 2048, 3072 or 4096.
-fn sign_phase2<'y, RL: RsaLength>(
+///
+/// The signer is created here rather than by the caller so that the whole operation can be repeated
+/// after a reconnect: the signer borrows the YubiKey for its lifetime, and one built against a
+/// connection that has since been reset cannot be reused.
+fn sign_phase2<RL: RsaLength>(
     yubikey: &mut YubiKey,
     phase2_req: &[u8],
     self_signed_cert: &Certificate,
-    spki_ref: SubjectPublicKeyInfoRef<'y>,
+    enc_spki: &[u8],
 ) -> Result<Vec<u8>> {
+    let spki_ref = SubjectPublicKeyInfoRef::from_der(enc_spki)?;
     let signer: yubikey::certificate::yubikey_signer::Signer<'_, YubiRsa<RL>> =
         yubikey::certificate::yubikey_signer::Signer::new(yubikey, CardAuthentication, spki_ref)
             .map_err(|_| Error::Unrecognized)?;
@@ -78,20 +84,25 @@ async fn phase2(
         .tbs_certificate()
         .subject_public_key_info()
         .to_der()?;
-    let spki_ref = SubjectPublicKeyInfoRef::from_der(&enc_spki)?;
-
     let key_size = get_rsa_key_size(&enc_spki)?;
+    let signing_label = format!("Signing of a Phase 2 request using slot {CardAuthentication}");
     let (signed_data_pkcs7_der, alg) = match key_size {
         2048 => (
-            sign_phase2::<Rsa2048>(yubikey, phase2_req, self_signed_cert, spki_ref)?,
+            retry_after_pcsc_drop(yubikey, pin, mgmt_key, &signing_label, |yubikey| {
+                sign_phase2::<Rsa2048>(yubikey, phase2_req, self_signed_cert, &enc_spki)
+            })?,
             AlgorithmId::Rsa2048,
         ),
         3072 => (
-            sign_phase2::<Rsa3072>(yubikey, phase2_req, self_signed_cert, spki_ref)?,
+            retry_after_pcsc_drop(yubikey, pin, mgmt_key, &signing_label, |yubikey| {
+                sign_phase2::<Rsa3072>(yubikey, phase2_req, self_signed_cert, &enc_spki)
+            })?,
             AlgorithmId::Rsa3072,
         ),
         4096 => (
-            sign_phase2::<Rsa4096>(yubikey, phase2_req, self_signed_cert, spki_ref)?,
+            retry_after_pcsc_drop(yubikey, pin, mgmt_key, &signing_label, |yubikey| {
+                sign_phase2::<Rsa4096>(yubikey, phase2_req, self_signed_cert, &enc_spki)
+            })?,
             AlgorithmId::Rsa4096,
         ),
         _ => {
@@ -227,6 +238,8 @@ async fn phase2(
             password,
             u8::MAX,
             Some(CardAuthentication),
+            pin,
+            mgmt_key,
         )
         .await
     }
