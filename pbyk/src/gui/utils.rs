@@ -166,7 +166,18 @@ pub(crate) fn determine_phase(yubikey: &mut YubiKey) -> Phase {
                     return Phase::PreEnroll;
                 }
             };
-            if !is_self_signed(&pe, &pdv) {
+            // A signature that cannot be checked is treated as not self-signed, which is where a
+            // YubiKey that has been enrolled lands; the reason is logged.
+            let self_signed = match is_self_signed(&pe, &pdv) {
+                Ok(self_signed) => self_signed,
+                Err(e) => {
+                    error!(
+                        "Failed to determine whether the certificate in the CardAuthentication slot is self-signed with: {e:?}. Continuing as not self-signed."
+                    );
+                    false
+                }
+            };
+            if !self_signed {
                 let r1 = get_cert_from_slot(yubikey, SlotId::Authentication);
                 let r2 = get_cert_from_slot(yubikey, SlotId::Signature);
                 if r1.is_ok() || r2.is_ok() {
