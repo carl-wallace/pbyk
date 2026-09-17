@@ -1,12 +1,8 @@
 //! Structure to contain signals primarily associated with UI rendering
 //!
 
-use dioxus::{
-    hooks::use_signal,
-    prelude::Signal,
-    signals::{Readable, Writable},
-};
-use dioxus_toast::ToastManager;
+use crate::gui::toast::ToastManager;
+use dioxus::prelude::*;
 
 use std::{fmt::Display, sync::LazyLock};
 

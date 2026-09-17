@@ -2,8 +2,8 @@
 // onsubmit, onclick, etc. are causing these warnings
 #![allow(unused_qualifications)]
 
+use crate::gui::toast::{Icon, ToastInfo};
 use dioxus::prelude::*;
-use dioxus_toast::{Icon, ToastInfo};
 use log::error;
 #[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
 use pbyklib::utils::{list_vscs::get_vsc, reset_vsc::reset_vsc};
@@ -37,13 +37,10 @@ pub(crate) fn reset(
                         (Some(Icon::Error), Some("Reset Error".to_string()))
                     };
 
-                let _id = ui_signals.toast.write().popup(ToastInfo {
+                ui_signals.toast.write().popup(ToastInfo {
                     heading,
                     context,
-                    allow_toast_close: true,
-                    position: dioxus_toast::Position::TopLeft,
                     icon,
-                    hide_after: None,
                 });
                 ui_signals.s_error_msg.set(String::new());
             }
@@ -76,12 +73,15 @@ pub(crate) fn reset(
     let css = include_str!("../../assets/pbyk.css");
     rsx! {
         style { "{css}" }
-        dioxus_toast::ToastFrame {
+        crate::gui::toast::ToastFrame {
             manager: ui_signals.toast
         }
         div {
             form {
                 onsubmit: move |ev| {
+                    // Dioxus 0.7 no longer prevents a form's native submission, which would reload
+                    // the page underneath the handler.
+                    ev.prevent_default();
                     let pin1 = string_or_default(&ev, "pin", "");
                     let pin2 = string_or_default(&ev, "pin2", "");
                     let puk1 = string_or_default(&ev, "puk", "");

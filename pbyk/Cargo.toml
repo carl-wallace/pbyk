@@ -20,10 +20,8 @@ tokio = { version = "1.52.4", features = ["full", "time", "rt-multi-thread"]}
 yubikey = {git = "https://github.com/carl-wallace/yubikey.rs.git", branch = "updates", features = ["untested"]}
 zeroize = "1.9.0"
 
-dioxus = {version = "0.6.3", optional = true}
-dioxus-desktop = {version = "0.6.3", optional = true}
-
-dioxus-toast = { version = "0.6", optional = true }
+dioxus = {version = "0.7.10", features = ["desktop"], optional = true}
+dioxus-desktop = {version = "0.7.10", optional = true}
 
 cfg-if = "1.0.4"
 home = {version = "0.5.12", optional = true}
@@ -48,7 +46,7 @@ om_nipr = ["pbyklib/om_nipr"]
 om_sipr = ["pbyklib/om_sipr"]
 nipr = ["pbyklib/nipr"]
 sipr = ["pbyklib/sipr"]
-gui = ["home", "anyhow", "dioxus-desktop", "dioxus", "dioxus-toast", "futures"]
+gui = ["home", "anyhow", "dioxus-desktop", "dioxus", "futures"]
 vsc = ["pbyklib/vsc", "reset_vsc"]
 reset_vsc = ["pbyklib/reset_vsc"] # this feature exists to quarantine non-functional VSC reset code. do not use.
 test_pin = [] # adds PBYK_PIN / PBYK_PUK env vars to bypass interactive PIN/PUK prompts. test/scripting only — do not ship.

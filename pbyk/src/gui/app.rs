@@ -5,9 +5,9 @@
 // onsubmit, onclick, etc. are causing these warnings
 #![allow(unused_qualifications)]
 
+use crate::gui::toast::{Icon, ToastInfo};
 use dioxus::prelude::*;
 use dioxus_desktop::use_window;
-use dioxus_toast::{Icon, ToastInfo};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -116,24 +116,18 @@ pub(crate) fn app(
     macro_rules! show_message {
         () => {
             if !ui_signals.s_error_msg.read().is_empty() {
-                let _id = ui_signals.toast.write().popup(ToastInfo {
+                ui_signals.toast.write().popup(ToastInfo {
                     heading: Some("ERROR".to_string()),
                     context: ui_signals.s_error_msg.to_string(),
-                    allow_toast_close: true,
-                    position: dioxus_toast::Position::TopLeft,
                     icon: Some(Icon::Error),
-                    hide_after: None,
                 });
                 ui_signals.s_error_msg.set(String::new());
             }
             if !ui_signals.s_success_msg.read().is_empty() {
-                let _id = ui_signals.toast.write().popup(ToastInfo {
+                ui_signals.toast.write().popup(ToastInfo {
                     heading: Some("SUCCESS".to_string()),
                     context: ui_signals.s_success_msg.to_string(),
-                    allow_toast_close: true,
-                    position: dioxus_toast::Position::TopLeft,
                     icon: Some(Icon::Success),
-                    hide_after: None,
                 });
                 ui_signals.s_success_msg.set(String::new());
             }
@@ -308,13 +302,16 @@ pub(crate) fn app(
         });
 
         rsx! {
-            dioxus_toast::ToastFrame {
+            crate::gui::toast::ToastFrame {
                 manager: ui_signals.toast
             }
             style { "{css}" }
             div {
                 form {
                     onsubmit: move |ev| {
+                        // Dioxus 0.7 no longer prevents a form's native submission, which would
+                        // reload the page underneath the handler.
+                        ev.prevent_default();
                         let environment = string_or_default(&ev, "environment", "DEV");
                         info!("Targeting {environment} environment");
 
