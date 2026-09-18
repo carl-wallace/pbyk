@@ -32,3 +32,31 @@ pub fn providers() -> Vec<&'static dyn TrustStoreProvider> {
     providers.push(certval_stores_sipr::provider());
     providers
 }
+
+/// The store id carrying the trust material for a Purebred environment.
+///
+/// The two are different things that used to be one string: an environment names
+/// a portal to enroll against, a store id names a set of trust anchors, and the
+/// providers state the latter. Mapping here rather than at the call sites keeps
+/// the correspondence beside the provider list it belongs with, and keeps it
+/// cfg-gated the same way -- an environment this build has no provider for has no
+/// store to name.
+///
+/// The ids come from the provider crates as constants, so renaming one there is a
+/// compile error here rather than a run-time "did not match any provider".
+#[allow(unreachable_patterns)]
+pub fn store_id(env: &str) -> Option<&'static str> {
+    match env {
+        #[cfg(feature = "dev")]
+        "DEV" => Some(certval_stores_pbdev::PUREBRED_DEV),
+        #[cfg(feature = "om_nipr")]
+        "OM_NIPR" => Some(certval_stores_nipr::NIPR_OM),
+        #[cfg(feature = "nipr")]
+        "NIPR" => Some(certval_stores_nipr::NIPR_PROD),
+        #[cfg(feature = "om_sipr")]
+        "OM_SIPR" => Some(certval_stores_sipr::SIPR_OM),
+        #[cfg(feature = "sipr")]
+        "SIPR" => Some(certval_stores_sipr::SIPR_PROD),
+        _ => None,
+    }
+}

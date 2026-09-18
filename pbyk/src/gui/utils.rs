@@ -127,24 +127,21 @@ pub(crate) fn read_saved_window_size() -> SavedWindowsSize {
 
 /// Searches the map for the given key. If an entry is found, the value is returned. Else, None is returned.
 pub(crate) fn string_or_none(ev: &Event<FormData>, key: &str) -> Option<String> {
-    if let Some(v) = ev.values().get(key)
-        && !v[0].is_empty()
-    {
-        Some(v[0].clone())
-    } else {
-        None
+    match ev.get_first(key) {
+        Some(FormValue::Text(s)) => {
+            if s.is_empty() {
+                None
+            } else {
+                Some(s)
+            }
+        }
+        _ => None,
     }
 }
 
 /// Searches the map for the given key. If an entry is found, the value is returned. Else, the provided default value is returned as a String.
 pub(crate) fn string_or_default(ev: &Event<FormData>, key: &str, default: &str) -> String {
-    if let Some(v) = ev.values().get(key)
-        && !v[0].is_empty()
-    {
-        v[0].clone()
-    } else {
-        default.to_string()
-    }
+    string_or_none(ev, key).unwrap_or_else(|| default.to_string())
 }
 
 /// Returns PreEnroll if no certificate can be read from CardAuthentication slot or if
@@ -169,7 +166,18 @@ pub(crate) fn determine_phase(yubikey: &mut YubiKey) -> Phase {
                     return Phase::PreEnroll;
                 }
             };
-            if !is_self_signed(&pe, &pdv) {
+            // A signature that cannot be checked is treated as not self-signed, which is where a
+            // YubiKey that has been enrolled lands; the reason is logged.
+            let self_signed = match is_self_signed(&pe, &pdv) {
+                Ok(self_signed) => self_signed,
+                Err(e) => {
+                    error!(
+                        "Failed to determine whether the certificate in the CardAuthentication slot is self-signed with: {e:?}. Continuing as not self-signed."
+                    );
+                    false
+                }
+            };
+            if !self_signed {
                 let r1 = get_cert_from_slot(yubikey, SlotId::Authentication);
                 let r2 = get_cert_from_slot(yubikey, SlotId::Signature);
                 if r1.is_ok() || r2.is_ok() {
