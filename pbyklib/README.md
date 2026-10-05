@@ -60,7 +60,7 @@ supported and that may be removed.
 
 ## Minimum Supported Rust Version
 
-This crate requires **Rust 1.88.0** at a minimum.
+This crate requires **Rust 1.89.0** at a minimum.
 
 ## License
 

@@ -95,7 +95,10 @@ pub fn reset_yubikey(
     ];
 
     let mut cardid_cccid = [0u8; 14];
-    pb_rng().try_fill_bytes(&mut cardid_cccid);
+    if let Err(e) = pb_rng().try_fill_bytes(&mut cardid_cccid) {
+        error!("Failed to generate a random CCC card identifier: {e:?}");
+        return Err(yubikey::Error::GenericError);
+    }
 
     let mut cccid_bytes = CCC_TMPL.to_vec();
     cccid_bytes[9..23].copy_from_slice(&cardid_cccid);
@@ -117,7 +120,10 @@ pub fn reset_yubikey(
         0x35, 0x08, 0x32, 0x30, 0x33, 0x30, 0x30, 0x31, 0x30, 0x31, 0x3e, 0x00, 0xfe, 0x00,
     ];
     let mut cardid_chuid = [0u8; 16];
-    pb_rng().try_fill_bytes(&mut cardid_chuid);
+    if let Err(e) = pb_rng().try_fill_bytes(&mut cardid_chuid) {
+        error!("Failed to generate a random CHUID card identifier: {e:?}");
+        return Err(yubikey::Error::GenericError);
+    }
 
     let mut chuid_bytes = CHUID_TMPL.to_vec();
     chuid_bytes[29..45].copy_from_slice(&cardid_chuid);

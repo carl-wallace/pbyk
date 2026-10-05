@@ -255,7 +255,9 @@ fn generate_self_signed_cert_inner(
     };
 
     let mut serial = [0u8; 20];
-    pb_rng().try_fill_bytes(&mut serial);
+    pb_rng()
+        .try_fill_bytes(&mut serial)
+        .map_err(|_| Error::Unrecognized)?;
     serial[0] = 0x01;
     let serial = SerialNumber::new(&serial[..]).expect("serial can't be more than 20 bytes long");
 

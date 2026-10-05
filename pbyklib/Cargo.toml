@@ -2,7 +2,7 @@
 name = "pbyklib"
 version = "0.4.2"
 edition = "2024"
-rust-version = "1.88.0"
+rust-version = "1.89.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
