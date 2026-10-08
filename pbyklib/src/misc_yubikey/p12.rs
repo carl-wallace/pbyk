@@ -1,7 +1,7 @@
 //! Supports importing PKCS12 objects into a YubiKey
 
 use log::{error, info};
-use rsa::pkcs1::RsaPrivateKey;
+use rsa::pkcs1::RsaPrivateKeyRef;
 
 use const_oid::db::rfc5912::{ID_CE_KEY_USAGE, ID_CE_SUBJECT_ALT_NAME};
 use der::{Decode, Encode};
@@ -165,7 +165,7 @@ pub(crate) async fn import_p12(
         },
     };
 
-    let rpk = match RsaPrivateKey::from_der(&der_key) {
+    let rpk = match RsaPrivateKeyRef::from_der(&der_key) {
         Ok(rpk) => rpk,
         Err(e) => {
             error!("Failed to parse RSA key from PKCS #12 object for {slot} slot: {e:?}");
@@ -286,7 +286,7 @@ async fn p12_test_rc2() {
     let cert = Certificate::from_der(&der_cert).unwrap();
     assert!(!cert.tbs_certificate().subject().to_string().is_empty());
     let der_key = der_key.unwrap();
-    let rpk = RsaPrivateKey::from_der(&der_key).unwrap();
+    let rpk = RsaPrivateKeyRef::from_der(&der_key).unwrap();
     assert!(!rpk.prime1.as_bytes().is_empty());
 }
 
@@ -305,7 +305,7 @@ async fn p12_test_aes() {
     let cert = Certificate::from_der(&der_cert).unwrap();
     assert!(!cert.tbs_certificate().subject().to_string().is_empty());
     let der_key = der_key.unwrap();
-    let rpk = RsaPrivateKey::from_der(&der_key).unwrap();
+    let rpk = RsaPrivateKeyRef::from_der(&der_key).unwrap();
     assert!(!rpk.prime1.as_bytes().is_empty());
 }
 

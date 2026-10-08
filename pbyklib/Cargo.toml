@@ -24,8 +24,8 @@ certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["s
 aes = { version = "0.9.1", features = ["zeroize"] }
 cipher = { version = "0.5.2", features = ["rand_core"] }
 cbc = "0.2.1"
-pkcs1 = "0.8.0-rc.4"
-rsa = { version = "0.10.0-rc.18", features = ["sha2"] }
+pkcs1 = "0.8.0-rc.5"
+rsa = { version = "0.10.0-rc.19", features = ["sha2"] }
 sha1 = {version = "0.11.0", default-features = false}
 sha2 = "0.11.0"
 signature = { version = "3.0.0", features = ["digest", "alloc"]}

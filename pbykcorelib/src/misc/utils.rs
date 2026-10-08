@@ -23,7 +23,10 @@ use const_oid::{
         rfc5912::ID_CE_BASIC_CONSTRAINTS,
     },
 };
-use der::{Any, AnyRef, Decode, Encode, Tag, asn1::OctetString};
+use der::{
+    Any, AnyRef, Decode, Encode, Tag,
+    asn1::{BitString, OctetString},
+};
 use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier, EncodePublicKey};
 use x509_cert::{
     Certificate,
@@ -269,7 +272,7 @@ pub async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec
             .verify_signature_message(
                 &pe,
                 &data_to_verify[..],
-                si.signature.as_bytes(),
+                &BitString::from_bytes(si.signature.as_bytes())?,
                 &si.signature_algorithm,
                 leaf_cert.tbs_certificate().subject_public_key_info(),
             )
