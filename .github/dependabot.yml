@@ -1,0 +1,57 @@
+# Dependency updates, monthly, one grouped pull request.
+#
+# Updates move Cargo.lock only (lockfile-only). pbyk ships a binary, whose lockfile is what pins
+# the release, and two libraries (pbyklib, pbykcorelib) that purebred-rs and
+# purebred-registration-rs consume, whose minimum versions in Cargo.toml are a decision for a
+# release rather than routine churn.
+#
+# Ignored: the git dependencies (certval, the certval stores, pkcs12_builder, the yubikey fork and
+# the prerelease RustCrypto crates). They move deliberately, through the dependency rounds and
+# build-certval-consumers.sh, and every upstream push would otherwise produce a pull request.
+#
+# certval_stores_sipr is private (RedHoundSoftware) and is still fetched to resolve the lockfile,
+# ignored or not. The redhound-git registry gives dependabot a read-only token for it: a
+# fine-grained token limited to that repository's contents, held as this repository's Dependabot
+# secret SIPR_READ_TOKEN, expiring 2027-10-09.
+version: 2
+registries:
+  redhound-git:
+    type: git
+    url: https://github.com
+    username: x-access-token
+    password: ${{secrets.SIPR_READ_TOKEN}}
+
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    registries:
+      - redhound-git
+    schedule:
+      interval: monthly
+    versioning-strategy: lockfile-only
+    open-pull-requests-limit: 3
+    groups:
+      cargo:
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: "certval"
+      - dependency-name: "certval_stores_core"
+      - dependency-name: "certval_stores_nipr"
+      - dependency-name: "certval_stores_pbdev"
+      - dependency-name: "certval_stores_sipr"
+      - dependency-name: "cms"
+      - dependency-name: "pkcs12"
+      - dependency-name: "pkcs12_builder"
+      - dependency-name: "x509-ocsp"
+      - dependency-name: "yubikey"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns:
+          - "*"
