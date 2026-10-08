@@ -13,6 +13,8 @@
 # ignored or not. The redhound-git registry gives dependabot a read-only token for it: a
 # fine-grained token limited to that repository's contents, held as this repository's Dependabot
 # secret SIPR_READ_TOKEN, expiring 2027-10-09.
+# CI (.github/workflows/ci.yml) reads the same token, from the Actions secret of that name on
+# ordinary runs and from the Dependabot secret on runs dependabot starts.
 version: 2
 registries:
   redhound-git:

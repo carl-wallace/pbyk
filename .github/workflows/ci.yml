@@ -32,11 +32,15 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libpcsclite-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # Read-only deploy key for the private certval_stores_sipr crate, which
-      # cargo resolves (fetches) even when the sipr feature is off.
-      - uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.CERTVAL_STORES_SIPR_DEPLOY_KEY }}
+      # Read access to the private certval_stores_sipr crate, which cargo
+      # resolves (fetches) even when the sipr feature is off.
+      - name: read access to certval_stores_sipr
+        shell: bash
+        env:
+          SIPR_READ_TOKEN: ${{ secrets.SIPR_READ_TOKEN }}
+        run: |
+          : "${SIPR_READ_TOKEN:?the SIPR_READ_TOKEN secret is empty}"
+          git config --global url."https://x-access-token:${SIPR_READ_TOKEN}@github.com/RedHoundSoftware/certval_stores_sipr".insteadOf ssh://git@github.com/RedHoundSoftware/certval_stores_sipr
       - run: cargo test --workspace --lib --locked
       # The legacy_p12 arm (RC2/3DES/SHA-1 PKCS #12 parsing) is off by default;
       # keep its test coverage alive.
@@ -60,15 +64,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
-      - uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.CERTVAL_STORES_SIPR_DEPLOY_KEY }}
+      - name: read access to certval_stores_sipr
+        shell: bash
+        env:
+          SIPR_READ_TOKEN: ${{ secrets.SIPR_READ_TOKEN }}
+        run: |
+          : "${SIPR_READ_TOKEN:?the SIPR_READ_TOKEN secret is empty}"
+          git config --global url."https://x-access-token:${SIPR_READ_TOKEN}@github.com/RedHoundSoftware/certval_stores_sipr".insteadOf ssh://git@github.com/RedHoundSoftware/certval_stores_sipr
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
   # Every deployment environment must compile (exactly one env feature each; the
   # workspace is virtual, so features are addressed per package). sipr/om_sipr
-  # pull the private certval_stores_sipr crate, fetched via the ssh-agent deploy
-  # key configured on each job.
+  # pull the private certval_stores_sipr crate, fetched with the SIPR_READ_TOKEN
+  # rewrite configured on each job.
   build-env:
     name: build (${{ matrix.env }})
     runs-on: ubuntu-latest
@@ -81,9 +89,13 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libpcsclite-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.CERTVAL_STORES_SIPR_DEPLOY_KEY }}
+      - name: read access to certval_stores_sipr
+        shell: bash
+        env:
+          SIPR_READ_TOKEN: ${{ secrets.SIPR_READ_TOKEN }}
+        run: |
+          : "${SIPR_READ_TOKEN:?the SIPR_READ_TOKEN secret is empty}"
+          git config --global url."https://x-access-token:${SIPR_READ_TOKEN}@github.com/RedHoundSoftware/certval_stores_sipr".insteadOf ssh://git@github.com/RedHoundSoftware/certval_stores_sipr
       - run: cargo check --workspace --no-default-features --features pbyk/${{ matrix.env }},pbyklib/${{ matrix.env }},pbykcorelib/${{ matrix.env }} --locked
 
   # Keep the Windows/VSC backend compiling — it never builds on the Linux jobs.
@@ -95,9 +107,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.CERTVAL_STORES_SIPR_DEPLOY_KEY }}
+      - name: read access to certval_stores_sipr
+        shell: bash
+        env:
+          SIPR_READ_TOKEN: ${{ secrets.SIPR_READ_TOKEN }}
+        run: |
+          : "${SIPR_READ_TOKEN:?the SIPR_READ_TOKEN secret is empty}"
+          git config --global url."https://x-access-token:${SIPR_READ_TOKEN}@github.com/RedHoundSoftware/certval_stores_sipr".insteadOf ssh://git@github.com/RedHoundSoftware/certval_stores_sipr
       - run: cargo check -p pbyklib --features vsc --locked
 
   msrv:
@@ -110,7 +126,11 @@ jobs:
         with:
           toolchain: 1.89.0
       - uses: Swatinem/rust-cache@v2
-      - uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.CERTVAL_STORES_SIPR_DEPLOY_KEY }}
+      - name: read access to certval_stores_sipr
+        shell: bash
+        env:
+          SIPR_READ_TOKEN: ${{ secrets.SIPR_READ_TOKEN }}
+        run: |
+          : "${SIPR_READ_TOKEN:?the SIPR_READ_TOKEN secret is empty}"
+          git config --global url."https://x-access-token:${SIPR_READ_TOKEN}@github.com/RedHoundSoftware/certval_stores_sipr".insteadOf ssh://git@github.com/RedHoundSoftware/certval_stores_sipr
       - run: cargo check --workspace --locked
