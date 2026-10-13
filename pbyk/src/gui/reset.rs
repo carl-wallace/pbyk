@@ -120,11 +120,11 @@ pub(crate) fn reset(
                                 return;
                             }
 
-                            if min_len > puk1.len() || 8 < puk1.len()  {
+                            if !puk1.is_ascii() || min_len > puk1.len() || 8 < puk1.len() {
                                 let sm = if min_len != 8 {
-                                    "PUK values MUST be between 6 and 8 characters long."
+                                    "PUK values MUST be between 6 and 8 characters long and only contain ASCII values."
                                 } else {
-                                    "PUK values MUST be 8 characters long."
+                                    "PUK values MUST be 8 characters long and only contain ASCII values."
                                 };
                                 error!("{}", sm);
                                 ui_signals.s_error_msg.set(sm.to_string());
