@@ -579,15 +579,15 @@ async fn interactive_main() {
                     #[cfg(feature = "test_pin")]
                     if let Ok(env_puk) = std::env::var("PBYK_PUK") {
                         let puk = Zeroizing::new(env_puk);
-                        if puk.len() < 6 || puk.len() > 8 {
-                            println!("{}: PBYK_PUK must be 6-8 characters", "ERROR".bold());
+                        if puk.len() < 6 || puk.len() > 8 || !puk.is_ascii() {
+                            println!("{}: PBYK_PUK must be 6-8 ASCII characters", "ERROR".bold());
                             return;
                         }
                         break 'puk_block puk;
                     }
                     loop {
                         let puk = Zeroizing::new(rpassword::prompt_password(
-                                format!("{}: ", "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 bytes in length".bold()).to_string())
+                                format!("{}: ", "Enter new PIN Unlock Key (PUK); PUKs must be 6 to 8 ASCII characters in length".bold()).to_string())
                                                      .unwrap() // allow panic for IO errors here
                         );
                         let puk2 = Zeroizing::new(
@@ -603,6 +603,8 @@ async fn interactive_main() {
                             println!("{}: PUK is not at least 6 characters long", "ERROR".bold());
                         } else if puk.len() > 8 {
                             println!("{}: PUK is longer than 8 characters long", "ERROR".bold());
+                        } else if !puk.is_ascii() {
+                            println!("{}: PUK contains non-ASCII characters", "ERROR".bold());
                         } else {
                             break puk;
                         }
