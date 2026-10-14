@@ -73,6 +73,35 @@ jobs:
           git config --global url."https://x-access-token:${SIPR_READ_TOKEN}@github.com/RedHoundSoftware/certval_stores_sipr".insteadOf ssh://git@github.com/RedHoundSoftware/certval_stores_sipr
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+  # The gui feature (pbyk/src/gui/, dioxus-desktop) is off by default, so no other job
+  # compiles it. dioxus-desktop on Linux needs the webkit2gtk/gtk3/xdo development
+  # packages; the apt options bound waits that are otherwise unbounded (dpkg lock held
+  # by the image's background updates, a stalled mirror), as in rust-pki's pittv3-ui.yml.
+  clippy-gui:
+    name: clippy gui (-D warnings)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 install -y \
+            libpcsclite-dev libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev
+        env:
+          DEBIAN_FRONTEND: noninteractive
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
+      - uses: Swatinem/rust-cache@v2
+      - name: read access to certval_stores_sipr
+        shell: bash
+        env:
+          SIPR_READ_TOKEN: ${{ secrets.SIPR_READ_TOKEN }}
+        run: |
+          : "${SIPR_READ_TOKEN:?the SIPR_READ_TOKEN secret is empty}"
+          git config --global url."https://x-access-token:${SIPR_READ_TOKEN}@github.com/RedHoundSoftware/certval_stores_sipr".insteadOf ssh://git@github.com/RedHoundSoftware/certval_stores_sipr
+      - run: cargo clippy -p pbyk --features gui --all-targets --locked -- -D warnings
+
   # Every deployment environment must compile (exactly one env feature each; the
   # workspace is virtual, so features are addressed per package). sipr/om_sipr
   # pull the private certval_stores_sipr crate, fetched with the SIPR_READ_TOKEN
