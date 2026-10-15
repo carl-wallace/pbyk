@@ -351,7 +351,10 @@ pub(crate) async fn process_scep_payload(
         }
         let enc_cert = c.to_der()?;
         let yc = yubikey::certificate::Certificate { cert: c.clone() };
-        let _ = yc.write(yubikey, slot_id, CertInfo::Uncompressed);
+        if let Err(e) = yc.write(yubikey, slot_id, CertInfo::Uncompressed) {
+            error!("Failed to write the issued certificate into slot {slot_id}: {e:?}");
+            return Err(Error::YubiKey(e));
+        }
         return Ok(enc_cert);
     }
 
