@@ -20,7 +20,7 @@ fn log_certs_in_path(path: &CertificationPath) {
 
     trace!(
         "Trust anchor: {}",
-        Base64::encode_string(&path.trust_anchor.encoded_ta)
+        Base64::encode_string(path.trust_anchor.as_bytes())
     );
     for (i, cert) in path.intermediates.iter().enumerate() {
         trace!(
