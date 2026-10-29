@@ -18,6 +18,18 @@ compile_error!(
     "at least one environment feature (\"dev\", \"om_nipr\", \"nipr\", \"om_sipr\", or \"sipr\") must be enabled"
 );
 
+// Checked here rather than only in the pbyk binary because this is where the providers are
+// assembled: every store a provider returns is trusted, for path validation and for TLS, so a
+// production build that also enables a test environment trusts that environment's roots. A crate
+// that takes this one, or pbyklib, with default features gets `dev` as well.
+#[cfg(all(
+    any(feature = "nipr", feature = "sipr"),
+    any(feature = "dev", feature = "om_nipr", feature = "om_sipr")
+))]
+compile_error!(
+    "the production environment features \"nipr\" and \"sipr\" cannot be combined with the test environment features \"dev\", \"om_nipr\", or \"om_sipr\"; a production build takes this crate with default-features = false"
+);
+
 /// Returns the trust-store providers for the environments this build was
 /// compiled with, for passing to `certval_stores_core` functions.
 // Providers are cfg-gated, so this cannot be a `vec![]` literal.
@@ -31,6 +43,16 @@ pub fn providers() -> Vec<&'static dyn TrustStoreProvider> {
     #[cfg(any(feature = "om_sipr", feature = "sipr"))]
     providers.push(certval_stores_sipr::provider());
     providers
+}
+
+/// The ids of every store the providers from [`providers`] return, for an HTTP client that trusts
+/// all of the trust material this build was compiled with.
+pub fn store_ids() -> Vec<&'static str> {
+    providers()
+        .iter()
+        .flat_map(|p| p.entries())
+        .map(|e| e.id)
+        .collect()
 }
 
 /// The store id carrying the trust material for a Purebred environment.
