@@ -509,8 +509,8 @@ dependencies = [
 
 [[package]]
 name = "certval"
-version = "0.2.0-pre"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=main#99640ea0309ef8cefa3bf5e241ab939618cb8795"
+version = "0.2.0-rc.1"
+source = "git+https://github.com/carl-wallace/rust-pki.git?branch=main#fce27c361035b4cfff632e403baee3f126915914"
 dependencies = [
  "base64ct",
  "bitvec",
@@ -546,41 +546,46 @@ dependencies = [
  "walkdir",
  "webpki-roots",
  "x509-cert",
- "x509-ocsp",
 ]
 
 [[package]]
 name = "certval_stores_core"
-version = "0.1.0"
-source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#9de23fedab347f0d8a987256c7fdb178aad53c36"
+version = "0.1.0-rc.1"
+source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#8fabc9d765e13c1581d59a10fbec8f710dcd43df"
 dependencies = [
  "certval",
+ "certval_stores_provider_core",
  "log",
  "reqwest",
 ]
 
 [[package]]
 name = "certval_stores_nipr"
-version = "0.1.0"
-source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#9de23fedab347f0d8a987256c7fdb178aad53c36"
+version = "1.0.0-rc.1"
+source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#8fabc9d765e13c1581d59a10fbec8f710dcd43df"
 dependencies = [
- "certval_stores_core",
+ "certval_stores_provider_core",
 ]
 
 [[package]]
 name = "certval_stores_pbdev"
-version = "0.1.0"
-source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#9de23fedab347f0d8a987256c7fdb178aad53c36"
+version = "1.0.0-rc.1"
+source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#8fabc9d765e13c1581d59a10fbec8f710dcd43df"
 dependencies = [
- "certval_stores_core",
+ "certval_stores_provider_core",
 ]
+
+[[package]]
+name = "certval_stores_provider_core"
+version = "1.0.0-rc.1"
+source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#8fabc9d765e13c1581d59a10fbec8f710dcd43df"
 
 [[package]]
 name = "certval_stores_sipr"
 version = "0.1.0"
-source = "git+ssh://git@github.com/RedHoundSoftware/certval_stores_sipr.git?branch=main#7bcac722e316a973f1dec8d0cb41c60df4b1640b"
+source = "git+ssh://git@github.com/RedHoundSoftware/certval_stores_sipr.git?branch=main#56668ada8ec8abdaf959148681dcc60dde729521"
 dependencies = [
- "certval_stores_core",
+ "certval_stores_provider_core",
 ]
 
 [[package]]
@@ -746,7 +751,8 @@ checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 [[package]]
 name = "cms"
 version = "0.3.0-rc.0"
-source = "git+https://github.com/RustCrypto/formats.git#4c5fadb155ebc05c4a8a3abc05e4e64a6a100614"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a7e16fb99a745fd8c7327eeb7deb9f667c03320f4f61d23c1927a55813b4466"
 dependencies = [
  "aes",
  "aes-kw",
@@ -2783,22 +2789,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper-tls"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
-dependencies = [
- "bytes",
- "http-body-util",
- "hyper",
- "hyper-util",
- "native-tls",
- "tokio",
- "tokio-native-tls",
- "tower-service",
-]
-
-[[package]]
 name = "hyper-util"
 version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4504,7 +4494,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 [[package]]
 name = "pkiprocmacros"
 version = "0.1.2"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=main#99640ea0309ef8cefa3bf5e241ab939618cb8795"
+source = "git+https://github.com/carl-wallace/rust-pki.git?branch=main#fce27c361035b4cfff632e403baee3f126915914"
 dependencies = [
  "quote",
  "syn 2.0.119",
@@ -5166,13 +5156,11 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-rustls",
- "hyper-tls",
  "hyper-util",
  "js-sys",
  "log",
  "mime",
  "mime_guess",
- "native-tls",
  "percent-encoding",
  "pin-project-lite",
  "quinn",
@@ -5181,7 +5169,6 @@ dependencies = [
  "rustls-platform-verifier",
  "sync_wrapper",
  "tokio",
- "tokio-native-tls",
  "tokio-rustls",
  "tower",
  "tower-http",
@@ -6304,16 +6291,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.6",
-]
-
-[[package]]
-name = "tokio-native-tls"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbae76ab933c85776efabc971569dd6119c580d8f5d448769dec1764bf796ef2"
-dependencies = [
- "native-tls",
- "tokio",
 ]
 
 [[package]]
@@ -7568,17 +7545,6 @@ dependencies = [
  "signature",
  "spki",
  "tls_codec",
-]
-
-[[package]]
-name = "x509-ocsp"
-version = "0.3.0-pre"
-source = "git+https://github.com/RustCrypto/formats.git#4c5fadb155ebc05c4a8a3abc05e4e64a6a100614"
-dependencies = [
- "const-oid",
- "der",
- "spki",
- "x509-cert",
 ]
 
 [[package]]

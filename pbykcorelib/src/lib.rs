@@ -47,6 +47,13 @@ impl From<reqwest::Error> for Error {
         Error::Network
     }
 }
+impl From<certval_stores_core::ClientError> for Error {
+    fn from(err: certval_stores_core::ClientError) -> Error {
+        use log::error;
+        error!("certval_stores_core::ClientError: {err}");
+        Error::Network
+    }
+}
 impl From<der::Error> for Error {
     fn from(err: der::Error) -> Error {
         Error::Asn1(err)

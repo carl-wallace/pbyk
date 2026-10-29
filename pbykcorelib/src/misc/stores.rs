@@ -33,6 +33,16 @@ pub fn providers() -> Vec<&'static dyn TrustStoreProvider> {
     providers
 }
 
+/// The ids of every store the providers from [`providers`] return, for an HTTP client that trusts
+/// all of the trust material this build was compiled with.
+pub fn store_ids() -> Vec<&'static str> {
+    providers()
+        .iter()
+        .flat_map(|p| p.entries())
+        .map(|e| e.id)
+        .collect()
+}
+
 /// The store id carrying the trust material for a Purebred environment.
 ///
 /// The two are different things that used to be one string: an environment names

@@ -8,7 +8,7 @@ use cms::{cert::CertificateChoices, content_info::ContentInfo, signed_data::Sign
 use der::{Decode, Encode};
 
 use crate::misc::pki::validate_cert;
-use crate::misc::stores::providers;
+use crate::misc::stores::{providers, store_ids};
 use crate::{Error, Result};
 
 /// Default value in seconds to use as timeout for network requests
@@ -98,7 +98,7 @@ pub fn get_content_type(response: &Response) -> String {
 
 /// Retrieves a configuration profile from the indicated URL
 pub async fn get_profile(url: &str) -> Result<Vec<u8>> {
-    let client = get_reqwest_client_rustls(&providers(), TIMEOUT, None)?;
+    let client = get_reqwest_client_rustls(&providers(), &store_ids(), TIMEOUT, None)?;
     match client.get(url).send().await {
         Ok(response) => {
             let status = response.status();
@@ -152,7 +152,7 @@ pub async fn get_profile(url: &str) -> Result<Vec<u8>> {
 /// subject DN and SAN rather than to the CSR's public key, so anyone able to decrypt the request
 /// could pair the challenge with a key of their own choosing.
 pub async fn get_ca_cert(url: &str, env: &str) -> Result<x509_cert::Certificate> {
-    let client = get_reqwest_client_rustls(&providers(), TIMEOUT, None)?;
+    let client = get_reqwest_client_rustls(&providers(), &store_ids(), TIMEOUT, None)?;
     match client.get(url).send().await {
         Ok(response) => {
             if !response.status().is_success() {
@@ -217,7 +217,7 @@ pub async fn get_ca_cert(url: &str, env: &str) -> Result<x509_cert::Certificate>
 /// Makes a POST request to the given URL with the provided body and content type and returns the result
 /// as a buffer. Logs any error details before returning.
 pub async fn post_body(uri: &str, body: &[u8], content_type: &str) -> Result<Vec<u8>> {
-    let client = get_reqwest_client_rustls(&providers(), TIMEOUT, None)?;
+    let client = get_reqwest_client_rustls(&providers(), &store_ids(), TIMEOUT, None)?;
     let response = match client
         .post(uri)
         .body(body.to_vec())
@@ -246,7 +246,7 @@ pub async fn post_body(uri: &str, body: &[u8], content_type: &str) -> Result<Vec
 /// Makes a POST request to the given URL and returns the result as a buffer. Logs error details
 /// before returning.
 pub async fn post_no_body(uri: &str) -> Result<Vec<u8>> {
-    let client = get_reqwest_client_rustls(&providers(), TIMEOUT, None)?;
+    let client = get_reqwest_client_rustls(&providers(), &store_ids(), TIMEOUT, None)?;
     let response = match client.post(uri).send().await {
         Ok(b) => b,
         Err(e) => {
@@ -268,7 +268,7 @@ pub async fn post_no_body(uri: &str) -> Result<Vec<u8>> {
 
 /// Attempts to retrieve data from the given URL within the specified timeout.
 pub async fn get_url(url: &str, timeout: u64) -> Result<()> {
-    let client = get_reqwest_client_rustls(&providers(), timeout, None)?;
+    let client = get_reqwest_client_rustls(&providers(), &store_ids(), timeout, None)?;
     match client.get(url).send().await {
         Ok(response) => match response.bytes().await {
             Ok(_bytes) => Ok(()),
