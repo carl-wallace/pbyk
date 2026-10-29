@@ -49,14 +49,11 @@ pub async fn validate_cert(
     let mut pe = PkiEnvironment::default();
     pe.populate_5280_pki_environment();
 
-    // read trust anchors from apple_attest_ta_folder and populate a TaSource instance
-    let mut ta_store = TaSource::new();
-
     let Some(store_id) = store_id(env) else {
         error!("No trust store provider is compiled in for the {env} environment");
         return Err(Error::BadInput);
     };
-    if let Err(e) = prepare_certval_environment(&providers(), &mut pe, &mut ta_store, store_id) {
+    if let Err(e) = prepare_certval_environment(&providers(), &mut pe, store_id) {
         error!("Error preparing PkiEnvironment: {e}");
         return Err(Error::BadInput);
     }
@@ -74,9 +71,6 @@ pub async fn validate_cert(
 
     cert_source.initialize(&Default::default())?;
     pe.add_certificate_source(Box::new(cert_source.clone()));
-
-    ta_store.initialize()?;
-    pe.add_trust_anchor_source(Box::new(ta_store.clone()));
 
     // Actually validate the certificate
     let mut fresh_uris = vec![];
