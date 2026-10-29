@@ -37,10 +37,11 @@ when `pbyk` is built. The following environment-related features are available:
 | sipr    | SIPR production environment |
 
 The `dev` feature is the default. At least one environment-related feature must be elected when `pbyk` is built, else compilation fails.
-Features are additive. For example, either of the following commands can be used to build a `pbyk` app that targets dev, om_sipr and sipr.
+The test environment features (`dev`, `om_nipr`, `om_sipr`) are additive, and a production feature (`nipr` or `sipr`) stands alone: combining
+it with a test environment, or `nipr` with `sipr`, fails compilation. A production build therefore turns the default off.
 ```bash
-cargo build --features om_sipr,sipr --release
-cargo build --no-default-features --features dev,om_sipr,sipr --release
+cargo build --features om_nipr,om_sipr --release
+cargo build --no-default-features --features sipr --release
 ```
 When more than one environment is available, the `environment` option must be specified. The `help` text for `environment` indicates available options, for example:
 ```text

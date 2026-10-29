@@ -74,8 +74,8 @@ impl FromStr for Environment {
 /// Returns number of environments supported at run-time.
 ///
 /// The number returned by this function is equal to the number of environment-related features that
-/// were enabled at compile time. For example, when pbyk is compiled with `--features sipr` this
-/// function will return two (i.e., for sipr and dev). When compiled with
+/// were enabled at compile time. For example, when pbyk is compiled with `--features om_sipr` this
+/// function will return two (i.e., for om_sipr and dev). When compiled with
 /// `--no-default-features --features sipr`, this function will return one (i.e., for sipr).
 pub(crate) fn num_environments() -> u8 {
     let mut count = 0;
