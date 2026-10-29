@@ -510,7 +510,7 @@ dependencies = [
 [[package]]
 name = "certval"
 version = "0.2.0-rc.1"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=main#f8192194fd918088b638afe5e2de48c630f13ca3"
+source = "git+https://github.com/carl-wallace/rust-pki.git?branch=main#8e0e084cf21924a5e6076f63048cbda10f467e2f"
 dependencies = [
  "base64ct",
  "bitvec",
@@ -523,7 +523,6 @@ dependencies = [
  "ecdsa",
  "flagset",
  "getrandom 0.4.3",
- "hex-literal",
  "log",
  "p256",
  "p384",
@@ -551,7 +550,7 @@ dependencies = [
 [[package]]
 name = "certval_stores_core"
 version = "0.1.0-rc.1"
-source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#189496fca9228e1d23e161ce0b891c8dd54da9b9"
+source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#7600203dd6742e21148b495fd64ebd44b17f045d"
 dependencies = [
  "certval",
  "certval_stores_provider_core",
@@ -562,7 +561,7 @@ dependencies = [
 [[package]]
 name = "certval_stores_nipr"
 version = "1.0.0-rc.1"
-source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#189496fca9228e1d23e161ce0b891c8dd54da9b9"
+source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#7600203dd6742e21148b495fd64ebd44b17f045d"
 dependencies = [
  "certval_stores_provider_core",
 ]
@@ -570,7 +569,7 @@ dependencies = [
 [[package]]
 name = "certval_stores_pbdev"
 version = "1.0.0-rc.1"
-source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#189496fca9228e1d23e161ce0b891c8dd54da9b9"
+source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#7600203dd6742e21148b495fd64ebd44b17f045d"
 dependencies = [
  "certval_stores_provider_core",
 ]
@@ -578,7 +577,7 @@ dependencies = [
 [[package]]
 name = "certval_stores_provider_core"
 version = "1.0.0-rc.1"
-source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#189496fca9228e1d23e161ce0b891c8dd54da9b9"
+source = "git+https://github.com/carl-wallace/certval-stores.git?branch=main#7600203dd6742e21148b495fd64ebd44b17f045d"
 
 [[package]]
 name = "certval_stores_sipr"
@@ -4494,7 +4493,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 [[package]]
 name = "pkiprocmacros"
 version = "0.1.2"
-source = "git+https://github.com/carl-wallace/rust-pki.git?branch=main#f8192194fd918088b638afe5e2de48c630f13ca3"
+source = "git+https://github.com/carl-wallace/rust-pki.git?branch=main#8e0e084cf21924a5e6076f63048cbda10f467e2f"
 dependencies = [
  "quote",
  "syn 2.0.119",
