@@ -4435,7 +4435,7 @@ dependencies = [
 [[package]]
 name = "pkcs12_builder"
 version = "0.1.1"
-source = "git+https://github.com/carl-wallace/pkcs12_builder#fee87548124d7473e0cf4c8a7184cb8049943c1c"
+source = "git+https://github.com/carl-wallace/pkcs12_builder#8bbd287cd697e7c4d71df8cbf42675970d035302"
 dependencies = [
  "cbc",
  "cms",
