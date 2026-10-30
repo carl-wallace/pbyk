@@ -20,7 +20,7 @@ spki = "0.8.0"
 x509-cert = "0.3.0"
 
 # certval has not yet been released, hence use of private branch
-certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std", "rsa"], branch = "main"}
+certval = { version = "0.2.0-rc.1", features = ["std", "rsa"] }
 
 aes = { version = "0.9.1", features = ["zeroize"] }
 cipher = { version = "0.5.2", features = ["rand_core"] }
