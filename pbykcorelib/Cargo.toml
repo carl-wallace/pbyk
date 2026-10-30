@@ -14,7 +14,7 @@ spki = "0.8.0"
 x509-cert = "0.3.0"
 
 # certval has not yet been released, hence use of private branch
-certval = { git = "https://github.com/carl-wallace/rust-pki.git", features = ["std", "rsa"], branch = "main"}
+certval = { version = "0.2.0-rc.1", features = ["std", "rsa"] }
 
 rsa = { version = "0.10.0-rc.19", features = ["sha2"] }
 sha2 = "0.11.0"
@@ -29,9 +29,9 @@ subtle-encoding = "0.5.1"
 # Trust-store providers (formerly the single pb_pki crate). core is always
 # needed; the environment providers are optional and pulled in by the matching
 # feature below. certval_stores_sipr lives in a private repo.
-certval_stores_core  = { git = "https://github.com/carl-wallace/certval-stores.git", branch = "main" }
-certval_stores_nipr  = { git = "https://github.com/carl-wallace/certval-stores.git", branch = "main", optional = true }
-certval_stores_pbdev = { git = "https://github.com/carl-wallace/certval-stores.git", branch = "main", optional = true }
+certval_stores_core  = "0.1.0-rc.1"
+certval_stores_nipr  = { version = "1.0.0-rc.1", optional = true }
+certval_stores_pbdev = { version = "1.0.0-rc.1", optional = true }
 certval_stores_sipr  = { git = "ssh://git@github.com/RedHoundSoftware/certval_stores_sipr.git", branch = "main", optional = true }
 rand = "0.10.2"
 rand_core = { version = "0.10.1"}
