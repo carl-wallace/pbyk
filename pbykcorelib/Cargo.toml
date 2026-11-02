@@ -36,6 +36,17 @@ certval_stores_sipr  = { git = "ssh://git@github.com/RedHoundSoftware/certval_st
 rand = "0.10.2"
 rand_core = { version = "0.10.1"}
 
+# Platform crypto providers that misc::pki::new_pki_environment registers ahead of certval's software
+# implementations. Not yet published to crates.io, hence git.
+[target.'cfg(target_os = "macos")'.dependencies]
+certval-security-framework = { git = "https://github.com/carl-wallace/certval-security-framework.git", branch = "main" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+certval-cng = { git = "https://github.com/carl-wallace/certval-cng.git", branch = "main" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+certval-awslc = { git = "https://github.com/carl-wallace/certval-awslc.git", branch = "main" }
+
 [features]
 default = ["dev"]
 dev = ["certval_stores_pbdev/dev"]

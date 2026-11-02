@@ -13,8 +13,11 @@ use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use yubikey::{YubiKey, piv::SlotId};
 
-use certval::{PDVCertificate, PkiEnvironment, is_self_signed};
-use pbyklib::{Error, Result, utils::get_cert_from_slot, utils::state::create_app_home};
+use certval::{PDVCertificate, is_self_signed};
+use pbyklib::{
+    Error, Result, utils::get_cert_from_slot, utils::new_pki_environment,
+    utils::state::create_app_home,
+};
 
 use crate::{args::PbYkArgs, gui::gui_main::Phase};
 
@@ -155,8 +158,7 @@ pub(crate) fn string_or_default(ev: &Event<FormData>, key: &str, default: &str) 
 pub(crate) fn determine_phase(yubikey: &mut YubiKey) -> Phase {
     match get_cert_from_slot(yubikey, SlotId::CardAuthentication) {
         Ok(c) => {
-            let mut pe = PkiEnvironment::default();
-            pe.populate_5280_pki_environment();
+            let pe = new_pki_environment();
             let pdv = match PDVCertificate::try_from(c) {
                 Ok(pdv) => pdv,
                 Err(e) => {

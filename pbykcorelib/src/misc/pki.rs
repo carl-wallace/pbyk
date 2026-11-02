@@ -31,6 +31,39 @@ fn log_certs_in_path(path: &CertificationPath) {
     trace!("Target: {}", Base64::encode_string(path.target.as_bytes()));
 }
 
+/// Returns a `PkiEnvironment` populated with certval's RFC 5280 implementations, preceded by the
+/// platform's crypto provider: Security.framework on macOS, CNG on Windows and AWS-LC on Linux.
+///
+/// The platform provider is consulted first. It declines what it does not support, and certval's
+/// software implementations answer those cases.
+pub fn new_pki_environment() -> PkiEnvironment {
+    let mut pe = PkiEnvironment::default();
+
+    #[cfg(target_os = "macos")]
+    {
+        use certval_security_framework::SecurityFrameworkCrypto;
+        pe.add_verify_signature_message_callback(SecurityFrameworkCrypto::new());
+        pe.add_verify_signature_digest_callback(SecurityFrameworkCrypto::new());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use certval_cng::CngCrypto;
+        pe.add_calculate_hash_callback(CngCrypto::new());
+        pe.add_verify_signature_message_callback(CngCrypto::new());
+        pe.add_verify_signature_digest_callback(CngCrypto::new());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use certval_awslc::AwsLcCrypto;
+        pe.add_calculate_hash_callback(AwsLcCrypto::new());
+        pe.add_verify_signature_message_callback(AwsLcCrypto::new());
+        pe.add_verify_signature_digest_callback(AwsLcCrypto::new());
+    }
+
+    pe.populate_5280_pki_environment();
+    pe
+}
+
 /// Takes a leaf certificate and a set of intermediate certificates and builds and validates a certification path to a
 /// trust anchor set populated based on the elected features using resources available at compile time.
 ///
@@ -46,8 +79,7 @@ pub async fn validate_cert(
 
     // create a default path settings object and default PKIEnvironment object
     let cps = CertificationPathSettings::new();
-    let mut pe = PkiEnvironment::default();
-    pe.populate_5280_pki_environment();
+    let mut pe = new_pki_environment();
 
     let Some(store_id) = store_id(env) else {
         error!("No trust store provider is compiled in for the {env} environment");

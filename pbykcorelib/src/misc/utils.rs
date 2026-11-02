@@ -34,9 +34,10 @@ use x509_cert::{
     name::Name,
 };
 
-use certval::PkiEnvironment;
-
-use crate::{Error, Result, misc::pki::validate_cert};
+use crate::{
+    Error, Result,
+    misc::pki::{new_pki_environment, validate_cert},
+};
 
 //------------------------------------------------------------------------------------
 // Local methods
@@ -258,8 +259,7 @@ pub async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec
 
     let hashes = hash_content(&sd, &xml)?;
 
-    let mut pe = PkiEnvironment::default();
-    pe.populate_5280_pki_environment();
+    let pe = new_pki_environment();
     let (intermediate_ca_certs, leaf_cert) = get_candidate_signer_cert(&sd)?;
     let leaf_cert_buf = leaf_cert.to_der()?;
     for si in sd.signer_infos.0.iter() {

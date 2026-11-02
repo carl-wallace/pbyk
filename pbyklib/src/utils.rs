@@ -10,6 +10,7 @@ pub mod state;
 pub use crate::utils::{
     list_yubikeys::*, portal_status_check::*, reset_yubikey::*, scep_check::*, state::*,
 };
+pub use pbykcorelib::misc::pki::new_pki_environment;
 
 #[cfg(all(target_os = "windows", feature = "vsc"))]
 pub mod list_vscs;

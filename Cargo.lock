@@ -287,9 +287,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.18.1"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b281d307588d634de920874890732659e2e7672f72b5e10e81badc1a8a83621e"
+checksum = "048006790404103c488e6c5616b3e7e702a71292aadda08e8f7698a9e0d2eb53"
 dependencies = [
  "aws-lc-sys",
  "zeroize",
@@ -297,9 +297,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.45.0"
+version = "0.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bff6c3b54fad79a2e60b8102caf565819711497c1f5f092f49508e2f5c31b27"
+checksum = "8bfbe32ac36b3c428696ce315464181bc4029d689fd58e3f2a4e58c252242f52"
 dependencies = [
  "cc",
  "cmake",
@@ -546,6 +546,47 @@ dependencies = [
  "walkdir",
  "webpki-roots",
  "x509-cert",
+]
+
+[[package]]
+name = "certval-awslc"
+version = "0.1.0-rc.1"
+source = "git+https://github.com/carl-wallace/certval-awslc.git?branch=main#9a1338c8f6370c2c7a53a69961fd8cef8f5926e3"
+dependencies = [
+ "aws-lc-rs",
+ "certval",
+ "const-oid",
+ "der",
+ "log",
+ "spki",
+]
+
+[[package]]
+name = "certval-cng"
+version = "0.1.0-rc.1"
+source = "git+https://github.com/carl-wallace/certval-cng.git?branch=main#a425a825a4e3a76387244f49c1624faaf13c87df"
+dependencies = [
+ "certval",
+ "const-oid",
+ "der",
+ "log",
+ "spki",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "certval-security-framework"
+version = "0.1.0-rc.1"
+source = "git+https://github.com/carl-wallace/certval-security-framework.git?branch=main#45d51149899e704545c7f5033477b500a35d6ecf"
+dependencies = [
+ "certval",
+ "const-oid",
+ "core-foundation 0.10.1",
+ "der",
+ "log",
+ "security-framework",
+ "security-framework-sys",
+ "spki",
 ]
 
 [[package]]
@@ -4165,6 +4206,9 @@ version = "0.4.2"
 dependencies = [
  "base64ct",
  "certval",
+ "certval-awslc",
+ "certval-cng",
+ "certval-security-framework",
  "certval_stores_core",
  "certval_stores_nipr",
  "certval_stores_pbdev",
@@ -6113,7 +6157,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
