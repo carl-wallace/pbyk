@@ -4325,11 +4325,10 @@ dependencies = [
 name = "pbyklib"
 version = "0.4.2"
 dependencies = [
- "aes",
  "base64ct",
- "cbc",
  "certval",
- "cipher",
+ "certval-cms",
+ "certval-cng",
  "cms",
  "const-oid",
  "der",

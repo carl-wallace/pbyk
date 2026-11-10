@@ -18,24 +18,20 @@ use windows::{
         },
         CryptographicBuffer,
     },
-    Win32::Security::Cryptography::{
-        BCRYPT_PAD_PKCS1, CERT_KEY_SPEC, NCRYPT_FLAGS, NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
-        NCryptDecrypt, NCryptOpenKey, NCryptOpenStorageProvider,
-    },
-    core::{HSTRING, PCWSTR},
+    core::HSTRING,
 };
-
-use cipher::{BlockModeDecrypt, KeyIvInit};
 
 use base64ct::{Base64, Encoding};
-use cms::{
-    content_info::ContentInfo,
-    enveloped_data::{EnvelopedData, RecipientInfo},
-};
-use der::{Decode, Encode, asn1::OctetString, zeroize::Zeroizing};
+use cms::content_info::ContentInfo;
+use der::{Decode, zeroize::Zeroizing};
 
 use certval::PDVCertificate;
-use pbykcorelib::misc::utils::{get_as_string, purebred_authorize_request};
+use certval_cms::recipient_matches;
+use certval_cng::CertStoreIdentities;
+use pbykcorelib::misc::{
+    pki::{new_cms_environment, new_pki_environment},
+    utils::{get_as_string, purebred_authorize_request},
+};
 
 use crate::{
     Error, Result,
@@ -105,70 +101,6 @@ fn attestation_does_not_work() {
         Err(e) => {
             error!("Failed to read value in attestation_does_not_work: {e:?}");
         }
-    }
-}
-
-/// Takes a [CertContext] notionally containing public key used to encrypt the provided `ciphertext` and returns the
-/// plaintext if the corresponding private key can be found and decryption is successful. Currently only supports RSA keys.
-fn asym_decrypt(cred: &CertContext, ciphertext: &[u8]) -> Result<Vec<u8>> {
-    unsafe {
-        let kpi_wrapper = match get_key_provider_info(cred) {
-            Ok(kpi_wrapper) => kpi_wrapper,
-            Err(e) => {
-                error!("Failed to get CRYPT_KEY_PROV_INFO for CERT_CONTEXT in asym_decrypt: {e:?}");
-                return Err(e);
-            }
-        };
-        let container_name = kpi_wrapper.get_container_name()?;
-        let provider_name = kpi_wrapper.get_provider_name()?;
-
-        // open the storage provider associated with the provided credential
-        let prov_handle = &mut NCRYPT_PROV_HANDLE(0) as *mut NCRYPT_PROV_HANDLE;
-        if let Err(e) =
-            NCryptOpenStorageProvider(prov_handle, PCWSTR::from_raw(provider_name.as_ptr()), 0)
-        {
-            error!("NCryptOpenStorageProvider failed in asym_decrypt: {e:?}");
-            return Err(e.into());
-        }
-
-        // open the key associated with the provided credential
-        let key_handle = &mut NCRYPT_KEY_HANDLE(0) as *mut NCRYPT_KEY_HANDLE;
-        if let Err(e) = NCryptOpenKey(
-            *prov_handle,
-            key_handle,
-            PCWSTR::from_raw(container_name.as_ptr()),
-            CERT_KEY_SPEC(0),
-            NCRYPT_FLAGS(0),
-        ) {
-            error!("NCryptOpenKey failed in asym_decrypt: {e:?}");
-            return Err(e.into());
-        }
-
-        let mut plaintext_len = 0;
-        if let Err(e) = NCryptDecrypt(
-            *key_handle,
-            Some(ciphertext),
-            None,
-            None,
-            &mut plaintext_len,
-            NCRYPT_FLAGS(BCRYPT_PAD_PKCS1.0),
-        ) {
-            error!("NCryptDecrypt failed to determine length in asym_decrypt: {e:?}");
-            return Err(e.into());
-        }
-        let mut plaintext = vec![0u8; plaintext_len as usize];
-        if let Err(e) = NCryptDecrypt(
-            *key_handle,
-            Some(ciphertext),
-            None,
-            Some(&mut plaintext),
-            &mut plaintext_len,
-            NCRYPT_FLAGS(BCRYPT_PAD_PKCS1.0),
-        ) {
-            error!("NCryptDecrypt failed in asym_decrypt: {e:?}");
-            return Err(e.into());
-        }
-        Ok(plaintext)
     }
 }
 
@@ -467,6 +399,10 @@ pub(crate) async fn import_p12_vsc(
 }
 
 /// Verifies a signature on an outer SignedData object, then decrypts and returns content from the wrapped EnvelopedData.
+///
+/// The EnvelopedData is decrypted by the NCrypt key of the certificate in the user's personal
+/// store that the message names as a recipient, which must be `cred`'s certificate, and with the
+/// content encryption algorithm the message names.
 pub(crate) async fn verify_and_decrypt_vsc(
     cred: &CertContext,
     content: &[u8],
@@ -479,55 +415,22 @@ pub(crate) async fn verify_and_decrypt_vsc(
         true => pbykcorelib::misc::utils::get_encrypted_payload_content(&xml)?,
         false => xml.to_vec(),
     };
+    let content_info = ContentInfo::from_der(&enc_ci)?;
 
-    let ci_ed = ContentInfo::from_der(&enc_ci)?;
-    if ci_ed.content_type != const_oid::db::rfc5911::ID_ENVELOPED_DATA {
-        error!(
-            "Unexpected content type (expected ID_ENVELOPED_DATA): {:?}",
-            ci_ed.content_type
-        );
-        return Err(Error::ParseError);
-    }
-    let bytes2ed = ci_ed.content.to_der()?;
-    let ed = EnvelopedData::from_der(&bytes2ed)?;
-
-    let params = match ed.encrypted_content.content_enc_alg.parameters {
-        Some(p) => p,
-        None => return Err(Error::Unrecognized),
-    };
-    let enc_params = params.to_der()?;
-
-    let os_iv = OctetString::from_der(&enc_params)?;
-    let iv = os_iv.as_bytes();
-
-    let mut ct = match ed.encrypted_content.encrypted_content {
-        Some(ct) => ct.as_bytes().to_vec(),
-        None => return Err(Error::Unrecognized),
-    };
-
-    for ri in ed.recip_infos.0.iter() {
-        let key = match ri {
-            RecipientInfo::Ktri(ktri) => match asym_decrypt(cred, ktri.enc_key.as_bytes()) {
-                Ok(dk) => dk,
-                Err(_) => continue,
-            },
-            _ => continue,
-        };
-
-        /// decryption type
-        type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-        let cipher = match Aes256CbcDec::new_from_slices(&key, iv) {
-            Ok(c) => c,
-            Err(e) => {
-                error!("Failed to create new Aes256CbcDec instance: {e}. Continuing...");
-                continue;
-            }
-        };
-        if let Ok(pt) = cipher.decrypt_padded::<cipher::block_padding::Pkcs7>(&mut ct) {
-            return Ok(Zeroizing::new(pt.to_vec()));
+    let mut cms_env = new_cms_environment(new_pki_environment());
+    cms_env.add_recipient_credential_source(CertStoreIdentities::new());
+    let decrypted = match cms_env.decrypt_enveloped_data(&content_info, None) {
+        Ok(decrypted) => decrypted,
+        Err(e) => {
+            error!("Failed to decrypt EnvelopedData with a key from the certificate store: {e}");
+            return Err(Error::Unrecognized);
         }
+    };
+    if !recipient_matches(&decrypted.recipient, cred.cert()) {
+        error!("The EnvelopedData named a recipient other than the credential in use");
+        return Err(Error::Unrecognized);
     }
-    Err(Error::Unrecognized)
+    Ok(decrypted.content)
 }
 
 /// Processes payloads from the presented `xml` generating and import keys using the provided YubiKey

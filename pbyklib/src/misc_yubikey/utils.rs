@@ -1,23 +1,23 @@
 //! YubiKey-related utility functions
 
 use std::{
+    cell::{Cell, RefCell},
     io::Cursor,
     str::FromStr,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use log::{error, info};
-use pbykcorelib::misc::rng::pb_rng;
+use pbykcorelib::misc::{
+    pki::{new_cms_environment, new_pki_environment},
+    rng::pb_rng,
+};
 use rand_core::TryRng;
 
-use cipher::{BlockModeDecrypt, KeyIvInit};
 use sha1::{Digest, Sha1};
 
-use cms::{
-    content_info::ContentInfo,
-    enveloped_data::{EnvelopedData, RecipientInfo},
-    signed_data::EncapsulatedContentInfo,
-};
+use certval_cms::{CmsEnvironment, KeyTransportAlgorithm, RecipientCredential, unpad_pkcs1v15};
+use cms::{content_info::ContentInfo, signed_data::EncapsulatedContentInfo};
 use const_oid::db::rfc4519::COMMON_NAME;
 use der::zeroize::Zeroizing;
 use der::{
@@ -48,7 +48,6 @@ use pbykcorelib::misc::utils::{
 
 use crate::{
     Error, Result,
-    misc::rsa_utils::decrypt_inner,
     misc_yubikey::{
         p12::import_p12,
         retry::{is_transient_yubikey_error, retry_after_pcsc_drop},
@@ -341,8 +340,77 @@ fn generate_self_signed_cert_inner(
     }
 }
 
+/// A [`RecipientCredential`] over an RSA key in a YubiKey slot: the card performs the raw RSA
+/// operation and certval-cms removes the PKCS #1 v1.5 padding.
+///
+/// certval-cms stands in a random content-encryption key for a key transport that fails
+/// (RFC 3218), so a PC/SC failure during the card operation would otherwise surface only as
+/// undecryptable content. The failure is kept here for the caller, which reconnects and retries.
+struct YubiKeyRecipientKey<'y> {
+    /// The card, borrowed for the decryption; `RecipientCredential` takes `&self`.
+    yubikey: RefCell<&'y mut YubiKey>,
+    /// The slot holding the key.
+    slot: SlotId,
+    /// The key's RSA size, which the card's decrypt command and the unpadding need.
+    alg: AlgorithmId,
+    /// The slot's certificate, which recipient identifiers are matched against.
+    certificate: Certificate,
+    /// A PC/SC failure met while decrypting, for the caller to reconnect on.
+    transient_error: Cell<Option<yubikey::Error>>,
+}
+
+impl YubiKeyRecipientKey<'_> {
+    /// The length in octets of the key's modulus, which is the length of a raw RSA decryption.
+    fn modulus_octets(&self) -> Option<usize> {
+        match self.alg {
+            AlgorithmId::Rsa2048 => Some(256),
+            AlgorithmId::Rsa3072 => Some(384),
+            AlgorithmId::Rsa4096 => Some(512),
+            _ => None,
+        }
+    }
+}
+
+impl RecipientCredential for YubiKeyRecipientKey<'_> {
+    fn certificate(&self) -> &Certificate {
+        &self.certificate
+    }
+
+    fn decrypt_key_transport(
+        &self,
+        _env: &CmsEnvironment,
+        alg: KeyTransportAlgorithm,
+        encrypted_key: &[u8],
+    ) -> certval_cms::Result<Zeroizing<Vec<u8>>> {
+        // The card decrypts without padding, and the portals encrypt to these keys with PKCS #1
+        // v1.5 only.
+        if alg != KeyTransportAlgorithm::RsaPkcs1v15 {
+            return Err(certval_cms::Error::Unrecognized);
+        }
+        let Some(k) = self.modulus_octets() else {
+            return Err(certval_cms::Error::Unrecognized);
+        };
+        let mut guard = self.yubikey.borrow_mut();
+        let yubikey: &mut YubiKey = &mut guard;
+        let em = piv::decrypt_data(yubikey, encrypted_key, self.alg, self.slot).map_err(|e| {
+            if is_transient_yubikey_error(&e) {
+                error!("YubiKey went away while decrypting a content encryption key: {e:?}");
+                self.transient_error.set(Some(e));
+            }
+            certval_cms::Error::Crypto(String::from("the YubiKey did not decrypt the key"))
+        })?;
+        unpad_pkcs1v15(&em, k)
+    }
+}
+
 /// Verifies a SignedData then decrypts an encapsulated EnvelopedData and returns the encapsulated
 /// contents from it as a buffer.
+///
+/// The EnvelopedData is decrypted with the key in `slot`, whose certificate the message must name
+/// as a recipient, and with the content encryption algorithm the message names.
+///
+/// The slot's certificate is read before the PIN is verified: a slot whose PIN policy is "always"
+/// refuses the decrypt if the card has answered anything else since the verification.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn verify_and_decrypt(
     yubikey: &mut YubiKey,
@@ -354,6 +422,7 @@ pub(crate) async fn verify_and_decrypt(
     env: &str,
     alg: AlgorithmId,
 ) -> Result<Zeroizing<Vec<u8>>> {
+    let certificate = get_cert_from_slot(yubikey, slot)?;
     if let Err(e) = yubikey.verify_pin(pin) {
         error!("Failed to verify PIN in verify_and_decrypt: {e:?}");
         return Err(Error::YubiKey(e));
@@ -369,94 +438,47 @@ pub(crate) async fn verify_and_decrypt(
         true => get_encrypted_payload_content(&xml)?,
         false => xml.to_vec(),
     };
-
-    let ci_ed = ContentInfo::from_der(&enc_ci)?;
-    if ci_ed.content_type != const_oid::db::rfc5911::ID_ENVELOPED_DATA {
-        error!(
-            "Unexpected content type (expected ID_ENVELOPED_DATA): {:?}",
-            ci_ed.content_type
-        );
-        return Err(Error::ParseError);
-    }
-    let bytes2ed = ci_ed.content.to_der()?;
-    let ed = EnvelopedData::from_der(&bytes2ed)?;
-
-    let params = match &ed.encrypted_content.content_enc_alg.parameters {
-        Some(p) => p,
-        None => return Err(Error::Unrecognized),
-    };
-    let enc_params = params.to_der()?;
-
-    let os_iv = OctetString::from_der(&enc_params)?;
-    let iv = os_iv.as_bytes();
-
-    let ct = match &ed.encrypted_content.encrypted_content {
-        Some(ct) => ct.as_bytes().to_vec(),
-        None => return Err(Error::Unrecognized),
-    };
+    let content_info = ContentInfo::from_der(&enc_ci)?;
 
     retry_after_pcsc_drop(
         yubikey,
         pin,
         mgmt_key,
         "Decryption of a content encryption key",
-        |yubikey| decrypt_enveloped_data(yubikey, slot, alg, &ed, iv, &ct),
+        |yubikey| decrypt_enveloped_data(yubikey, slot, alg, certificate.clone(), &content_info),
     )
 }
 
-/// Unwraps the content encryption key from each `RecipientInfo` in `ed` in turn using the key in the
-/// indicated slot and, where that succeeds, decrypts `ct` with it.
+/// Decrypts `content_info`, an EnvelopedData, with the key in `slot`, whose certificate is
+/// `certificate`. The decrypt is the first command sent to the card.
 ///
-/// A YubiKey that goes away mid-operation is reported instead of skipped, so the caller can
-/// reconnect and try again instead of reporting the enveloped data as undecryptable.
+/// A YubiKey that goes away mid-operation is reported as such rather than as a decryption failure,
+/// so the caller can reconnect and try again.
 fn decrypt_enveloped_data(
     yubikey: &mut YubiKey,
     slot: SlotId,
     alg: AlgorithmId,
-    ed: &EnvelopedData,
-    iv: &[u8],
-    ct: &[u8],
+    certificate: Certificate,
+    content_info: &ContentInfo,
 ) -> Result<Zeroizing<Vec<u8>>> {
-    for ri in ed.recip_infos.0.iter() {
-        let dec_key = match ri {
-            RecipientInfo::Ktri(ktri) => {
-                let dk = match piv::decrypt_data(yubikey, ktri.enc_key.as_bytes(), alg, slot) {
-                    Ok(dk) => dk,
-                    Err(e) => {
-                        if is_transient_yubikey_error(&e) {
-                            error!(
-                                "YubiKey went away while decrypting a content encryption key: {e:?}"
-                            );
-                            return Err(Error::YubiKey(e));
-                        }
-                        continue;
-                    }
-                };
-                match decrypt_inner(dk.to_vec(), 256) {
-                    Ok(dec_key) => dec_key,
-                    Err(_) => continue,
-                }
+    let env = new_cms_environment(new_pki_environment());
+    let credential = YubiKeyRecipientKey {
+        yubikey: RefCell::new(yubikey),
+        slot,
+        alg,
+        certificate,
+        transient_error: Cell::new(None),
+    };
+    match env.decrypt_enveloped_data(content_info, Some(&credential)) {
+        Ok(decrypted) => Ok(decrypted.content),
+        Err(e) => {
+            if let Some(e) = credential.transient_error.take() {
+                return Err(Error::YubiKey(e));
             }
-            _ => continue,
-        };
-
-        /// decryption type
-        type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-        let cipher = match Aes256CbcDec::new_from_slices(&dec_key.1[dec_key.2 as usize..], iv) {
-            Ok(c) => c,
-            Err(e) => {
-                error!("Failed to create new Aes256CbcDec instance: {e}. Continuing...");
-                continue;
-            }
-        };
-        // decrypt_padded works in place and scrambles the buffer when it fails, so each candidate
-        // key (and each retry after a reconnect) gets its own copy of the ciphertext.
-        let mut ct = ct.to_vec();
-        if let Ok(pt) = cipher.decrypt_padded::<cipher::block_padding::Pkcs7>(&mut ct) {
-            return Ok(Zeroizing::new(pt.to_vec()));
+            error!("Failed to decrypt EnvelopedData with the key in slot {slot}: {e}");
+            Err(Error::Unrecognized)
         }
     }
-    Err(Error::Unrecognized)
 }
 
 /// Processes payloads from the presented `xml` generating and import keys using the provided YubiKey
