@@ -10,9 +10,7 @@ use sha2::{Digest, Sha256};
 use signature::Signer;
 
 use certval::CertificationPathSettings;
-use certval_cms::{
-    DigestAlgorithm, SignedDataBuilder, Signer as CmsSigner, SignerCredential, SignerPolicy,
-};
+use certval_cms::{SignedDataBuilder, Signer as CmsSigner, SignerCredential, SignerPolicy};
 use cms::{
     cert::IssuerAndSerialNumber,
     content_info::ContentInfo,
@@ -62,8 +60,8 @@ where
 /// as its only certificate.
 ///
 /// The message has the shape the portals have always received from this crate: the signer
-/// identified by the certificate's subject key identifier, signed attributes hashed with SHA-256,
-/// and no signing-certificate attribute.
+/// identified by the certificate's subject key identifier, the signed attributes hashed with the
+/// digest the signer's algorithm uses (RFC 5754), and no signing-certificate attribute.
 pub(crate) fn build_signed_data<S, Sig>(
     signer: &S,
     signers_cert: Certificate,
@@ -78,9 +76,7 @@ where
     let env = new_cms_environment(new_pki_environment());
     let credential: SignerCredential<_, Sig> =
         SignerCredential::new(signers_cert, BorrowedSigner(signer));
-    let mut cms_signer = CmsSigner::explicit(&credential)
-        .digest(DigestAlgorithm::Sha256)
-        .without_ess_cert_id();
+    let mut cms_signer = CmsSigner::explicit(&credential).without_ess_cert_id();
     for attribute in attributes {
         cms_signer = cms_signer.signed_attribute(attribute);
     }
