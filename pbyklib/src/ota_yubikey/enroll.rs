@@ -50,7 +50,7 @@ fn sign_phase2<RL: RsaLength>(
         yubikey::certificate::yubikey_signer::Signer::new(yubikey, CardAuthentication, spki_ref)
             .map_err(|_| Error::Unrecognized)?;
 
-    match get_signed_data(&signer, self_signed_cert, phase2_req, None, true) {
+    match get_signed_data(&signer, self_signed_cert, phase2_req, None) {
         Ok(d) => Ok(d),
         Err(e) => {
             error!("Failed to generate SignedData for Phase 2 request: {e:?}");

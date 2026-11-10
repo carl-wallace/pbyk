@@ -7,16 +7,18 @@ rust-version = "1.89.0"
 
 [dependencies]
 base64ct = { version="1.8.3", features = ["alloc"] }
-cms = { version = "0.3.0-pre.2", features = ["builder"] }
+cms = "0.3.0-pre.2"
 const-oid = { version = "0.10.2", features = ["db"] }
 der = { version = "0.8.1", features = ["alloc", "derive", "oid", "pem"] }
 spki = "0.8.0"
 x509-cert = "0.3.0"
 
-# certval has not yet been released, hence use of private branch
 certval = { version = "0.2.0-rc.1", features = ["std", "rsa"] }
+# CMS building, decryption and verification, with the cryptography routed through the platform
+# provider registered below. Not yet on crates.io: the workspace [patch.crates-io] takes it from git.
+certval-cms = "0.1.0-rc.1"
 
-rsa = { version = "0.10.0-rc.19", features = ["sha2"] }
+rsa = "0.10.0-rc.19"
 sha2 = "0.11.0"
 signature = { version = "3.0.0", features = ["digest", "alloc"]}
 
@@ -35,6 +37,24 @@ certval_stores_pbdev = { version = "1.0.0-rc.1", optional = true }
 certval_stores_sipr  = { git = "ssh://git@github.com/RedHoundSoftware/certval_stores_sipr.git", branch = "main", optional = true }
 rand = "0.10.2"
 rand_core = { version = "0.10.1"}
+
+# Platform crypto providers that misc::pki::new_pki_environment registers ahead of certval's software
+# implementations, and whose `cms` feature new_cms_environment registers ahead of certval-cms's.
+# Not yet published to crates.io, hence git.
+[target.'cfg(target_os = "macos")'.dependencies]
+certval-security-framework = { git = "https://github.com/carl-wallace/certval-security-framework.git", branch = "main", features = ["cms"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+certval-cng = { git = "https://github.com/carl-wallace/certval-cng.git", branch = "main", features = ["cms"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+certval-awslc = { git = "https://github.com/carl-wallace/certval-awslc.git", branch = "main", features = ["cms"] }
+
+[dev-dependencies]
+# Self-signed test certificates for the SignedData and EnvelopedData round trips, and a runtime for
+# the asynchronous verification entry point.
+x509-cert = { version = "0.3.0", features = ["builder"] }
+tokio = { version = "1.52.4", features = ["macros", "rt"] }
 
 [features]
 default = ["dev"]

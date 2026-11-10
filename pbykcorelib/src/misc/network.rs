@@ -3,8 +3,9 @@
 use log::error;
 use reqwest::{Response, header::CONTENT_TYPE};
 
+use certval_cms::certificates_only;
 use certval_stores_core::get_reqwest_client_rustls;
-use cms::{cert::CertificateChoices, content_info::ContentInfo, signed_data::SignedData};
+use cms::content_info::ContentInfo;
 use der::{Decode, Encode};
 
 use crate::misc::pki::validate_cert;
@@ -48,38 +49,13 @@ fn check_response(response: &Response, uri: &str) -> Result<()> {
 /// to a trust anchor is built through — so callers that intend to validate the RA certificate need
 /// the whole set, not just the one they picked.
 pub fn get_certs_from_signed_data(enc_ci: &[u8]) -> Result<Vec<x509_cert::Certificate>> {
-    match ContentInfo::from_der(enc_ci) {
-        Ok(ci) => match ci.content.to_der() {
-            Ok(content) => match SignedData::from_der(content.as_slice()) {
-                Ok(sd) => {
-                    let mut certs = vec![];
-                    for c in sd.certificates.iter() {
-                        for a in c.0.iter() {
-                            if let CertificateChoices::Certificate(c) = a {
-                                certs.push(c.clone());
-                            }
-                        }
-                    }
-                    Ok(certs)
-                }
-                Err(e) => {
-                    error!(
-                        "Failed to parse SignedData in get_certs_from_signed_data: {:?}",
-                        e
-                    );
-                    Err(Error::Asn1(e))
-                }
-            },
-            Err(e) => {
-                error!(
-                    "Failed to encode content in get_certs_from_signed_data: {:?}",
-                    e
-                );
-                Err(Error::Asn1(e))
-            }
-        },
-        Err(e) => Err(Error::Asn1(e)),
-    }
+    let content_info = ContentInfo::from_der(enc_ci).inspect_err(|e| {
+        error!("Failed to parse ContentInfo in get_certs_from_signed_data: {e:?}");
+    })?;
+    certificates_only(&content_info).map_err(|e| {
+        error!("Failed to read certificates in get_certs_from_signed_data: {e}");
+        Error::from(e)
+    })
 }
 
 /// Returns Content-Type header value from Response or an empty string

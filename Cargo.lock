@@ -287,9 +287,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.18.1"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b281d307588d634de920874890732659e2e7672f72b5e10e81badc1a8a83621e"
+checksum = "048006790404103c488e6c5616b3e7e702a71292aadda08e8f7698a9e0d2eb53"
 dependencies = [
  "aws-lc-sys",
  "zeroize",
@@ -297,9 +297,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.45.0"
+version = "0.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bff6c3b54fad79a2e60b8102caf565819711497c1f5f092f49508e2f5c31b27"
+checksum = "8bfbe32ac36b3c428696ce315464181bc4029d689fd58e3f2a4e58c252242f52"
 dependencies = [
  "cc",
  "cmake",
@@ -402,6 +402,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa"
 dependencies = [
  "hybrid-array",
+ "zeroize",
 ]
 
 [[package]]
@@ -509,9 +510,9 @@ dependencies = [
 
 [[package]]
 name = "certval"
-version = "0.2.0-rc.1"
+version = "0.2.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc6f0bddbf3de03eac84e36737d40f788805a49472d25c00f1e2c0b784757995"
+checksum = "c2931e556d57cef87778e3dda4c46180e2da38c324ea065123008fc62bdd5d80"
 dependencies = [
  "base64ct",
  "bitvec",
@@ -546,6 +547,96 @@ dependencies = [
  "walkdir",
  "webpki-roots",
  "x509-cert",
+ "x509-ocsp",
+]
+
+[[package]]
+name = "certval-awslc"
+version = "0.1.0-rc.1"
+source = "git+https://github.com/carl-wallace/certval-awslc.git?branch=main#be1d04d17a5ab4188ef4ecbeefb6c320b0b14afb"
+dependencies = [
+ "aws-lc-rs",
+ "certval",
+ "certval-cms",
+ "const-oid",
+ "der",
+ "log",
+ "pkcs8",
+ "spki",
+ "x509-cert",
+ "zeroize",
+]
+
+[[package]]
+name = "certval-cms"
+version = "0.1.0-rc.1"
+source = "git+https://github.com/carl-wallace/certval-cms.git?branch=main#1e567ecd3f7a0e453907f23b26d28739bc81147c"
+dependencies = [
+ "aes",
+ "aes-gcm",
+ "aes-kw",
+ "ansi-x963-kdf",
+ "cbc",
+ "certval",
+ "cms",
+ "const-oid",
+ "der",
+ "elliptic-curve",
+ "getrandom 0.4.3",
+ "hkdf",
+ "log",
+ "ml-kem",
+ "p256",
+ "p384",
+ "p521",
+ "rand_core 0.10.1",
+ "rsa",
+ "sha1 0.11.0",
+ "sha2 0.11.1",
+ "signature",
+ "spki",
+ "subtle",
+ "x509-cert",
+ "zeroize",
+]
+
+[[package]]
+name = "certval-cng"
+version = "0.1.0-rc.1"
+source = "git+https://github.com/carl-wallace/certval-cng.git?branch=main#368f2d834bc52511a1d7ea54eb1d3cbeeeb6da71"
+dependencies = [
+ "certval",
+ "certval-cms",
+ "cms",
+ "const-oid",
+ "der",
+ "log",
+ "pkcs8",
+ "spki",
+ "windows-sys 0.61.2",
+ "x509-cert",
+ "zeroize",
+]
+
+[[package]]
+name = "certval-security-framework"
+version = "0.1.0-rc.1"
+source = "git+https://github.com/carl-wallace/certval-security-framework.git?branch=main#6c2763d96f98f4e1f25356c3b8499e9bfbe678f1"
+dependencies = [
+ "certval",
+ "certval-cms",
+ "cms",
+ "const-oid",
+ "core-foundation 0.10.1",
+ "der",
+ "log",
+ "pkcs8",
+ "sec1",
+ "security-framework",
+ "security-framework-sys",
+ "spki",
+ "x509-cert",
+ "zeroize",
 ]
 
 [[package]]
@@ -754,9 +845,9 @@ checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 
 [[package]]
 name = "cms"
-version = "0.3.0-rc.0"
+version = "0.3.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a7e16fb99a745fd8c7327eeb7deb9f667c03320f4f61d23c1927a55813b4466"
+checksum = "6e99ff55bfffd019bf15e3f0d5edef2ca1e3af5ade276ed100e3c0c3455050c2"
 dependencies = [
  "aes",
  "aes-kw",
@@ -770,7 +861,7 @@ dependencies = [
  "rsa",
  "sha1 0.11.0",
  "sha2 0.11.1",
- "sha3",
+ "sha3 0.11.0",
  "signature",
  "spki",
  "x509-cert",
@@ -1075,9 +1166,9 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crypto-bigint"
-version = "0.7.5"
+version = "0.7.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a52aa3fcda4e6302a9f48734f234d35d4721b96f8fe07d073f07ce9df4f0271"
+checksum = "914c195c4d7fbc5ed7f88d14cbf85914d5c664967658d43404b263913a477e82"
 dependencies = [
  "cpubits",
  "ctutils",
@@ -1159,9 +1250,9 @@ dependencies = [
 
 [[package]]
 name = "ctutils"
-version = "0.4.2"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d5515a3834141de9eafb9717ad39eea8247b5674e6066c404e8c4b365d2a29e"
+checksum = "261af4dc7a06ea8a527a8717d8cbba3417530d6ea14e1edb3de6b67806be474f"
 dependencies = [
  "cmov",
  "subtle",
@@ -1334,6 +1425,7 @@ dependencies = [
  "const-oid",
  "crypto-common 0.2.2",
  "ctutils",
+ "zeroize",
 ]
 
 [[package]]
@@ -1877,9 +1969,9 @@ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 
 [[package]]
 name = "elliptic-curve"
-version = "0.14.1"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d65aa39b3a5c1c9c1b745c9a019234bb7a21b77abcb4f4d266d706e2d577d65"
+checksum = "900f37e7e18d74a2347389af6cd69e3a30d5cc9e697f40004865679aa75e9c7c"
 dependencies = [
  "base16ct 1.0.0",
  "crypto-bigint",
@@ -2751,6 +2843,7 @@ version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17"
 dependencies = [
+ "ctutils",
  "subtle",
  "typenum",
  "zeroize",
@@ -3188,6 +3281,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kem"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01737161ba802849cfd486b5bd209d38ba4943494c249a8126005170c7621edd"
+dependencies = [
+ "crypto-common 0.2.2",
+ "rand_core 0.10.1",
+]
+
+[[package]]
 name = "keyboard-types"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3360,9 +3463,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.34"
+version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 dependencies = [
  "serde_core",
 ]
@@ -3624,10 +3727,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "ml-kem"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84ca78b66f46050d49fa21693ae8adab2081d8101b65d8067316b6b70b64a0d1"
+dependencies = [
+ "const-oid",
+ "hybrid-array",
+ "kem",
+ "module-lattice",
+ "pkcs8",
+ "rand_core 0.10.1",
+ "sha3 0.12.0",
+ "shake",
+]
+
+[[package]]
 name = "mock_instant"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9bb517913cfcfb9eeda59f36020269075a152701a01606c612f547e4890be399"
+
+[[package]]
+name = "module-lattice"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4a1e412c8ee83a1c678f427806219c49c96b2511b9f07497514f0e43fb26155"
+dependencies = [
+ "ctutils",
+ "hybrid-array",
+ "num-traits",
+]
 
 [[package]]
 name = "moxcms"
@@ -4165,6 +4295,10 @@ version = "0.4.2"
 dependencies = [
  "base64ct",
  "certval",
+ "certval-awslc",
+ "certval-cms",
+ "certval-cng",
+ "certval-security-framework",
  "certval_stores_core",
  "certval_stores_nipr",
  "certval_stores_pbdev",
@@ -4183,6 +4317,7 @@ dependencies = [
  "signature",
  "spki",
  "subtle-encoding",
+ "tokio",
  "x509-cert",
 ]
 
@@ -4190,11 +4325,10 @@ dependencies = [
 name = "pbyklib"
 version = "0.4.2"
 dependencies = [
- "aes",
  "base64ct",
- "cbc",
  "certval",
- "cipher",
+ "certval-cms",
+ "certval-cng",
  "cms",
  "const-oid",
  "der",
@@ -4410,9 +4544,9 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "pkcs1"
-version = "0.8.0-rc.5"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f485dbafe293ea6ccaa7d82bc591651a796eb8a9aec3df040b057b706073dbc3"
+checksum = "6250dd7321adbe93d12b750aee0ced159fd13e77f625edcdf1cb6f83cd99f650"
 dependencies = [
  "der",
  "spki",
@@ -5251,14 +5385,16 @@ dependencies = [
 
 [[package]]
 name = "rsa"
-version = "0.10.0-rc.19"
+version = "0.10.0-rc.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33405e321e16ef941ca66e254f6904c3aafd3c7ff001fb88bf11c73eb75c2b85"
+checksum = "47cf9537fc2210e5db7a35a1cdda9d8d451b9df6fba234ec1cf0cd746c120c35"
 dependencies = [
  "const-oid",
  "crypto-bigint",
+ "crypto-common 0.2.2",
  "crypto-primes",
  "digest 0.11.3",
+ "hmac",
  "pkcs1",
  "pkcs8",
  "rand_core 0.10.1",
@@ -5687,6 +5823,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha3"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc9bad02c26382724b2d2692c6f179285e4b54eeecd7968f52a50059c3c11759"
+dependencies = [
+ "digest 0.11.3",
+ "keccak",
+ "sponge-cursor",
+]
+
+[[package]]
+name = "shake"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09057cb2149ad4cbd2da1e26b351f9a4c354219421229c69c3063e6f61947c4a"
+dependencies = [
+ "digest 0.11.3",
+ "keccak",
+ "sponge-cursor",
+]
+
+[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5876,6 +6034,12 @@ dependencies = [
  "base64ct",
  "der",
 ]
+
+[[package]]
+name = "sponge-cursor"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a0219bd7d979d58245a4f41f695e1ac9f8befdffadd7f61f1bae9e39abc6620"
 
 [[package]]
 name = "stable_deref_trait"
@@ -7553,6 +7717,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "x509-ocsp"
+version = "0.3.0-rc.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24e12c9a7f47a2a518e34d822c083d6bc21736d58d3425707244e046923efb79"
+dependencies = [
+ "const-oid",
+ "der",
+ "spki",
+ "x509-cert",
+]
+
+[[package]]
 name = "xkeysym"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7590,7 +7766,7 @@ dependencies = [
 [[package]]
 name = "yubikey"
 version = "0.9.0-pre.0"
-source = "git+https://github.com/carl-wallace/yubikey.rs.git?branch=updates#36d9ab7c9d8fec028d3661e2f581f2274f6d5d10"
+source = "git+https://github.com/carl-wallace/yubikey.rs.git?branch=updates#cbe7faf9e0d76575ce9ddc2e1cfe097c27ab523b"
 dependencies = [
  "aes",
  "base16ct 0.2.0",

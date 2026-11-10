@@ -11,22 +11,21 @@ rust-version = "1.89.0"
 pbykcorelib = {path = "../pbykcorelib", default-features = false}
 
 base64ct = { version="1.8.3", features = ["alloc"] }
-# EnvelopedDataBuilder is not yet released, hence use of private branch
-cms = {version = "0.3.0-pre.2"}
+# The builder, for the certificates-only SignedData pbyklib assembles.
+cms = { version = "0.3.0-pre.2", features = ["builder"] }
 pkcs12_builder = {git = "https://github.com/carl-wallace/pkcs12_builder"}
 const-oid = { version = "0.10.2", features = ["db"] }
 der = { version = "0.8.1", features = ["alloc", "derive", "oid", "pem"] }
 spki = "0.8.0"
 x509-cert = "0.3.0"
 
-# certval has not yet been released, hence use of private branch
 certval = { version = "0.2.0-rc.1", features = ["std", "rsa"] }
+# CMS decryption with the YubiKey's or the smart card's key. Not yet on crates.io: the workspace
+# [patch.crates-io] takes it from git.
+certval-cms = "0.1.0-rc.1"
 
-aes = { version = "0.9.1", features = ["zeroize"] }
-cipher = { version = "0.5.2", features = ["rand_core"] }
-cbc = "0.2.1"
 pkcs1 = "0.8.0-rc.5"
-rsa = { version = "0.10.0-rc.19", features = ["sha2"] }
+rsa = "0.10.0-rc.19"
 sha1 = {version = "0.11.0", default-features = false}
 sha2 = "0.11.0"
 signature = { version = "3.0.0", features = ["digest", "alloc"]}
@@ -70,6 +69,9 @@ windows = {version = "0.61.3", features = [
 # additional crates -- windows-future is already in the graph, and its `std` feature is empty)
 # lets reset_vsc await the consent-prompting delete instead of blocking on it.
 windows-future = { version = "0.2.1", optional = true }
+# The personal certificate store's NCrypt keys as certval-cms recipient credentials, for the
+# virtual smart card's decryption. Not yet published to crates.io, hence git.
+certval-cng = { git = "https://github.com/carl-wallace/certval-cng.git", branch = "main", features = ["cms"] }
 
 [features]
 default = ["dev"]
