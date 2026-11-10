@@ -23,7 +23,7 @@ use windows::{
 
 use base64ct::{Base64, Encoding};
 use cms::content_info::ContentInfo;
-use der::{Decode, zeroize::Zeroizing};
+use der::{Decode, Encode, zeroize::Zeroizing};
 
 use certval::PDVCertificate;
 use certval_cms::recipient_matches;
