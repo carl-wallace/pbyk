@@ -85,8 +85,7 @@ where
     <S as Keypair>::VerifyingKey: EncodePublicKey,
 {
     info!("Executing Phase 3");
-    let signed_data_pkcs7_der =
-        get_signed_data(signer, ca_issued_device_cert, phase3_req, None, true)?;
+    let signed_data_pkcs7_der = get_signed_data(signer, ca_issued_device_cert, phase3_req, None)?;
     match post_body(
         phase3_url,
         &signed_data_pkcs7_der,

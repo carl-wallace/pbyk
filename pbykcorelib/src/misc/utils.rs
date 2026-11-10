@@ -1,181 +1,98 @@
 //! Utility functions for use within pbyklib
 
-use std::{collections::BTreeMap, io::Cursor, str::FromStr};
+use std::{io::Cursor, str::FromStr};
 
 use log::error;
 use plist::Dictionary;
 use subtle_encoding::hex;
 
-use sha2::{Digest, Sha256, Sha384, Sha512};
-use signature::{Keypair, Signer};
+use sha2::{Digest, Sha256};
+use signature::Signer;
 
+use certval::CertificationPathSettings;
+use certval_cms::{
+    DigestAlgorithm, SignedDataBuilder, Signer as CmsSigner, SignerCredential, SignerPolicy,
+};
 use cms::{
-    builder::{SignedDataBuilder, SignerInfoBuilder},
-    cert::{CertificateChoices, IssuerAndSerialNumber},
+    cert::IssuerAndSerialNumber,
     content_info::ContentInfo,
     enveloped_data::RecipientIdentifier,
-    signed_data::{EncapsulatedContentInfo, SignedData, SignerIdentifier, SignerInfo},
+    signed_data::{EncapsulatedContentInfo, SignerIdentifier},
 };
 use const_oid::{
     ObjectIdentifier,
-    db::{
-        rfc5280::ID_CE_SUBJECT_KEY_IDENTIFIER, rfc5911::ID_MESSAGE_DIGEST,
-        rfc5912::ID_CE_BASIC_CONSTRAINTS,
-    },
+    db::{rfc5280::ID_CE_SUBJECT_KEY_IDENTIFIER, rfc5911::ID_DATA},
 };
-use der::{
-    Any, AnyRef, Decode, Encode, Tag,
-    asn1::{BitString, OctetString},
-};
-use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier, EncodePublicKey};
-use x509_cert::{
-    Certificate,
-    ext::pkix::{BasicConstraints, SubjectKeyIdentifier},
-    name::Name,
-};
+use der::{Decode, Encode, asn1::OctetString};
+use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier, SignatureBitStringEncoding};
+use x509_cert::{Certificate, attr::Attribute, ext::pkix::SubjectKeyIdentifier, name::Name};
 
 use crate::{
     Error, Result,
-    misc::pki::{new_pki_environment, validate_cert},
+    misc::pki::{new_cms_environment, new_pki_environment, pki_environment_for},
 };
 
 //------------------------------------------------------------------------------------
 // Local methods
 //------------------------------------------------------------------------------------
-/// Takes a buffer containing hash of content to compare to value in message digest attribute. Returns
-/// Ok if the value matches and an Err if it does not match or there is no message digest attribute.
-fn check_message_digest_attr(
-    hash: &BTreeMap<ObjectIdentifier, Vec<u8>>,
-    si: &SignerInfo,
-) -> Result<()> {
-    if let Some(attrs) = &si.signed_attrs {
-        for attr in attrs.iter() {
-            if attr.oid == ID_MESSAGE_DIGEST {
-                // Look the digest up with get() rather than indexing: si.digest_alg
-                // is attacker-controlled and hash_content only populates the algs
-                // actually present in sd.digest_algorithms (SHA-256/384/512), so a
-                // crafted SignerInfo naming any other algorithm would panic on a
-                // missing key and abort the host app before signatures are checked.
-                let expected = match hash.get(&si.digest_alg.oid) {
-                    Some(expected) => expected,
-                    None => {
-                        error!(
-                            "No content hash was computed for the SignerInfo digest algorithm {}",
-                            si.digest_alg.oid
-                        );
-                        return Err(Error::UnexpectedValue);
-                    }
-                };
-                for value in attr.values.iter() {
-                    if value.value() == expected.as_slice() {
-                        return Ok(());
-                    }
-                }
-                error!("Message digest attribute did not contain expected value");
-                return Err(Error::UnexpectedValue);
-            }
-        }
+/// A signer borrowed for one SignedData. [`SignerCredential`] holds its signer by value, and the
+/// signers here are borrowed from a device connection that outlives the message.
+struct BorrowedSigner<'a, S>(&'a S);
+
+impl<S, Sig> Signer<Sig> for BorrowedSigner<'_, S>
+where
+    S: Signer<Sig>,
+{
+    fn try_sign(&self, msg: &[u8]) -> core::result::Result<Sig, signature::Error> {
+        self.0.try_sign(msg)
     }
-    error!("No message digest attribute was found");
-    Err(Error::MissingAttribute)
 }
 
-/// Accepts a SignedData object and some content to hash. Generates a hash for each hash algorithm
-/// indicated in the digest_algorithms field and returns a map containing with results with an
-/// ObjectIdentifier that identifies the hash algorithm used as map key.
+impl<S> DynSignatureAlgorithmIdentifier for BorrowedSigner<'_, S>
+where
+    S: DynSignatureAlgorithmIdentifier,
+{
+    fn signature_algorithm_identifier(&self) -> spki::Result<AlgorithmIdentifierOwned> {
+        self.0.signature_algorithm_identifier()
+    }
+}
+
+/// Builds a SignedData over `content` of type `content_type`, signed once by `signer` with
+/// `attributes` beyond the content-type and message-digest attributes, and carrying `signers_cert`
+/// as its only certificate.
 ///
-/// Supports SHA256, SHA384 and SHA512. Ignores other values and logs an error.
-fn hash_content(sd: &SignedData, content: &[u8]) -> Result<BTreeMap<ObjectIdentifier, Vec<u8>>> {
-    let mut map = BTreeMap::new();
-    for alg in sd.digest_algorithms.iter() {
-        match alg.oid {
-            const_oid::db::rfc5912::ID_SHA_256 => {
-                let mut hasher = Sha256::new();
-                hasher.update(content);
-                let hash = hasher.finalize().to_vec();
-                map.insert(alg.oid, hash);
-            }
-            const_oid::db::rfc5912::ID_SHA_384 => {
-                let mut hasher = Sha384::new();
-                hasher.update(content);
-                let hash = hasher.finalize().to_vec();
-                map.insert(alg.oid, hash);
-            }
-            const_oid::db::rfc5912::ID_SHA_512 => {
-                let mut hasher = Sha512::new();
-                hasher.update(content);
-                let hash = hasher.finalize().to_vec();
-                map.insert(alg.oid, hash);
-            }
-            _ => {
-                error!(
-                    "Unexpected hash algorithm found in SignedData::digest_algorithms field: {}",
-                    alg.oid
-                );
-            }
-        }
+/// The message has the shape the portals have always received from this crate: the signer
+/// identified by the certificate's subject key identifier, signed attributes hashed with SHA-256,
+/// and no signing-certificate attribute.
+pub(crate) fn build_signed_data<S, Sig>(
+    signer: &S,
+    signers_cert: Certificate,
+    content: &[u8],
+    content_type: ObjectIdentifier,
+    attributes: Vec<Attribute>,
+) -> Result<Vec<u8>>
+where
+    S: Signer<Sig> + DynSignatureAlgorithmIdentifier,
+    Sig: SignatureBitStringEncoding,
+{
+    let env = new_cms_environment(new_pki_environment());
+    let credential: SignerCredential<_, Sig> =
+        SignerCredential::new(signers_cert, BorrowedSigner(signer));
+    let mut cms_signer = CmsSigner::explicit(&credential)
+        .digest(DigestAlgorithm::Sha256)
+        .without_ess_cert_id();
+    for attribute in attributes {
+        cms_signer = cms_signer.signed_attribute(attribute);
     }
-    Ok(map)
-}
-
-/// Accepts a cert and returns true if BasicConstraints is found with isCA set to true, false if
-/// BasicConstraints is found with isCA set to false or no BasicConstraints is found, and an error
-/// if BasicConstraints is found but cannot be parsed.
-fn is_ca(cert: &Certificate) -> Result<bool> {
-    match cert.tbs_certificate().extensions() {
-        Some(extensions) => {
-            for ext in extensions {
-                if ext.extn_id == ID_CE_BASIC_CONSTRAINTS {
-                    let bc = BasicConstraints::from_der(ext.extn_value.as_bytes())?;
-                    return Ok(bc.ca);
-                }
-            }
-            Ok(false)
-        }
-        None => Ok(false),
-    }
-}
-/// Accepts a SignedData that is expected to have only one SignerInfo. It traverses the list of
-/// certificates in the certificates field and returns a tuple containing a (possibly empty) vector
-/// of CA certificates and an end entity certificate, if present. BasicConstraints is used to
-/// categorize certificates. If more than one end entity certificate is encountered, the last one in
-/// the list is returned.
-fn get_candidate_signer_cert(sd: &SignedData) -> Result<(Vec<Certificate>, Certificate)> {
-    let mut cas = vec![];
-    let mut candidate_signer_cert = None;
-
-    match &sd.certificates {
-        Some(certs) => {
-            for cert_choice in certs.0.iter() {
-                match cert_choice {
-                    CertificateChoices::Certificate(cert) => {
-                        if is_ca(cert)? {
-                            cas.push(cert.clone());
-                        } else {
-                            candidate_signer_cert = Some(cert.clone());
-                        }
-                    }
-                    _ => {
-                        error!(
-                            "SignedData contains unrecognized certificate choice type. Ignoring."
-                        );
-                    }
-                }
-            }
-        }
-        None => {
-            error!("SignedData does not contain any certificates");
-            return Err(Error::BadInput);
-        }
-    }
-
-    match candidate_signer_cert {
-        Some(cert) => Ok((cas, cert)),
-        None => {
-            error!("SignedData does not contain any end entity certificates");
-            Err(Error::BadInput)
-        }
-    }
+    let built = SignedDataBuilder::new(content)
+        .content_type(content_type)
+        .add_signer(cms_signer)
+        .build(&env)
+        .map_err(|e| {
+            error!("Failed to build SignedData: {e}");
+            Error::from(e)
+        })?;
+    Ok(built.content_info.to_der()?)
 }
 
 //------------------------------------------------------------------------------------
@@ -236,58 +153,23 @@ pub fn get_encap_content(eci: &EncapsulatedContentInfo) -> Result<Vec<u8>> {
 
 /// Processes the provided content as a SignedData message and verifies the signer's certificate relative to the given
 /// environment. Returns the encapsulated content as a byte array.
+///
+/// A signer verifies when its message digest matches the content, its signature verifies with the
+/// platform's crypto provider, and its certificate validates to the trust anchors compiled in for
+/// `env`, building through any CA certificates the message carries. One verified signer is enough.
+/// Revocation is not checked: the device holds no revocation data for the portal's certificates.
 pub async fn purebred_authorize_request(content: &[u8], env: &str) -> Result<Vec<u8>> {
-    let ci_sd = ContentInfo::from_der(content)?;
-    if ci_sd.content_type != const_oid::db::rfc5911::ID_SIGNED_DATA {
-        error!(
-            "Unexpected content type (expected ID_SIGNED_DATA): {:?}",
-            ci_sd.content_type
-        );
-        return Err(Error::ParseError);
-    }
-
-    let bytes2 = ci_sd.content.to_der()?;
-    let sd = SignedData::from_der(&bytes2)?;
-
-    let xml = match get_encap_content(&sd.encap_content_info) {
-        Ok(xml) => xml,
+    let content_info = ContentInfo::from_der(content)?;
+    let cms_env = new_cms_environment(pki_environment_for(env)?);
+    let mut settings = CertificationPathSettings::new();
+    settings.set_check_revocation_status(false);
+    match cms_env.verify_signed_data(&content_info, None, Some(&settings), SignerPolicy::Any) {
+        Ok(verified) => Ok(verified.content),
         Err(e) => {
-            error!("Failed to read encapsulated content from request: {e:?}");
-            return Err(e);
-        }
-    };
-
-    let hashes = hash_content(&sd, &xml)?;
-
-    let pe = new_pki_environment();
-    let (intermediate_ca_certs, leaf_cert) = get_candidate_signer_cert(&sd)?;
-    let leaf_cert_buf = leaf_cert.to_der()?;
-    for si in sd.signer_infos.0.iter() {
-        if check_message_digest_attr(&hashes, si).is_err() {
-            continue;
-        }
-
-        let data_to_verify = si.signed_attrs.to_der()?;
-        if pe
-            .verify_signature_message(
-                &pe,
-                &data_to_verify[..],
-                &BitString::from_bytes(si.signature.as_bytes())?,
-                &si.signature_algorithm,
-                leaf_cert.tbs_certificate().subject_public_key_info(),
-            )
-            .is_ok()
-        {
-            return match validate_cert(&leaf_cert_buf, intermediate_ca_certs, env).await {
-                Ok(_) => Ok(xml),
-                Err(e) => {
-                    error!("Failed to validate certificate purebred_authorize_request: {e:?}");
-                    Err(Error::BadInput)
-                }
-            };
+            error!("Failed to verify SignedData in purebred_authorize_request: {e}");
+            Err(Error::BadInput)
         }
     }
-    Err(Error::BadInput)
 }
 
 /// Create a SKID-based SignerIdentifier from certificate
@@ -322,67 +204,25 @@ pub fn recipient_identifier_from_cert(cert: &Certificate) -> Result<RecipientIde
     Ok(RecipientIdentifier::SubjectKeyIdentifier(skid))
 }
 
-/// Generates a SignedData object covering the `data_to_sign` using the provided `yubikey` and `slot_id`, which
-/// are assumed to related to the provided `signers_certificate`.
-pub fn get_signed_data<S>(
+/// Generates a SignedData object covering `data_to_sign`, signed by `signer`, whose certificate is
+/// `signers_cert`. The content is of type `encap_type`, id-data when `None`.
+pub fn get_signed_data<S, Sig>(
     signer: &S,
     signers_cert: &Certificate,
     data_to_sign: &[u8],
     encap_type: Option<ObjectIdentifier>,
-    use_skid: bool,
 ) -> Result<Vec<u8>>
 where
-    S: Keypair + DynSignatureAlgorithmIdentifier + Signer<rsa::pkcs1v15::Signature>,
-    <S as Keypair>::VerifyingKey: EncodePublicKey,
+    S: Signer<Sig> + DynSignatureAlgorithmIdentifier,
+    Sig: SignatureBitStringEncoding,
 {
-    let econtent_type = encap_type.unwrap_or(const_oid::db::rfc5911::ID_DATA);
-
-    let content = EncapsulatedContentInfo {
-        econtent_type,
-        econtent: Some(Any::new(Tag::OctetString, data_to_sign)?),
-    };
-
-    let digest_algorithm = AlgorithmIdentifierOwned {
-        oid: const_oid::db::rfc5912::ID_SHA_256,
-        parameters: Some(Any::from(AnyRef::NULL)),
-    };
-
-    let si = signer_identifier_from_cert(signers_cert, use_skid)?;
-
-    let external_message_digest = None;
-    let signer_info_builder_1 = match SignerInfoBuilder::new(
-        si,
-        digest_algorithm.clone(),
-        &content,
-        external_message_digest,
-    ) {
-        Ok(sib) => sib,
-        Err(e) => {
-            error!("Failed to create SignerInfoBuilder: {e:?}");
-            return Err(Error::Unrecognized);
-        }
-    };
-
-    let mut builder = SignedDataBuilder::new(&content);
-
-    let signed_data_pkcs7 = builder
-        .add_digest_algorithm(digest_algorithm)
-        .map_err(|_err| Error::Unrecognized)?
-        .add_certificate(CertificateChoices::Certificate(signers_cert.clone()))
-        .map_err(|_err| Error::Unrecognized)?
-        .add_signer_info(signer_info_builder_1, signer)
-        .map_err(|_err| Error::Unrecognized)?
-        .build()
-        .map_err(|_err| Error::Unrecognized)?;
-
-    let signed_data_pkcs7_der = match signed_data_pkcs7.to_der() {
-        Ok(d) => d,
-        Err(e) => {
-            error!("Failed to encoded SignedData: {e:?}");
-            return Err(Error::Asn1(e));
-        }
-    };
-    Ok(signed_data_pkcs7_der)
+    build_signed_data(
+        signer,
+        signers_cert.clone(),
+        data_to_sign,
+        encap_type.unwrap_or(ID_DATA),
+        vec![],
+    )
 }
 
 /// Extract SKID extension value from certificate or calculate a SKID value from the SubjectPublicKeyInfo
@@ -503,64 +343,145 @@ pub fn get_as_string(dict: &Dictionary, key: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cms::content_info::CmsVersion;
-    use const_oid::db::rfc5912::ID_SHA_256;
-    use der::asn1::SetOfVec;
-    use x509_cert::attr::Attribute;
+    use crate::{
+        RFC8894_ID_MESSAGE_TYPE, RFC8894_ID_SENDER_NONCE, RFC8894_ID_TRANSACTION_ID,
+        misc::{
+            rng::pb_rng,
+            scep::{prepare_enveloped_data, prepare_scep_signed_data},
+        },
+    };
+    use certval_cms::{SoftwareRecipientKey, VerifiedSignedData};
+    use rsa::{RsaPrivateKey, pkcs1v15::SigningKey, pkcs8::EncodePrivateKey};
+    use signature::Keypair;
+    use x509_cert::{
+        TbsCertificate,
+        builder::{Builder, CertificateBuilder, profile::BuilderProfile},
+        ext::Extension,
+        serial_number::SerialNumber,
+        spki::{EncodePublicKey, SubjectPublicKeyInfoOwned, SubjectPublicKeyInfoRef},
+        time::Validity,
+    };
 
-    /// Build a minimal SignerInfo with the given digest-algorithm OID and a single
-    /// message-digest signed attribute carrying `md_value`. Only the fields
-    /// `check_message_digest_attr` reads (`digest_alg` + `signed_attrs`) are
-    /// meaningful; the remaining fields are valid filler.
-    fn signer_info_with(digest_oid: ObjectIdentifier, md_value: &[u8]) -> SignerInfo {
-        let md_attr = Attribute {
-            oid: ID_MESSAGE_DIGEST,
-            values: SetOfVec::try_from(vec![Any::new(Tag::OctetString, md_value).unwrap()])
-                .unwrap(),
-        };
-        let alg = AlgorithmIdentifierOwned {
-            oid: digest_oid,
-            parameters: None,
-        };
-        SignerInfo {
-            version: CmsVersion::V1,
-            sid: SignerIdentifier::SubjectKeyIdentifier(SubjectKeyIdentifier(
-                OctetString::new(vec![0u8]).unwrap(),
-            )),
-            digest_alg: alg.clone(),
-            signed_attrs: Some(SetOfVec::try_from(vec![md_attr]).unwrap()),
-            signature_algorithm: alg,
-            signature: OctetString::new(vec![0u8]).unwrap(),
-            unsigned_attrs: None,
+    /// `id-aa-signingCertificateV2` (RFC 5035), which these messages do not carry.
+    const ID_AA_SIGNING_CERTIFICATE_V2: ObjectIdentifier =
+        ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.16.2.47");
+
+    /// Issues a self-signed certificate with a subject key identifier, as the device's own
+    /// certificates have.
+    struct SelfSigned(Name);
+
+    impl BuilderProfile for SelfSigned {
+        fn get_issuer(&self, _subject: &Name) -> Name {
+            self.0.clone()
+        }
+        fn get_subject(&self) -> Name {
+            self.0.clone()
+        }
+        fn build_extensions(
+            &self,
+            spk: SubjectPublicKeyInfoRef<'_>,
+            _issuer_spk: SubjectPublicKeyInfoRef<'_>,
+            _tbs: &TbsCertificate,
+        ) -> x509_cert::builder::Result<Vec<Extension>> {
+            let skid = SubjectKeyIdentifier(
+                OctetString::new(Sha256::digest(spk.subject_public_key.raw_bytes()).to_vec())
+                    .unwrap(),
+            );
+            Ok(vec![Extension {
+                extn_id: ID_CE_SUBJECT_KEY_IDENTIFIER,
+                critical: false,
+                extn_value: OctetString::new(skid.to_der().unwrap()).unwrap(),
+            }])
         }
     }
 
-    /// H-1 regression: a SignerInfo whose digest algorithm is absent from the
-    /// computed-hash map must return an error, not index-panic (the map is built
-    /// from `sd.digest_algorithms`, but the digest alg here is attacker-controlled).
-    #[test]
-    fn missing_digest_alg_returns_err_not_panic() {
-        let si = signer_info_with(ID_SHA_256, &[0xAB; 32]);
-        let hashes: BTreeMap<ObjectIdentifier, Vec<u8>> = BTreeMap::new();
-        assert!(check_message_digest_attr(&hashes, &si).is_err());
+    /// A software RSA signer, its self-signed certificate and its PKCS #8 key.
+    fn device_credential() -> (SigningKey<Sha256>, Certificate, Vec<u8>) {
+        let key = RsaPrivateKey::new(&mut pb_rng(), 2048).unwrap();
+        let pkcs8 = key.to_pkcs8_der().unwrap();
+        let signer = SigningKey::<Sha256>::new(key);
+        let spki = signer.verifying_key().to_public_key_der().unwrap();
+        let cert = CertificateBuilder::new(
+            SelfSigned(Name::from_str("CN=pbykcorelib test device").unwrap()),
+            SerialNumber::new(&[1]).unwrap(),
+            Validity::from_now(core::time::Duration::from_secs(600)).unwrap(),
+            SubjectPublicKeyInfoOwned::from_der(spki.as_bytes()).unwrap(),
+        )
+        .unwrap()
+        .build::<_, rsa::pkcs1v15::Signature>(&signer)
+        .unwrap();
+        (signer, cert, pkcs8.as_bytes().to_vec())
     }
 
-    /// Happy path preserved: digest alg present and the attribute value matches.
-    #[test]
-    fn matching_digest_returns_ok() {
-        let digest = vec![0xAB; 32];
-        let si = signer_info_with(ID_SHA_256, &digest);
-        let mut hashes = BTreeMap::new();
-        hashes.insert(ID_SHA_256, digest);
-        assert!(check_message_digest_attr(&hashes, &si).is_ok());
+    /// Verifies the signatures of `signed` without vetting the signer's certificate.
+    fn verify(signed: &[u8]) -> VerifiedSignedData {
+        let env = new_cms_environment(new_pki_environment());
+        let content_info = ContentInfo::from_der(signed).unwrap();
+        env.verify_signed_data(&content_info, None, None, SignerPolicy::All)
+            .unwrap()
     }
 
-    /// Digest alg present but the attribute value differs -> rejection, no panic.
     #[test]
-    fn mismatched_digest_value_returns_err() {
-        let si = signer_info_with(ID_SHA_256, &[0x11; 32]);
-        let mut hashes = BTreeMap::new();
-        hashes.insert(ID_SHA_256, vec![0x22; 32]);
-        assert!(check_message_digest_attr(&hashes, &si).is_err());
+    fn signed_data_verifies_and_keeps_its_shape() {
+        let (signer, cert, _) = device_credential();
+        let signed = get_signed_data(&signer, &cert, b"phase 2 request", None).unwrap();
+        let verified = verify(&signed);
+        assert_eq!(verified.content_type, ID_DATA);
+        assert_eq!(verified.content, b"phase 2 request");
+        assert_eq!(verified.signers.len(), 1);
+        let signer = &verified.signers[0];
+        assert_eq!(signer.certificate, cert);
+        assert!(matches!(
+            signer.sid,
+            SignerIdentifier::SubjectKeyIdentifier(_)
+        ));
+        let attrs = signer.signed_attributes.as_ref().unwrap();
+        assert!(attrs.iter().all(|a| a.oid != ID_AA_SIGNING_CERTIFICATE_V2));
+    }
+
+    #[test]
+    fn scep_signed_data_carries_the_pkcsreq_attributes() {
+        let (signer, cert, _) = device_credential();
+        let signed = prepare_scep_signed_data(&signer, cert, b"enveloped data").unwrap();
+        let verified = verify(&signed);
+        let attrs = verified.signers[0].signed_attributes.as_ref().unwrap();
+        let oids: Vec<ObjectIdentifier> = attrs.iter().map(|a| a.oid).collect();
+        for oid in [
+            *RFC8894_ID_MESSAGE_TYPE,
+            *RFC8894_ID_SENDER_NONCE,
+            *RFC8894_ID_TRANSACTION_ID,
+        ] {
+            assert!(oids.contains(&oid), "{oid} missing");
+        }
+        assert!(!oids.contains(&ID_AA_SIGNING_CERTIFICATE_V2));
+    }
+
+    #[test]
+    fn enveloped_data_decrypts_with_the_recipients_key() {
+        let (_, cert, pkcs8) = device_credential();
+        let enveloped = prepare_enveloped_data(b"a CSR", &cert).unwrap();
+        let env = new_cms_environment(new_pki_environment());
+        let key = SoftwareRecipientKey::from_pkcs8_der(cert, &pkcs8).unwrap();
+        let content_info = ContentInfo::from_der(&enveloped).unwrap();
+        let decrypted = env
+            .decrypt_enveloped_data(&content_info, Some(&key))
+            .unwrap();
+        assert_eq!(decrypted.content.as_slice(), b"a CSR");
+        assert!(matches!(
+            decrypted.recipient,
+            RecipientIdentifier::SubjectKeyIdentifier(_)
+        ));
+    }
+
+    /// The trust anchors compiled in are the portal's; a self-signed signer has no path to them.
+    #[cfg(feature = "dev")]
+    #[tokio::test]
+    async fn authorize_request_rejects_a_signer_outside_the_environment() {
+        let (signer, cert, _) = device_credential();
+        let signed = get_signed_data(&signer, &cert, b"not from the portal", None).unwrap();
+        assert_eq!(
+            purebred_authorize_request(&signed, "dev").await,
+            Err(Error::BadInput)
+        );
     }
 }

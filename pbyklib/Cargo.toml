@@ -11,8 +11,8 @@ rust-version = "1.89.0"
 pbykcorelib = {path = "../pbykcorelib", default-features = false}
 
 base64ct = { version="1.8.3", features = ["alloc"] }
-# EnvelopedDataBuilder is not yet released, hence use of private branch
-cms = {version = "0.3.0-pre.2"}
+# The builder, for the certificates-only SignedData pbyklib assembles.
+cms = { version = "0.3.0-pre.2", features = ["builder"] }
 pkcs12_builder = {git = "https://github.com/carl-wallace/pkcs12_builder"}
 const-oid = { version = "0.10.2", features = ["db"] }
 der = { version = "0.8.1", features = ["alloc", "derive", "oid", "pem"] }
@@ -26,7 +26,7 @@ aes = { version = "0.9.1", features = ["zeroize"] }
 cipher = { version = "0.5.2", features = ["rand_core"] }
 cbc = "0.2.1"
 pkcs1 = "0.8.0-rc.5"
-rsa = { version = "0.10.0-rc.19", features = ["sha2"] }
+rsa = "0.10.0-rc.19"
 sha1 = {version = "0.11.0", default-features = false}
 sha2 = "0.11.0"
 signature = { version = "3.0.0", features = ["digest", "alloc"]}

@@ -64,6 +64,19 @@ impl From<certval::Error> for Error {
         Error::Certval(err)
     }
 }
+impl From<certval_cms::Error> for Error {
+    fn from(err: certval_cms::Error) -> Error {
+        use log::error;
+        match err {
+            certval_cms::Error::Asn1(e) => Error::Asn1(e),
+            certval_cms::Error::Certval(e) => Error::Certval(e),
+            other => {
+                error!("certval_cms::Error: {other}");
+                Error::Unrecognized
+            }
+        }
+    }
+}
 impl From<base64ct::Error> for Error {
     fn from(err: base64ct::Error) -> Error {
         Error::Base64(err)

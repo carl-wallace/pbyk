@@ -4,29 +4,25 @@ use log::error;
 use plist::Dictionary;
 
 use crate::misc::rng::pb_rng;
-use spki::EncodePublicKey;
 
 use rsa::RsaPublicKey;
 
-use cms::{
-    builder::{
-        ContentEncryptionAlgorithm, EnvelopedDataBuilder, KeyEncryptionInfo,
-        KeyTransRecipientInfoBuilder, SignedDataBuilder, SignerInfoBuilder,
-    },
-    cert::CertificateChoices,
-    content_info::ContentInfo,
-    signed_data::EncapsulatedContentInfo,
+use certval_cms::{
+    ContentEncryptionAlgorithm, EnvelopedDataBuilder, KeyTransRecipient, KeyTransportAlgorithm,
 };
 use const_oid::{
     ObjectIdentifier,
-    db::rfc5912::{ID_CE_SUBJECT_ALT_NAME, ID_EXTENSION_REQ},
+    db::{
+        rfc5911::ID_DATA,
+        rfc5912::{ID_CE_SUBJECT_ALT_NAME, ID_EXTENSION_REQ},
+    },
 };
 use der::{
-    Any, AnyRef, Decode, Encode, Tag,
+    Any, Decode, Encode, Tag,
     asn1::{Ia5String, OctetString, PrintableString, SetOfVec},
 };
-use signature::{Keypair, Signer};
-use spki::{AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier};
+use signature::Signer;
+use spki::{DynSignatureAlgorithmIdentifier, SignatureBitStringEncoding};
 use x509_cert::{
     Certificate,
     attr::{Attribute, AttributeValue},
@@ -42,7 +38,8 @@ use crate::{
     RFC8894_ID_TRANSACTION_ID, Result,
     misc::{
         network::post_body,
-        utils::{recipient_identifier_from_cert, signer_identifier_from_cert},
+        pki::{new_cms_environment, new_pki_environment},
+        utils::build_signed_data,
     },
 };
 
@@ -153,73 +150,43 @@ pub fn get_rsa_key_from_cert(cert: &Certificate) -> Result<RsaPublicKey> {
 }
 
 /// Prepares an EnvelopedData containing the given CSR with a key transport recipient based on given certificate.
+///
+/// The content is encrypted with AES-256-CBC and the key transported with RSAES-PKCS1-v1_5, which
+/// is what the RA decrypts. The certificate is not vetted here: `get_ca_cert` validated it when it
+/// was fetched.
 pub fn prepare_enveloped_data(csr_der: &[u8], ca_cert: &Certificate) -> Result<Vec<u8>> {
-    let recipient_identifier = recipient_identifier_from_cert(ca_cert)?;
-    let recipient_public_key = get_rsa_key_from_cert(ca_cert)?;
-
-    let recipient_info_builder = KeyTransRecipientInfoBuilder::new(
-        recipient_identifier,
-        KeyEncryptionInfo::Rsa(recipient_public_key),
-    )
-    .map_err(|_| Error::Unrecognized)?;
-
-    let mut enveloped_data_builder = EnvelopedDataBuilder::new(
+    let env = new_cms_environment(new_pki_environment());
+    let recipient = KeyTransRecipient::from_certificate(
+        &env,
+        ca_cert,
         None,
-        csr_der,                               // data to be encrypted...
-        ContentEncryptionAlgorithm::Aes256Cbc, // ... with this algorithm
-        None,
+        KeyTransportAlgorithm::RsaPkcs1v15,
     )
-    .map_err(|_| Error::Unrecognized)?;
-
-    // Add recipient info. Multiple recipients are possible, but not used here.
-    let mut rng = pb_rng();
-    let enveloped_data = enveloped_data_builder
-        .add_recipient_info(recipient_info_builder)
-        .map_err(|_| Error::Unrecognized)?
-        .build_with_rng(&mut rng)
-        .map_err(|_| Error::Unrecognized)?;
-
-    let enveloped_data_der = enveloped_data.to_der()?;
-    let content = AnyRef::try_from(enveloped_data_der.as_slice())?;
-    let content_info = ContentInfo {
-        content_type: const_oid::db::rfc5911::ID_ENVELOPED_DATA,
-        content: Any::from(content),
-    };
-
+    .map_err(|e| {
+        error!("Failed to prepare the RA certificate as a key transport recipient: {e}");
+        Error::from(e)
+    })?;
+    let content_info = EnvelopedDataBuilder::new(csr_der, ContentEncryptionAlgorithm::Aes256Cbc)?
+        .add_recipient(recipient)
+        .build_content_info(&env, &mut pb_rng())
+        .map_err(|e| {
+            error!("Failed to build EnvelopedData: {e}");
+            Error::from(e)
+        })?;
     Ok(content_info.to_der()?)
 }
 
 /// Prepares a SignedData object containing the given data, with SCEP-appropriate signer info, a signature generated
 /// using the given signer and with the given certificate in the certificates bag.
-pub fn prepare_scep_signed_data<S>(
+pub fn prepare_scep_signed_data<S, Sig>(
     signer: &S,
     self_signed_cert: Certificate,
     enc_ed: &[u8],
 ) -> Result<Vec<u8>>
 where
-    S: Keypair + DynSignatureAlgorithmIdentifier + Signer<rsa::pkcs1v15::Signature>,
-    <S as Keypair>::VerifyingKey: EncodePublicKey,
+    S: Signer<Sig> + DynSignatureAlgorithmIdentifier,
+    Sig: SignatureBitStringEncoding,
 {
-    let si = signer_identifier_from_cert(&self_signed_cert, true)?;
-
-    let content = EncapsulatedContentInfo {
-        econtent_type: const_oid::db::rfc5911::ID_DATA,
-        econtent: Some(Any::new(Tag::OctetString, enc_ed)?),
-    };
-    let digest_algorithm = AlgorithmIdentifierOwned {
-        oid: const_oid::db::rfc5912::ID_SHA_256,
-        parameters: None,
-    };
-
-    let external_message_digest = None;
-    let mut signer_info_builder = SignerInfoBuilder::new(
-        si,
-        digest_algorithm.clone(),
-        &content,
-        external_message_digest,
-    )
-    .map_err(|_| Error::Unrecognized)?;
-
     let mut message_type_value: SetOfVec<AttributeValue> = Default::default();
     let id = PrintableString::try_from(String::from("19"))?;
     message_type_value.insert(Any::from(&id))?;
@@ -242,28 +209,13 @@ where
         values: transaction_id_value,
     };
 
-    signer_info_builder
-        .add_signed_attribute(message_type)
-        .map_err(|_| Error::Unrecognized)?;
-    signer_info_builder
-        .add_signed_attribute(sender_nonce)
-        .map_err(|_| Error::Unrecognized)?;
-    signer_info_builder
-        .add_signed_attribute(transaction_id)
-        .map_err(|_| Error::Unrecognized)?;
-
-    let mut builder = SignedDataBuilder::new(&content);
-
-    let signed_data_pkcs7 = builder
-        .add_digest_algorithm(digest_algorithm)
-        .map_err(|_| Error::Unrecognized)?
-        .add_certificate(CertificateChoices::Certificate(self_signed_cert))
-        .map_err(|_| Error::Unrecognized)?
-        .add_signer_info(signer_info_builder, signer)
-        .map_err(|_| Error::Unrecognized)?
-        .build()
-        .map_err(|_| Error::Unrecognized)?;
-    Ok(signed_data_pkcs7.to_der()?)
+    build_signed_data(
+        signer,
+        self_signed_cert,
+        enc_ed,
+        ID_DATA,
+        vec![message_type, sender_nonce, transaction_id],
+    )
 }
 
 /// Posts the given SCEP request to the given URL

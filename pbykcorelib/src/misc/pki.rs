@@ -1,5 +1,7 @@
 //! Provide certification path building and validation support
 
+use std::sync::Arc;
+
 use log::{Level::Trace, debug, error, info, log_enabled, trace};
 
 use base64ct::{Base64, Encoding};
@@ -7,6 +9,7 @@ use der::Encode;
 use x509_cert::Certificate;
 
 use certval::*;
+use certval_cms::CmsEnvironment;
 use certval_stores_core::prepare_certval_environment;
 
 use crate::Error;
@@ -64,6 +67,59 @@ pub fn new_pki_environment() -> PkiEnvironment {
     pe
 }
 
+/// Returns a [`PkiEnvironment`] from [`new_pki_environment`] holding the trust anchors and CA
+/// certificates compiled in for the `env` environment.
+pub fn pki_environment_for(env: &str) -> crate::Result<PkiEnvironment> {
+    let mut pe = new_pki_environment();
+    let Some(store_id) = store_id(env) else {
+        error!("No trust store provider is compiled in for the {env} environment");
+        return Err(Error::BadInput);
+    };
+    if let Err(e) = prepare_certval_environment(&providers(), &mut pe, store_id) {
+        error!("Error preparing PkiEnvironment: {e}");
+        return Err(Error::BadInput);
+    }
+    Ok(pe)
+}
+
+/// Returns a [`CmsEnvironment`] whose content encryption and key management go to the platform's
+/// crypto provider first, with certval-cms's software implementations answering what the provider
+/// declines, and which hashes, verifies signatures and vets certificates with `pe`.
+pub fn new_cms_environment(pe: PkiEnvironment) -> CmsEnvironment {
+    let mut env = CmsEnvironment::new();
+
+    #[cfg(target_os = "macos")]
+    {
+        use certval_security_framework::SecurityFrameworkCrypto;
+        env.add_encrypt_content_callback(SecurityFrameworkCrypto::new());
+        env.add_decrypt_content_callback(SecurityFrameworkCrypto::new());
+        env.add_encrypt_key_transport_callback(SecurityFrameworkCrypto::new());
+        env.add_encrypt_key_agreement_callback(SecurityFrameworkCrypto::new());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use certval_cng::CngCrypto;
+        env.add_encrypt_content_callback(CngCrypto::new());
+        env.add_decrypt_content_callback(CngCrypto::new());
+        env.add_encrypt_key_transport_callback(CngCrypto::new());
+        env.add_encrypt_key_agreement_callback(CngCrypto::new());
+        env.add_encrypt_kem_callback(CngCrypto::new());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use certval_awslc::AwsLcCrypto;
+        env.add_encrypt_content_callback(AwsLcCrypto::new());
+        env.add_decrypt_content_callback(AwsLcCrypto::new());
+        env.add_encrypt_key_transport_callback(AwsLcCrypto::new());
+        env.add_encrypt_key_agreement_callback(AwsLcCrypto::new());
+        env.add_encrypt_kem_callback(AwsLcCrypto::new());
+    }
+
+    env.populate_software();
+    env.set_pki_environment(Arc::new(pe));
+    env
+}
+
 /// Takes a leaf certificate and a set of intermediate certificates and builds and validates a certification path to a
 /// trust anchor set populated based on the elected features using resources available at compile time.
 ///
@@ -75,20 +131,8 @@ pub async fn validate_cert(
     env: &str,
 ) -> crate::Result<()> {
     debug!("validate_cert for {env}");
-    // let configuration = get_configuration().expect("Failed to read configuration.");
-
-    // create a default path settings object and default PKIEnvironment object
     let cps = CertificationPathSettings::new();
-    let mut pe = new_pki_environment();
-
-    let Some(store_id) = store_id(env) else {
-        error!("No trust store provider is compiled in for the {env} environment");
-        return Err(Error::BadInput);
-    };
-    if let Err(e) = prepare_certval_environment(&providers(), &mut pe, store_id) {
-        error!("Error preparing PkiEnvironment: {e}");
-        return Err(Error::BadInput);
-    }
+    let mut pe = pki_environment_for(env)?;
 
     let mut cert_source = CertSource::new();
     for (i, ca_cert) in intermediate.iter().enumerate() {

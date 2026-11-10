@@ -14,3 +14,6 @@ debug = true
 
 [patch.crates-io]
 pkcs12    = { git = "https://github.com/RustCrypto/formats.git" }
+# certval-cms is not on crates.io yet; pbykcorelib and the platform providers' `cms` features take
+# it from its repository.
+certval-cms = { git = "https://github.com/carl-wallace/certval-cms.git", branch = "main" }
