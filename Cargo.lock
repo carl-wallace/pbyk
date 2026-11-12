@@ -92,9 +92,9 @@ dependencies = [
 
 [[package]]
 name = "ansi-x963-kdf"
-version = "0.1.0-rc.2"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f52e4ce522e484c3a0e6723a7fe3ba130b2075ef37cdb06d4c0c976d62d4b746"
+checksum = "a813d97aa3fa6fa23ad0f4ea5bf6c13bfe2404c02ce0552ed47cd9962ae9b159"
 dependencies = [
  "digest 0.11.3",
 ]
@@ -510,9 +510,9 @@ dependencies = [
 
 [[package]]
 name = "certval"
-version = "0.2.0-rc.2"
+version = "0.2.0-rc.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2931e556d57cef87778e3dda4c46180e2da38c324ea065123008fc62bdd5d80"
+checksum = "db144332ad5a5b7f686e41ac9685b135bc0d996b38c5e8fafb358ca261fd0dbe"
 dependencies = [
  "base64ct",
  "bitvec",
@@ -553,7 +553,7 @@ dependencies = [
 [[package]]
 name = "certval-awslc"
 version = "0.1.0-rc.1"
-source = "git+https://github.com/carl-wallace/certval-awslc.git?branch=main#be1d04d17a5ab4188ef4ecbeefb6c320b0b14afb"
+source = "git+https://github.com/carl-wallace/certval-awslc.git?branch=main#1f0d4979167f67e64f1e85a0fd32eed86987a078"
 dependencies = [
  "aws-lc-rs",
  "certval",
@@ -570,7 +570,7 @@ dependencies = [
 [[package]]
 name = "certval-cms"
 version = "0.1.0-rc.1"
-source = "git+https://github.com/carl-wallace/certval-cms.git?branch=main#1e567ecd3f7a0e453907f23b26d28739bc81147c"
+source = "git+https://github.com/carl-wallace/certval-cms.git?branch=main#42eeaf3c5183b6d43c4398ad7fc57c45e6573e99"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -603,7 +603,7 @@ dependencies = [
 [[package]]
 name = "certval-cng"
 version = "0.1.0-rc.1"
-source = "git+https://github.com/carl-wallace/certval-cng.git?branch=main#368f2d834bc52511a1d7ea54eb1d3cbeeeb6da71"
+source = "git+https://github.com/carl-wallace/certval-cng.git?branch=main#241f568e5b50e8f1acb3ad600742d631a9abb3b8"
 dependencies = [
  "certval",
  "certval-cms",
@@ -621,7 +621,7 @@ dependencies = [
 [[package]]
 name = "certval-security-framework"
 version = "0.1.0-rc.1"
-source = "git+https://github.com/carl-wallace/certval-security-framework.git?branch=main#6c2763d96f98f4e1f25356c3b8499e9bfbe678f1"
+source = "git+https://github.com/carl-wallace/certval-security-framework.git?branch=main#8484523aa0b8fd2a50a6d7225270abc5feae948f"
 dependencies = [
  "certval",
  "certval-cms",
@@ -845,9 +845,9 @@ checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 
 [[package]]
 name = "cms"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e99ff55bfffd019bf15e3f0d5edef2ca1e3af5ade276ed100e3c0c3455050c2"
+checksum = "d089eddc8a5c984d82fcf1427367a6fa0d019d5af04b6e3197e86c8989533b8d"
 dependencies = [
  "aes",
  "aes-kw",
@@ -3740,6 +3740,7 @@ dependencies = [
  "rand_core 0.10.1",
  "sha3 0.12.0",
  "shake",
+ "zeroize",
 ]
 
 [[package]]
@@ -3757,6 +3758,7 @@ dependencies = [
  "ctutils",
  "hybrid-array",
  "num-traits",
+ "zeroize",
 ]
 
 [[package]]
@@ -5385,9 +5387,9 @@ dependencies = [
 
 [[package]]
 name = "rsa"
-version = "0.10.0-rc.21"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47cf9537fc2210e5db7a35a1cdda9d8d451b9df6fba234ec1cf0cd746c120c35"
+checksum = "23e77fd77e0dea28b3011fd62d15445b7de7959333b0276d930e03be0f755699"
 dependencies = [
  "const-oid",
  "crypto-bigint",
@@ -7718,9 +7720,9 @@ dependencies = [
 
 [[package]]
 name = "x509-ocsp"
-version = "0.3.0-rc.0"
+version = "0.3.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24e12c9a7f47a2a518e34d822c083d6bc21736d58d3425707244e046923efb79"
+checksum = "c9adad5e5ba07625d8c85ded0fcbc2bc20a7fc4d9f5db6fbde3141065e67befc"
 dependencies = [
  "const-oid",
  "der",

@@ -347,7 +347,7 @@ mod tests {
         },
     };
     use certval_cms::{SoftwareRecipientKey, VerifiedSignedData};
-    use rsa::{RsaPrivateKey, pkcs1v15::SigningKey, pkcs8::EncodePrivateKey};
+    use rsa::{PrivateKey as RsaPrivateKey, pkcs1v15::SigningKey, pkcs8::EncodePrivateKey};
     use signature::Keypair;
     use x509_cert::{
         TbsCertificate,
