@@ -5,7 +5,7 @@ use plist::Dictionary;
 
 use crate::misc::rng::pb_rng;
 
-use rsa::RsaPublicKey;
+use rsa::PublicKey as RsaPublicKey;
 
 use certval_cms::{
     ContentEncryptionAlgorithm, EnvelopedDataBuilder, KeyTransRecipient, KeyTransportAlgorithm,

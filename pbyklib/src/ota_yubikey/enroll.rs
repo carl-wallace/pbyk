@@ -6,7 +6,7 @@ use log::{error, info};
 use plist::Value;
 
 use der::{Decode, Encode};
-use rsa::{RsaPublicKey, traits::PublicKeyParts};
+use rsa::{PublicKey as RsaPublicKey, traits::PublicKeyParts};
 use spki::{DecodePublicKey, SubjectPublicKeyInfoRef};
 use x509_cert::Certificate;
 

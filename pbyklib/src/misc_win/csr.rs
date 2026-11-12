@@ -219,7 +219,7 @@ pub(crate) async fn consume_attested_csr(b64_csr: &str) -> Result<(String, Certi
 async fn consume_parsed_csr(csr: &CertReq) -> Result<(String, Certificate)> {
     // collect "CA" components
     let private_key_bytes = include_bytes!("../../assets/TrustAnchorRootCertificate.p8");
-    let private_key = rsa::RsaPrivateKey::from_pkcs1_der(private_key_bytes)?;
+    let private_key = rsa::PrivateKey::from_pkcs1_der(private_key_bytes)?;
     let signer = SigningKey::<Sha256>::new(private_key);
     let issuer_cert_bytes = include_bytes!("../../assets/TrustAnchorRootCertificate.crt");
     let issuer_cert = Certificate::from_der(issuer_cert_bytes)?;

@@ -16,7 +16,7 @@ use windows::{
     core::PCWSTR,
 };
 
-use rsa::RsaPublicKey;
+use rsa::PublicKey as RsaPublicKey;
 use sha2::{Digest, Sha256};
 use signature::{Keypair, Signer};
 

@@ -34,7 +34,7 @@ serde_json = "1.0.150"
 base64ct = { version="1.8.3", features = ["alloc"] }
 
 # certval has not yet been released, hence use of private branch
-certval = { version = "0.2.0-rc.1", features = ["std", "rsa"] }
+certval = { version = "0.2.0-rc.3", features = ["std", "rsa"] }
 futures = { version = "0.3.32", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
