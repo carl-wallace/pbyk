@@ -70,8 +70,8 @@ windows = {version = "0.61.3", features = [
 # lets reset_vsc await the consent-prompting delete instead of blocking on it.
 windows-future = { version = "0.2.1", optional = true }
 # The personal certificate store's NCrypt keys as certval-cms recipient credentials, for the
-# virtual smart card's decryption. Not yet published to crates.io, hence git.
-certval-cng = { git = "https://github.com/carl-wallace/certval-cng.git", branch = "main", features = ["cms"] }
+# virtual smart card's decryption.
+certval-cng = { version = "0.1.0-rc.1", features = ["cms"] }
 
 [features]
 default = ["dev"]

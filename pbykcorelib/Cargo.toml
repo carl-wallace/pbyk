@@ -40,15 +40,14 @@ rand_core = { version = "0.10.1"}
 
 # Platform crypto providers that misc::pki::new_pki_environment registers ahead of certval's software
 # implementations, and whose `cms` feature new_cms_environment registers ahead of certval-cms's.
-# Not yet published to crates.io, hence git.
 [target.'cfg(target_os = "macos")'.dependencies]
-certval-security-framework = { git = "https://github.com/carl-wallace/certval-security-framework.git", branch = "main", features = ["cms"] }
+certval-security-framework = { version = "0.1.0-rc.1", features = ["cms"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-certval-cng = { git = "https://github.com/carl-wallace/certval-cng.git", branch = "main", features = ["cms"] }
+certval-cng = { version = "0.1.0-rc.1", features = ["cms"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-certval-awslc = { git = "https://github.com/carl-wallace/certval-awslc.git", branch = "main", features = ["cms"] }
+certval-awslc = { version = "0.1.0-rc.1", features = ["cms"] }
 
 [dev-dependencies]
 # Self-signed test certificates for the SignedData and EnvelopedData round trips, and a runtime for
