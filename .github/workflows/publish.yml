@@ -45,6 +45,12 @@ jobs:
             echo "release $TAG is not a draft"
             exit 1
           fi
+          # Only this release's own files: the pbyk and pbyk-test archives of this version and the
+          # checksums. Anything else (another product's archives among them) is refused.
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
+            | grep -vE "^((pbyk|pbyk-test)-${TAG#v}-[a-z0-9_-]+\.(tar\.gz|zip)|SHA256SUMS)$" && {
+              echo "the draft holds the files above, which are not this release's"; exit 1; }
+          true
 
   verify-macos:
     needs: check
