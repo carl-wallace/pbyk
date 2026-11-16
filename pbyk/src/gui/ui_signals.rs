@@ -11,7 +11,7 @@ use log::error;
 
 use pbyklib::utils::get_pre_enroll_hash_yubikey;
 
-#[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+#[cfg(all(target_os = "windows", feature = "vsc"))]
 use pbyklib::utils::get_pre_enroll_hash;
 
 use crate::{
@@ -23,7 +23,7 @@ use crate::{
     },
 };
 
-#[cfg(all(target_os = "windows", feature = "vsc", feature = "reset_vsc"))]
+#[cfg(all(target_os = "windows", feature = "vsc"))]
 use crate::gui::utils::parse_reader_from_vsc_display;
 
 static DISA_ICON_BASE64: LazyLock<String> =
