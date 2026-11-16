@@ -1,0 +1,232 @@
+# Builds pbyk for Linux, macOS and Windows and puts the binaries in a draft GitHub release, for the
+# macOS and Windows binaries to be signed and the release published by publish.yml. A push of a tag
+# named v<version> makes the draft; <version> must be the version in pbyk/Cargo.toml.
+#
+# Everything but the signatures is done here, from the tag, so that what is signed is what CI built:
+# each archive carries a build provenance attestation, which is checked before what is in it is
+# signed. Signing replaces the macOS and Windows archives in the draft with archives of the signed
+# binaries, under the same names; publish.yml then checks the signatures, writes SHA256SUMS and an
+# attestation over the final files, and publishes.
+#
+# Two builds, each in its own archives:
+#   pbyk-<version>-<target>       production: the NIPR environment and nothing else
+#   pbyk-test-<version>-<target>  test: the development and NIPR O&M environments
+# The default features (which include the development environment) are off for both, and a step
+# below fails a build that holds a store it must not: either store for production, the SIPR store
+# for test, which must hold the development store. Neither carries a SIPR environment, whose store
+# is private. The GUI is included in both; `pbyk --interactive` is the command line.
+#
+# A manual run builds and smoke-tests the same binaries and keeps them as workflow artifacts, without
+# making a release, which is how to try a change to this workflow before tagging. A manual run given
+# release_tag builds from that existing tag and makes its draft.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing tag (v<version>) to build and make a draft release of; empty to build without one"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    name: build ${{ matrix.flavor }} (${{ matrix.platform.target }})
+    runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [production, test]
+        platform:
+          # 22.04 rather than ubuntu-latest so the binary needs only glibc 2.35 and the
+          # distribution's pcsc-lite, WebKitGTK 4.1, GTK 3 and libxdo; 22.04 is the oldest Ubuntu
+          # that has webkit2gtk-4.1.
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            builds: x86_64-unknown-linux-gnu
+            rust_targets: x86_64-unknown-linux-gnu
+            extra_features: ""
+            archive: tar.gz
+          # One universal binary, for Apple silicon and Intel Macs alike: both are built and
+          # combined with lipo, under the name cargo-binstall looks for on any Mac.
+          - os: macos-latest
+            target: universal-apple-darwin
+            builds: aarch64-apple-darwin x86_64-apple-darwin
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+            extra_features: ""
+            archive: tar.gz
+          # vsc adds enrollment with Windows virtual smart cards. It does not bring in reset_vsc,
+          # the quarantined VSC reset code.
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            builds: x86_64-pc-windows-msvc
+            rust_targets: x86_64-pc-windows-msvc
+            extra_features: ",vsc"
+            archive: zip
+        include:
+          - flavor: production
+            environments: nipr
+            prefix: pbyk
+            # Stores the build must not hold, and one it must.
+            forbidden: certval_stores_(pbdev|sipr)
+            required: ""
+          - flavor: test
+            environments: dev,om_nipr
+            prefix: pbyk-test
+            forbidden: certval_stores_sipr
+            required: certval_stores_pbdev
+    defaults:
+      run:
+        shell: bash
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      FEATURES: ${{ matrix.environments }},gui${{ matrix.platform.extra_features }}
+      TARGET: ${{ matrix.platform.target }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+      # The same packages, with the same bounds on apt's waits, as ci.yml's clippy-gui job.
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 install -y \
+            libpcsclite-dev libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev
+        env:
+          DEBIAN_FRONTEND: noninteractive
+      # cargo fetches every git source in Cargo.lock, the SIPR store's included, though neither
+      # build compiles it.
+      - name: read access to certval_stores_sipr
+        env:
+          SIPR_READ_TOKEN: ${{ secrets.SIPR_READ_TOKEN }}
+        run: |
+          : "${SIPR_READ_TOKEN:?the SIPR_READ_TOKEN secret is empty}"
+          git config --global url."https://x-access-token:${SIPR_READ_TOKEN}@github.com/RedHoundSoftware/certval_stores_sipr".insteadOf ssh://git@github.com/RedHoundSoftware/certval_stores_sipr
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.rust_targets }}
+      - name: Read the version
+        id: version
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "pbyk") | .version')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: The tag names the version being built
+        if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
+        run: |
+          tag=${RELEASE_TAG:-$GITHUB_REF_NAME}
+          if [ "$tag" != "v${{ steps.version.outputs.version }}" ]; then
+            echo "tag $tag does not match pbyk ${{ steps.version.outputs.version }}"
+            exit 1
+          fi
+      # The whole dependency graph is listed, and must list, so that a cargo failure cannot pass
+      # for an absent store.
+      - name: The build holds the stores it should
+        env:
+          FORBIDDEN: ${{ matrix.forbidden }}
+          REQUIRED: ${{ matrix.required }}
+        run: |
+          for t in ${{ matrix.platform.builds }}; do
+            cargo tree --locked -p pbyk --no-default-features --features "$FEATURES" \
+              --target "$t" --prefix none --format '{p}' > "deps-$t.txt"
+            grep -q '^pbyk ' "deps-$t.txt"
+            if grep -E "^${FORBIDDEN} " "deps-$t.txt"; then
+              echo "the $t ${{ matrix.flavor }} build holds the store(s) above"
+              exit 1
+            fi
+            if [ -n "$REQUIRED" ] && ! grep -q "^${REQUIRED} " "deps-$t.txt"; then
+              echo "the $t ${{ matrix.flavor }} build does not hold $REQUIRED"
+              exit 1
+            fi
+          done
+      - name: Build
+        run: |
+          for t in ${{ matrix.platform.builds }}; do
+            cargo build --release --locked -p pbyk --no-default-features --features "$FEATURES" --target "$t"
+          done
+      # The binary to package: the one build, or on macOS the two combined.
+      - name: Combine
+        id: bin
+        run: |
+          exe=""
+          if [ "$RUNNER_OS" = Windows ]; then exe=.exe; fi
+          if [ "$RUNNER_OS" = macOS ]; then
+            mkdir -p universal
+            lipo -create -output universal/pbyk \
+              target/aarch64-apple-darwin/release/pbyk target/x86_64-apple-darwin/release/pbyk
+            lipo -archs universal/pbyk
+            echo "path=universal/pbyk" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=target/$TARGET/release/pbyk$exe" >> "$GITHUB_OUTPUT"
+          fi
+      # --version is answered before the GUI starts, so it runs on a runner with no display. On
+      # macOS this runs the runner's own slice of the universal binary.
+      - name: Smoke test
+        run: |
+          "${{ steps.bin.outputs.path }}" --version | tee smoke.txt
+          grep -q "${{ steps.version.outputs.version }}" smoke.txt
+      - name: Package
+        id: package
+        run: |
+          name=${{ matrix.prefix }}-${{ steps.version.outputs.version }}-$TARGET
+          mkdir "$name"
+          cp ${{ steps.bin.outputs.path }} pbyk/README.md LICENSE-APACHE LICENSE-MIT "$name"/
+          if [ "${{ matrix.platform.archive }}" = zip ]; then
+            7z a "$name.zip" "$name" > /dev/null
+          else
+            tar czf "$name.tar.gz" "$name"
+          fi
+          echo "file=$name.${{ matrix.platform.archive }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.prefix }}-${{ matrix.platform.target }}
+          path: ${{ steps.package.outputs.file }}
+          if-no-files-found: error
+
+  draft:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      # A provenance attestation for each archive as built, which is checked with `gh attestation
+      # verify <file> --repo carl-wallace/pbyk` before what is in it is signed.
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/pbyk-*
+      - name: Draft release
+        run: |
+          tag=${RELEASE_TAG:-$GITHUB_REF_NAME}
+          version=${tag#v}
+          prerelease=""
+          case "$version" in *-*) prerelease="--prerelease" ;; esac
+          cat > notes.md <<EOF
+          pbyk $version for Linux (x86_64, glibc 2.35 or later), macOS (one universal binary, for Apple silicon and Intel) and Windows (x86_64, with virtual smart card enrollment), in two builds:
+
+          - **pbyk-$version-…**: production, for the NIPR environment only.
+          - **pbyk-test-$version-…**: test, for the development and NIPR O&M environments. Not for production use.
+
+          The binary opens the GUI; \`pbyk --interactive\` runs it as a command line tool. On Linux it needs pcsc-lite and the WebKitGTK 4.1, GTK 3 and libxdo runtime packages, and on Windows the WebView2 runtime. SHA256SUMS lists each archive's SHA-256; each archive also carries a build provenance attestation, checked with \`gh attestation verify <archive> --repo carl-wallace/pbyk\`.
+          EOF
+          gh release create "$tag" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft \
+            --title "pbyk $version" \
+            --notes-file notes.md \
+            $prerelease

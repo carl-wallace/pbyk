@@ -1,6 +1,7 @@
 [package]
 name = "pbyk"
-version = "0.4.2"
+version = "0.4.3"
+license = "Apache-2.0 OR MIT"
 publish = false
 edition = "2024"
 rust-version = "1.89.0"
@@ -48,7 +49,8 @@ om_sipr = ["pbyklib/om_sipr"]
 nipr = ["pbyklib/nipr"]
 sipr = ["pbyklib/sipr"]
 gui = ["home", "anyhow", "dioxus-desktop", "dioxus", "futures"]
-vsc = ["pbyklib/vsc", "reset_vsc"]
+# Enrollment with Windows virtual smart cards. Resetting one is reset_vsc, which is not part of it.
+vsc = ["pbyklib/vsc"]
 reset_vsc = ["pbyklib/reset_vsc"] # this feature exists to quarantine non-functional VSC reset code. do not use.
 test_pin = [] # adds PBYK_PIN / PBYK_PUK env vars to bypass interactive PIN/PUK prompts. test/scripting only — do not ship.
 legacy_p12 = ["pbyklib/legacy_p12"] # accept legacy (RC2/3DES/SHA-1) PKCS #12 encryption; portal P12s are modern, off by default

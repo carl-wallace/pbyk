@@ -144,6 +144,9 @@ jobs:
           : "${SIPR_READ_TOKEN:?the SIPR_READ_TOKEN secret is empty}"
           git config --global url."https://x-access-token:${SIPR_READ_TOKEN}@github.com/RedHoundSoftware/certval_stores_sipr".insteadOf ssh://git@github.com/RedHoundSoftware/certval_stores_sipr
       - run: cargo check -p pbyklib --features vsc --locked
+      # The Windows release build: production NIPR, the GUI and VSC enrollment, without the
+      # quarantined VSC reset code that vsc used to bring in.
+      - run: cargo check -p pbyk --no-default-features --features nipr,gui,vsc --locked
 
   msrv:
     name: msrv 1.89.0
