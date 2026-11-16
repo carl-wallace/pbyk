@@ -4,8 +4,9 @@
 #
 #   gh workflow run publish.yml --repo carl-wallace/pbyk -f tag=v<version>
 #
-# require_signatures (default true) refuses to publish unless every macOS binary carries Red Hound Software's Developer ID signature and every Windows binary its
-# Authenticode signature, each timestamped. Set it false to publish a release whose binaries were not signed, e.g. a release
+# require_signatures (default true) refuses to publish unless every macOS binary carries Red Hound
+# Software's Developer ID signature and every Windows binary its Authenticode signature, each
+# timestamped. Set it false to publish a release whose binaries were not signed, e.g. a release
 # candidate; the notes then say so.
 name: publish
 
