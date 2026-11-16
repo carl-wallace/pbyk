@@ -83,8 +83,10 @@ jobs:
         shell: bash
     env:
       RELEASE_TAG: ${{ inputs.release_tag }}
-      FEATURES: ${{ matrix.environments }},gui${{ matrix.platform.extra_features }}
-      TARGET: ${{ matrix.platform.target }}
+      # legacy_p12 accepts PKCS #12 files encrypted the older way (RC2, 3DES, a SHA-1 PRF), as the
+      # P12s some enrollments deliver are.
+      FEATURES: ${{ matrix.environments }},gui,legacy_p12${{ matrix.platform.extra_features }}
+      ARCHIVE_TARGET: ${{ matrix.platform.target }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -161,7 +163,7 @@ jobs:
             lipo -archs universal/pbyk
             echo "path=universal/pbyk" >> "$GITHUB_OUTPUT"
           else
-            echo "path=target/$TARGET/release/pbyk$exe" >> "$GITHUB_OUTPUT"
+            echo "path=target/$ARCHIVE_TARGET/release/pbyk$exe" >> "$GITHUB_OUTPUT"
           fi
       # --version is answered before the GUI starts, so it runs on a runner with no display. On
       # macOS this runs the runner's own slice of the universal binary.
@@ -172,7 +174,7 @@ jobs:
       - name: Package
         id: package
         run: |
-          name=${{ matrix.prefix }}-${{ steps.version.outputs.version }}-$TARGET
+          name=${{ matrix.prefix }}-${{ steps.version.outputs.version }}-$ARCHIVE_TARGET
           mkdir "$name"
           cp ${{ steps.bin.outputs.path }} pbyk/README.md LICENSE-APACHE LICENSE-MIT "$name"/
           if [ "${{ matrix.platform.archive }}" = zip ]; then
