@@ -18,7 +18,14 @@
 #
 # A manual run builds and smoke-tests the same binaries and keeps them as workflow artifacts, without
 # making a release, which is how to try a change to this workflow before tagging. A manual run given
-# release_tag builds from that existing tag and makes its draft.
+# release_tag builds from that existing tag and makes its draft. Run it from the tag (`gh workflow
+# run release.yml --ref <tag> -f release_tag=<tag>`), so that the provenance names the tag and its
+# commit, not the branch the run was started from; the signing scripts refuse an archive whose
+# provenance does not name the tag.
+#
+# No draft is made from a commit whose CI has not passed; see the ci job. BUILT-SHA256SUMS, attested
+# with the archives, lists them as built, before signing replaces the macOS and Windows ones, and
+# stays in the published release.
 name: release
 
 on:
@@ -30,8 +37,62 @@ on:
         description: "Existing tag (v<version>) to build and make a draft release of; empty to build without one"
         required: false
         default: ""
+      skip_ci_check:
+        description: "Make the draft even though CI has not passed on the tag's commit (the release notes say so)"
+        type: boolean
+        default: false
 
 jobs:
+  # CI must have passed on the commit being built. ci.yml runs on every push to main and pre-release and on every pull request to main, so a merged commit has a run, which may
+  # still be going when the tag is pushed: this waits for it. A manual run can pass skip_ci_check,
+  # e.g. when CI failed for a reason unrelated to the change; the draft's notes then say that CI had
+  # not passed. A tag push cannot skip it, and a build without a release only reports the result.
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REF: ${{ inputs.release_tag || github.sha }}
+      WORKFLOWS: ci.yml
+      RELEASING: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release_tag != '' }}
+      SKIP: ${{ inputs.skip_ci_check }}
+    outputs:
+      skipped: ${{ steps.ci.outputs.skipped }}
+      sha: ${{ steps.ci.outputs.sha }}
+    steps:
+      - name: CI passed on the commit being built
+        id: ci
+        run: |
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$REF" --jq .sha)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          failed=""
+          for wf in $WORKFLOWS; do
+            while :; do
+              runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/runs?head_sha=$sha" \
+                --jq '[.workflow_runs[] | .conclusion // "pending"] | join(" ")')
+              echo "$wf on $sha: ${runs:-no run}"
+              case " $runs " in
+                *" success "*) break ;;
+                *" pending "*) sleep 60 ;;
+                *) failed="$failed $wf"; break ;;
+              esac
+            done
+          done
+          if [ -z "$failed" ]; then
+            exit 0
+          elif [ "$RELEASING" != true ]; then
+            echo "::warning::CI has not passed on $sha:$failed; a build without a release goes ahead"
+          elif [ "$SKIP" = true ]; then
+            echo "::warning::CI has not passed on $sha:$failed; building anyway (skip_ci_check)"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::CI has not passed on $sha:$failed"
+            exit 1
+          fi
+
   build:
     name: build ${{ matrix.flavor }} (${{ matrix.platform.target }})
     runs-on: ${{ matrix.platform.os }}
@@ -88,7 +149,7 @@ jobs:
       FEATURES: ${{ matrix.environments }},gui,legacy_p12${{ matrix.platform.extra_features }}
       ARCHIVE_TARGET: ${{ matrix.platform.target }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.release_tag || github.ref }}
       # The same packages, with the same bounds on apt's waits, as ci.yml's clippy-gui job.
@@ -108,8 +169,11 @@ jobs:
         run: |
           : "${SIPR_READ_TOKEN:?the SIPR_READ_TOKEN secret is empty}"
           git config --global url."https://x-access-token:${SIPR_READ_TOKEN}@github.com/RedHoundSoftware/certval_stores_sipr".insteadOf ssh://git@github.com/RedHoundSoftware/certval_stores_sipr
-      - uses: dtolnay/rust-toolchain@stable
+      # A fixed version rather than stable, so that a release can be rebuilt with the compiler that
+      # built it; bump it on purpose.
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
+          toolchain: 1.100.0
           targets: ${{ matrix.platform.rust_targets }}
       - name: Read the version
         id: version
@@ -183,14 +247,14 @@ jobs:
             tar czf "$name.tar.gz" "$name"
           fi
           echo "file=$name.${{ matrix.platform.archive }}" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.prefix }}-${{ matrix.platform.target }}
           path: ${{ steps.package.outputs.file }}
           if-no-files-found: error
 
   draft:
-    needs: build
+    needs: [ci, build]
     if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -201,16 +265,26 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ inputs.release_tag }}
+      CI_SKIPPED: ${{ needs.ci.outputs.skipped }}
+      CI_SHA: ${{ needs.ci.outputs.sha }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist
           merge-multiple: true
-      # A provenance attestation for each archive as built, which is checked with `gh attestation
-      # verify <file> --repo carl-wallace/pbyk` before what is in it is signed.
-      - uses: actions/attest-build-provenance@v2
+      # A provenance attestation for each archive as built, which is checked before what is in it is
+      # signed: `gh attestation verify <file> --repo carl-wallace/pbyk --signer-workflow
+      # carl-wallace/pbyk/.github/workflows/release.yml --source-ref refs/tags/<tag>`.
+      # BUILT-SHA256SUMS is attested too: it stays in the release, and lists the macOS and Windows
+      # archives as they were before signing replaced them.
+      - name: Built checksums
+        working-directory: dist
+        run: sha256sum pbyk-* | tee BUILT-SHA256SUMS
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
-          subject-path: dist/pbyk-*
+          subject-path: |
+            dist/pbyk-*
+            dist/BUILT-SHA256SUMS
       - name: Draft release
         run: |
           tag=${RELEASE_TAG:-$GITHUB_REF_NAME}
@@ -225,6 +299,9 @@ jobs:
 
           The binary opens the GUI; \`pbyk --interactive\` runs it as a command line tool. On Linux it needs pcsc-lite and the WebKitGTK 4.1, GTK 3 and libxdo runtime packages, and on Windows the WebView2 runtime. SHA256SUMS lists each archive's SHA-256; each archive also carries a build provenance attestation, checked with \`gh attestation verify <archive> --repo carl-wallace/pbyk\`.
           EOF
+          if [ "$CI_SKIPPED" = true ]; then
+            printf '\n**CI had not passed on commit %s when this release was built.**\n' "$CI_SHA" >> notes.md
+          fi
           gh release create "$tag" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
